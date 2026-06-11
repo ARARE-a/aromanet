@@ -17,13 +17,15 @@ export default function TherapistDetail() {
   const [isFav, setIsFav] = useState(false);
   const [isFollowed, setIsFollowed] = useState(false);
 
+  // Allow any logged-in user (store, therapist, customer) to view therapist profiles
   useEffect(() => {
-    if (!isLoading && (!session || session.role !== "customer")) navigate("/customer/login");
+    if (!isLoading && !session) navigate("/");
   }, [session, isLoading]);
 
+  const isCustomer = session?.role === "customer";
   const { data: therapist } = trpc.therapist.getById.useQuery({ therapistId: therapistId }, { enabled: !!session && !!therapistId });
   const { data: posts } = trpc.post.getFeed.useQuery({ therapistId, limit: 9 }, { enabled: !!session && !!therapistId });
-  const { data: favs } = trpc.customer.getFavorites.useQuery(undefined, { enabled: !!session });
+  const { data: favs } = trpc.customer.getFavorites.useQuery(undefined, { enabled: !!session && isCustomer });
   useEffect(() => {
     const list = (favs as any[]) ?? [];
     setIsFav(list.some(f => f.targetType === "therapist" && f.targetId === therapistId));
@@ -41,8 +43,11 @@ export default function TherapistDetail() {
   const t = therapist as any;
   const postList = (posts as any[]) ?? [];
 
+  // Determine back href based on role
+  const backHref = session?.role === "store" ? "/store/therapists" : session?.role === "therapist" ? "/therapist/dashboard" : "/home";
+
   return (
-    <AromaLayout showBack backHref="/home">
+    <AromaLayout showBack backHref={backHref}>
       {/* Profile header */}
       <div className="px-4 pt-4 pb-3">
         <div className="flex items-start gap-4">
@@ -71,22 +76,24 @@ export default function TherapistDetail() {
           </div>
         </div>
 
-        {/* Action buttons */}
-        <div className="flex gap-2 mt-3">
-          <Button className={`flex-1 h-9 rounded-xl text-sm font-semibold transition-all ${isFollowed ? "bg-muted text-foreground border border-border" : "gradient-luxury text-white"}`}
-            onClick={() => toggleFollowMut.mutate({ targetType: "therapist", targetId: therapistId })}>
-            <UserPlus className="w-4 h-4 mr-1" />{isFollowed ? "フォロー中" : "フォロー"}
-          </Button>
-          <motion.button whileTap={{ scale: 0.8 }} onClick={() => toggleFavMut.mutate({ targetType: "therapist", targetId: therapistId })}
-            className="w-9 h-9 rounded-xl border border-border flex items-center justify-center hover:bg-muted transition-colors">
-            <Heart className={`w-4 h-4 transition-colors ${isFav ? "fill-red-500 text-red-500" : "text-muted-foreground"}`} />
-          </motion.button>
-          <Link href={`/messages?therapistId=${therapistId}`}>
-            <button className="w-9 h-9 rounded-xl border border-border flex items-center justify-center hover:bg-muted transition-colors">
-              <MessageCircle className="w-4 h-4 text-muted-foreground" />
-            </button>
-          </Link>
-        </div>
+        {/* Action buttons - customer only */}
+        {isCustomer && (
+          <div className="flex gap-2 mt-3">
+            <Button className={`flex-1 h-9 rounded-xl text-sm font-semibold transition-all ${isFollowed ? "bg-muted text-foreground border border-border" : "gradient-luxury text-white"}`}
+              onClick={() => toggleFollowMut.mutate({ targetType: "therapist", targetId: therapistId })}>
+              <UserPlus className="w-4 h-4 mr-1" />{isFollowed ? "フォロー中" : "フォロー"}
+            </Button>
+            <motion.button whileTap={{ scale: 0.8 }} onClick={() => toggleFavMut.mutate({ targetType: "therapist", targetId: therapistId })}
+              className="w-9 h-9 rounded-xl border border-border flex items-center justify-center hover:bg-muted transition-colors">
+              <Heart className={`w-4 h-4 transition-colors ${isFav ? "fill-red-500 text-red-500" : "text-muted-foreground"}`} />
+            </motion.button>
+            <Link href={`/messages?therapistId=${therapistId}`}>
+              <button className="w-9 h-9 rounded-xl border border-border flex items-center justify-center hover:bg-muted transition-colors">
+                <MessageCircle className="w-4 h-4 text-muted-foreground" />
+              </button>
+            </Link>
+          </div>
+        )}
       </div>
 
       {/* Tabs */}
@@ -117,11 +124,13 @@ export default function TherapistDetail() {
                 {t?.bodyType && <div className="flex justify-between"><span className="text-muted-foreground">スタイル</span><span>{t.bodyType}</span></div>}
               </div>
             </div>
-            <Link href={`/my/reservations?therapistId=${therapistId}`}>
-              <Button className="w-full h-12 rounded-xl gradient-luxury text-white text-base font-semibold">
-                <Calendar className="w-5 h-5 mr-2" />この子を指名して予約
-              </Button>
-            </Link>
+            {isCustomer && (
+              <Link href={`/my/reservations?therapistId=${therapistId}`}>
+                <Button className="w-full h-12 rounded-xl gradient-luxury text-white text-base font-semibold">
+                  <Calendar className="w-5 h-5 mr-2" />この子を指名して予約
+                </Button>
+              </Link>
+            )}
           </div>
         )}
 

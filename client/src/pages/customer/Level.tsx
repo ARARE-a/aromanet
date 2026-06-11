@@ -8,8 +8,8 @@ import { useSession } from "@/contexts/SessionContext";
 import { Progress } from "@/components/ui/progress";
 
 const LEVEL_THRESHOLDS: Record<number, number> = {
-  1: 0, 2: 10000, 3: 30000, 4: 60000, 5: 100000,
-  6: 150000, 7: 220000, 8: 300000, 9: 400000, 10: 500000,
+  1: 0, 2: 30000, 3: 80000, 4: 150000, 5: 300000,
+  6: 500000, 7: 800000, 8: 1200000, 9: 2000000, 10: 5000000,
 };
 
 const LEVEL_BENEFITS: Record<number, string[]> = {
@@ -31,12 +31,16 @@ export default function CustomerLevel() {
   useEffect(() => { if (!isLoading && (!session || session.role !== "customer")) navigate("/customer/login"); }, [session, isLoading]);
   const { data: profile } = trpc.customer.getMyProfile.useQuery(undefined, { enabled: !!session });
   const p = profile as any;
-  const level = p?.memberLevel ?? 1;
   const totalSpent = p?.totalSpent ?? 0;
+  // Calculate level from totalSpent
+  let level = 1;
+  for (let lv = 10; lv >= 1; lv--) {
+    if (totalSpent >= (LEVEL_THRESHOLDS[lv] ?? 0)) { level = lv; break; }
+  }
   const currentThreshold = LEVEL_THRESHOLDS[level] ?? 0;
   const nextThreshold = LEVEL_THRESHOLDS[level + 1];
   const progress = nextThreshold
-    ? Math.min(100, ((totalSpent - currentThreshold) / (nextThreshold - currentThreshold)) * 100)
+    ? Math.min(100, Math.max(0, ((totalSpent - currentThreshold) / (nextThreshold - currentThreshold)) * 100))
     : 100;
 
   return (
@@ -55,7 +59,7 @@ export default function CustomerLevel() {
             <div className="mt-4">
               <div className="flex justify-between text-xs text-muted-foreground mb-1.5">
                 <span>現在</span>
-                <span>次のレベルまで ¥{(nextThreshold - totalSpent).toLocaleString()}</span>
+                <span>次のレベルまで ¥{Math.max(0, nextThreshold - totalSpent).toLocaleString()}</span>
               </div>
               <Progress value={progress} className="h-2 rounded-full" />
               <div className="text-xs text-muted-foreground mt-1">¥{nextThreshold.toLocaleString()} でLv.{level + 1}へ</div>

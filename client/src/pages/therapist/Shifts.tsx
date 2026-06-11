@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { motion } from "framer-motion";
-import { Clock, Plus, Trash2 } from "lucide-react";
+import { Clock, Plus, Home, PlusSquare, MessageCircle, User } from "lucide-react";
 import { AromaLayout } from "@/components/AromaLayout";
 import { trpc } from "@/lib/trpc";
 import { useSession } from "@/contexts/SessionContext";
@@ -10,6 +10,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
+
+const navItems = [
+  { href: "/therapist/dashboard", icon: <Home className="w-[26px] h-[26px]" strokeWidth={1.5} />, activeIcon: <Home className="w-[26px] h-[26px]" strokeWidth={2.5} fill="currentColor" />, label: "ホーム" },
+  { href: "/therapist/shifts", icon: <Clock className="w-[26px] h-[26px]" strokeWidth={1.5} />, activeIcon: <Clock className="w-[26px] h-[26px]" strokeWidth={2.5} />, label: "出勤" },
+  { href: "/therapist/posts", icon: <PlusSquare className="w-[26px] h-[26px]" strokeWidth={1.5} />, activeIcon: <PlusSquare className="w-[26px] h-[26px]" strokeWidth={2.5} fill="currentColor" />, label: "投稿" },
+  { href: "/messages", icon: <MessageCircle className="w-[26px] h-[26px]" strokeWidth={1.5} />, activeIcon: <MessageCircle className="w-[26px] h-[26px]" strokeWidth={2.5} fill="currentColor" />, label: "DM" },
+  { href: "/therapist/profile", icon: <User className="w-[26px] h-[26px]" strokeWidth={1.5} />, activeIcon: <User className="w-[26px] h-[26px]" strokeWidth={2.5} fill="currentColor" />, label: "プロフィール" },
+];
 
 export default function TherapistShifts() {
   const [, navigate] = useLocation();
@@ -21,7 +29,7 @@ export default function TherapistShifts() {
   const createMut = trpc.therapist.createShift.useMutation({ onSuccess: () => { toast.success("出勤を登録しました"); setShowAdd(false); refetch(); }, onError: e => toast.error(e.message) });
   const list = (shifts as any[]) ?? [];
   return (
-    <AromaLayout title="出勤管理" showBack backHref="/therapist/dashboard">
+    <AromaLayout title="出勤管理" showBack backHref="/therapist/dashboard" showNav navItems={navItems}>
       <div className="px-4 py-3">
         <Button size="sm" className="w-full h-9 rounded-xl gradient-luxury text-white" onClick={() => setShowAdd(true)}>
           <Plus className="w-4 h-4 mr-1" />出勤を登録

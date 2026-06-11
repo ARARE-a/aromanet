@@ -33,13 +33,17 @@ export default function CustomerMyPage() {
     return <div className="min-h-[100dvh] flex items-center justify-center"><div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" /></div>;
   }
 
-  const currentLevel = p?.level ?? p?.memberLevel ?? 1;
   const totalSpent = p?.totalSpent ?? 0;
-  const levelThresholds = [0, 10000, 30000, 60000, 100000, 150000, 220000, 300000, 400000, 500000];
-  const nextThreshold = levelThresholds[currentLevel] ?? 500000;
-  const prevThreshold = levelThresholds[currentLevel - 1] ?? 0;
-  const progress = nextThreshold > prevThreshold
-    ? Math.min(100, ((totalSpent - prevThreshold) / (nextThreshold - prevThreshold)) * 100)
+  const levelThresholds = [0, 0, 30000, 80000, 150000, 300000, 500000, 800000, 1200000, 2000000, 5000000];
+  // Calculate level from totalSpent
+  let currentLevel = 1;
+  for (let lv = 10; lv >= 1; lv--) {
+    if (totalSpent >= (levelThresholds[lv] ?? 0)) { currentLevel = lv; break; }
+  }
+  const prevThreshold = levelThresholds[currentLevel] ?? 0;
+  const nextThreshold = levelThresholds[currentLevel + 1];
+  const progress = nextThreshold && nextThreshold > prevThreshold
+    ? Math.min(100, Math.max(0, ((totalSpent - prevThreshold) / (nextThreshold - prevThreshold)) * 100))
     : 100;
 
   return (
@@ -88,7 +92,7 @@ export default function CustomerMyPage() {
           <div className="flex items-center justify-between mb-2">
             <LevelBadge level={currentLevel} />
             <span className="text-[11px] text-gray-500">
-              ¥{totalSpent.toLocaleString()} / ¥{nextThreshold.toLocaleString()}
+              ¥{totalSpent.toLocaleString()} / {nextThreshold ? `¥${nextThreshold.toLocaleString()}` : "MAX"}
             </span>
           </div>
           <div className="h-1.5 bg-gray-200 rounded-full overflow-hidden">
@@ -98,7 +102,7 @@ export default function CustomerMyPage() {
             />
           </div>
           <div className="text-[11px] text-gray-400 mt-1">
-            次のレベルまで ¥{Math.max(0, nextThreshold - totalSpent).toLocaleString()}
+            {nextThreshold ? `次のレベルまで ¥${Math.max(0, nextThreshold - totalSpent).toLocaleString()}` : "最高レベル達成！"}
           </div>
         </div>
 

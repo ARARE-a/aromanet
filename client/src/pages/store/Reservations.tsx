@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { motion } from "framer-motion";
-import { Calendar, ChevronLeft, ChevronRight, Filter } from "lucide-react";
+import { Calendar, ChevronLeft, ChevronRight, Home, Users, TrendingUp, MessageCircle } from "lucide-react";
 import { AromaLayout, StatusBadge, AromaAvatar } from "@/components/AromaLayout";
 import { trpc } from "@/lib/trpc";
 import { useSession } from "@/contexts/SessionContext";
@@ -10,6 +10,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "sonner";
 import { format, addDays, subDays } from "date-fns";
 import { ja } from "date-fns/locale";
+
+const navItems = [
+  { href: "/store/dashboard", icon: <Home className="w-[26px] h-[26px]" strokeWidth={1.5} />, activeIcon: <Home className="w-[26px] h-[26px]" strokeWidth={2.5} fill="currentColor" />, label: "ホーム" },
+  { href: "/store/reservations", icon: <Calendar className="w-[26px] h-[26px]" strokeWidth={1.5} />, activeIcon: <Calendar className="w-[26px] h-[26px]" strokeWidth={2.5} fill="currentColor" />, label: "予約" },
+  { href: "/store/therapists", icon: <Users className="w-[26px] h-[26px]" strokeWidth={1.5} />, activeIcon: <Users className="w-[26px] h-[26px]" strokeWidth={2.5} />, label: "スタッフ" },
+  { href: "/store/sales", icon: <TrendingUp className="w-[26px] h-[26px]" strokeWidth={1.5} />, activeIcon: <TrendingUp className="w-[26px] h-[26px]" strokeWidth={2.5} />, label: "売上" },
+  { href: "/messages", icon: <MessageCircle className="w-[26px] h-[26px]" strokeWidth={1.5} />, activeIcon: <MessageCircle className="w-[26px] h-[26px]" strokeWidth={2.5} fill="currentColor" />, label: "DM" },
+];
 
 const STATUS_OPTIONS = [
   { value: "all", label: "すべて" },
@@ -45,7 +53,7 @@ export default function StoreReservations() {
   );
 
   return (
-    <AromaLayout title="予約管理" showBack backHref="/store/dashboard">
+    <AromaLayout title="予約管理" showBack backHref="/store/dashboard" showNav navItems={navItems}>
       {/* Date navigator */}
       <div className="px-4 py-3 flex items-center justify-between bg-white border-b border-border/50">
         <button onClick={() => setDate(subDays(date, 1))} className="p-2 rounded-full hover:bg-muted transition-colors">

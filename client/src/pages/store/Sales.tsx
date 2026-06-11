@@ -1,13 +1,21 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { motion } from "framer-motion";
-import { TrendingUp, ChevronLeft, ChevronRight } from "lucide-react";
+import { TrendingUp, ChevronLeft, ChevronRight, Home, Calendar, Users, MessageCircle } from "lucide-react";
 import { AromaLayout } from "@/components/AromaLayout";
 import { trpc } from "@/lib/trpc";
 import { useSession } from "@/contexts/SessionContext";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import { format, subMonths, addMonths } from "date-fns";
 import { ja } from "date-fns/locale";
+
+const navItems = [
+  { href: "/store/dashboard", icon: <Home className="w-[26px] h-[26px]" strokeWidth={1.5} />, activeIcon: <Home className="w-[26px] h-[26px]" strokeWidth={2.5} fill="currentColor" />, label: "ホーム" },
+  { href: "/store/reservations", icon: <Calendar className="w-[26px] h-[26px]" strokeWidth={1.5} />, activeIcon: <Calendar className="w-[26px] h-[26px]" strokeWidth={2.5} fill="currentColor" />, label: "予約" },
+  { href: "/store/therapists", icon: <Users className="w-[26px] h-[26px]" strokeWidth={1.5} />, activeIcon: <Users className="w-[26px] h-[26px]" strokeWidth={2.5} />, label: "スタッフ" },
+  { href: "/store/sales", icon: <TrendingUp className="w-[26px] h-[26px]" strokeWidth={1.5} />, activeIcon: <TrendingUp className="w-[26px] h-[26px]" strokeWidth={2.5} />, label: "売上" },
+  { href: "/messages", icon: <MessageCircle className="w-[26px] h-[26px]" strokeWidth={1.5} />, activeIcon: <MessageCircle className="w-[26px] h-[26px]" strokeWidth={2.5} fill="currentColor" />, label: "DM" },
+];
 
 export default function StoreSales() {
   const [, navigate] = useLocation();
@@ -31,7 +39,7 @@ export default function StoreSales() {
   }));
 
   return (
-    <AromaLayout title="売上管理" showBack backHref="/store/dashboard">
+    <AromaLayout title="売上管理" showBack backHref="/store/dashboard" showNav navItems={navItems}>
       {/* Month navigator */}
       <div className="px-4 py-3 flex items-center justify-between">
         <button onClick={() => setMonth(subMonths(month, 1))} className="p-2 rounded-full hover:bg-muted transition-colors">
@@ -76,7 +84,7 @@ export default function StoreSales() {
       )}
 
       {/* Daily breakdown */}
-      <div className="px-4 space-y-2">
+      <div className="px-4 space-y-2 pb-4">
         <h3 className="text-sm font-semibold text-foreground">日別明細</h3>
         {daily.map((d: any) => (
           <div key={d.date} className="bg-white rounded-xl p-3 shadow-luxury flex items-center justify-between">

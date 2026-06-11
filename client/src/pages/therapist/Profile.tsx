@@ -1,9 +1,10 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { motion } from "framer-motion";
-import { Camera, Save, Instagram, Twitter, User, ChevronDown, Eye } from "lucide-react";
+import { Camera, Save, Instagram, Twitter, User, Eye, Home, Clock, PlusSquare, MessageCircle } from "lucide-react";
 import { Link } from "wouter";
 import { AromaLayout, AromaAvatar } from "@/components/AromaLayout";
+import { ImageCropper, useAvatarCrop } from "@/components/ImageCropper";
 import { trpc } from "@/lib/trpc";
 import { useSession } from "@/contexts/SessionContext";
 import { Button } from "@/components/ui/button";
@@ -12,10 +13,19 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 
+const navItems = [
+  { href: "/therapist/dashboard", icon: <Home className="w-[26px] h-[26px]" strokeWidth={1.5} />, activeIcon: <Home className="w-[26px] h-[26px]" strokeWidth={2.5} fill="currentColor" />, label: "ホーム" },
+  { href: "/therapist/shifts", icon: <Clock className="w-[26px] h-[26px]" strokeWidth={1.5} />, activeIcon: <Clock className="w-[26px] h-[26px]" strokeWidth={2.5} />, label: "出勤" },
+  { href: "/therapist/posts", icon: <PlusSquare className="w-[26px] h-[26px]" strokeWidth={1.5} />, activeIcon: <PlusSquare className="w-[26px] h-[26px]" strokeWidth={2.5} fill="currentColor" />, label: "投稿" },
+  { href: "/messages", icon: <MessageCircle className="w-[26px] h-[26px]" strokeWidth={1.5} />, activeIcon: <MessageCircle className="w-[26px] h-[26px]" strokeWidth={2.5} fill="currentColor" />, label: "DM" },
+  { href: "/therapist/profile", icon: <User className="w-[26px] h-[26px]" strokeWidth={1.5} />, activeIcon: <User className="w-[26px] h-[26px]" strokeWidth={2.5} fill="currentColor" />, label: "プロフィール" },
+];
+
 export default function TherapistProfile() {
   const [, navigate] = useLocation();
   const { session, isLoading } = useSession();
   const utils = trpc.useUtils();
+  const { cropOpen, pendingFile, openCropper, closeCropper } = useAvatarCrop();
 
   useEffect(() => {
     if (!isLoading && (!session || session.role !== "therapist")) navigate("/therapist/login");
@@ -36,19 +46,23 @@ export default function TherapistProfile() {
     profileImageUrl: "",
   });
   const [uploading, setUploading] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState<string>("");
 
   useEffect(() => {
-    if (p) setForm({
-      displayName: p.displayName ?? "",
-      catchphrase: p.catchphrase ?? "",
-      selfIntroduction: p.selfIntroduction ?? "",
-      age: String(p.age ?? ""),
-      height: String(p.height ?? ""),
-      bodyType: p.bodyType ?? "",
-      instagramUrl: p.instagramUrl ?? "",
-      twitterUrl: p.twitterUrl ?? "",
-      profileImageUrl: p.profileImageUrl ?? "",
-    });
+    if (p) {
+      setForm({
+        displayName: p.displayName ?? "",
+        catchphrase: p.catchphrase ?? "",
+        selfIntroduction: p.selfIntroduction ?? "",
+        age: String(p.age ?? ""),
+        height: String(p.height ?? ""),
+        bodyType: p.bodyType ?? "",
+        instagramUrl: p.instagramUrl ?? "",
+        twitterUrl: p.twitterUrl ?? "",
+        profileImageUrl: p.profileImageUrl ?? "",
+      });
+      setPreviewUrl(p.profileImageUrl ?? "");
+    }
   }, [p]);
 
   const updateMut = trpc.therapist.updateProfile.useMutation({
@@ -59,24 +73,28 @@ export default function TherapistProfile() {
     onError: e => toast.error(e.message),
   });
 
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > 5 * 1024 * 1024) { toast.error("5MB以下の画像を選択してください"); return; }
+    if (file.size > 10 * 1024 * 1024) { toast.error("10MB以下の画像を選択してください"); return; }
+    openCropper(file);
+    e.target.value = "";
+  };
+
+  const handleCropComplete = async (croppedUrl: string, blob: Blob) => {
+    setPreviewUrl(croppedUrl);
     setUploading(true);
     try {
       const formData = new FormData();
-      formData.append("file", file);
+      formData.append("file", blob, "avatar.jpg");
       const res = await fetch("/api/upload", { method: "POST", body: formData });
       if (res.ok) {
         const data = await res.json();
         setForm(f => ({ ...f, profileImageUrl: data.url }));
         toast.success("画像をアップロードしました");
       } else {
-        // Fallback: use object URL for preview
-        const objectUrl = URL.createObjectURL(file);
-        setForm(f => ({ ...f, profileImageUrl: objectUrl }));
-        toast.info("プレビューを表示しています（保存後に反映されます）");
+        setForm(f => ({ ...f, profileImageUrl: croppedUrl }));
+        toast.info("プレビューを表示中（保存ボタンで確定）");
       }
     } catch {
       toast.error("アップロードに失敗しました");
@@ -102,20 +120,20 @@ export default function TherapistProfile() {
   ];
 
   return (
-    <AromaLayout title="プロフィール編集" showBack backHref="/therapist/dashboard">
+    <AromaLayout title="プロフィール編集" showBack backHref="/therapist/dashboard" showNav navItems={navItems}>
       <div className="px-4 py-6 space-y-6 pb-24">
-        {/* Avatar upload */}
+        {/* Avatar upload with crop */}
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
           className="flex flex-col items-center gap-2">
           <div className="relative">
-            <AromaAvatar name={form.displayName || p?.displayName} src={form.profileImageUrl} size="xl" />
+            <AromaAvatar name={form.displayName || p?.displayName} src={previewUrl || form.profileImageUrl} size="xl" />
             <label className="absolute bottom-0 right-0 w-9 h-9 bg-primary rounded-full flex items-center justify-center cursor-pointer shadow-lg border-2 border-white">
               <Camera className="w-4 h-4 text-white" />
-              <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} disabled={uploading} />
+              <input type="file" accept="image/*" className="hidden" onChange={handleFileSelect} disabled={uploading} />
             </label>
           </div>
           <p className="text-xs text-muted-foreground">
-            {uploading ? "アップロード中..." : "タップして写真を変更"}
+            {uploading ? "アップロード中..." : "タップして写真を変更（切り取り可能）"}
           </p>
         </motion.div>
 
@@ -202,6 +220,16 @@ export default function TherapistProfile() {
           </Button>
         </Link>
       </div>
+
+      {/* Image Cropper Dialog */}
+      <ImageCropper
+        open={cropOpen}
+        onClose={closeCropper}
+        onCropComplete={handleCropComplete}
+        imageFile={pendingFile}
+        aspectRatio={1}
+        title="プロフィール画像をトリミング"
+      />
     </AromaLayout>
   );
 }

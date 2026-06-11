@@ -5,8 +5,9 @@ import { getDb } from "../db";
 import { getSession } from "../session";
 import {
   customerProfiles, reservations, reviews, follows, favorites, notifications,
+  stores, therapists, menus,
 } from "../../drizzle/schema";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, sql } from "drizzle-orm";
 
 const LEVEL_THRESHOLDS = [
   { level: 1, name: "ブロンズ", minAmount: 0, badgeColor: "#CD7F32" },
@@ -60,7 +61,30 @@ export const customerRouter = router({
     if (!session || session.role !== "customer") throw new TRPCError({ code: "UNAUTHORIZED" });
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-    return db.select().from(reservations).where(eq(reservations.customerId, session.accountId)).orderBy(desc(reservations.date), desc(reservations.startTime)).limit(50);
+    const rows = await db
+      .select({
+        id: reservations.id,
+        date: reservations.date,
+        startTime: reservations.startTime,
+        endTime: reservations.endTime,
+        status: reservations.status,
+        totalAmount: reservations.totalPrice,
+        customerNote: reservations.customerNote,
+        createdAt: reservations.createdAt,
+        storeName: stores.name,
+        therapistName: therapists.displayName,
+        menuName: menus.name,
+        menuPrice: menus.price,
+        menuDuration: menus.durationMinutes,
+      })
+      .from(reservations)
+      .leftJoin(stores, eq(reservations.storeId, stores.id))
+      .leftJoin(therapists, eq(reservations.therapistId, therapists.id))
+      .leftJoin(menus, eq(reservations.menuId, menus.id))
+      .where(eq(reservations.customerId, session.accountId))
+      .orderBy(desc(reservations.date), desc(reservations.startTime))
+      .limit(50);
+    return rows;
   }),
 
   getFavorites: publicProcedure.query(async ({ ctx }) => {

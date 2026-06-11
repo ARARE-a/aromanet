@@ -1,12 +1,21 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { motion } from "framer-motion";
-import { TrendingUp, ChevronLeft, ChevronRight } from "lucide-react";
+import { TrendingUp, ChevronLeft, ChevronRight, Home, Clock, PlusSquare, MessageCircle, User } from "lucide-react";
 import { AromaLayout } from "@/components/AromaLayout";
+
 import { trpc } from "@/lib/trpc";
 import { useSession } from "@/contexts/SessionContext";
 import { format, subMonths, addMonths } from "date-fns";
 import { ja } from "date-fns/locale";
+
+const navItems = [
+  { href: "/therapist/dashboard", icon: <Home className="w-[26px] h-[26px]" strokeWidth={1.5} />, activeIcon: <Home className="w-[26px] h-[26px]" strokeWidth={2.5} fill="currentColor" />, label: "ホーム" },
+  { href: "/therapist/shifts", icon: <Clock className="w-[26px] h-[26px]" strokeWidth={1.5} />, activeIcon: <Clock className="w-[26px] h-[26px]" strokeWidth={2.5} />, label: "出勤" },
+  { href: "/therapist/posts", icon: <PlusSquare className="w-[26px] h-[26px]" strokeWidth={1.5} />, activeIcon: <PlusSquare className="w-[26px] h-[26px]" strokeWidth={2.5} fill="currentColor" />, label: "投稿" },
+  { href: "/messages", icon: <MessageCircle className="w-[26px] h-[26px]" strokeWidth={1.5} />, activeIcon: <MessageCircle className="w-[26px] h-[26px]" strokeWidth={2.5} fill="currentColor" />, label: "DM" },
+  { href: "/therapist/profile", icon: <User className="w-[26px] h-[26px]" strokeWidth={1.5} />, activeIcon: <User className="w-[26px] h-[26px]" strokeWidth={2.5} fill="currentColor" />, label: "プロフィール" },
+];
 
 export default function TherapistSales() {
   const [, navigate] = useLocation();
@@ -21,7 +30,7 @@ export default function TherapistSales() {
   const s = summary as any;
   const p = payroll as any;
   return (
-    <AromaLayout title="売上確認" showBack backHref="/therapist/dashboard">
+    <AromaLayout title="売上確認" showBack backHref="/therapist/dashboard" showNav navItems={navItems}>
       <div className="px-4 py-3 flex items-center justify-between">
         <button onClick={() => setMonth(subMonths(month, 1))} className="p-2 rounded-full hover:bg-muted transition-colors"><ChevronLeft className="w-5 h-5" /></button>
         <span className="font-semibold text-foreground">{format(month, "yyyy年M月", { locale: ja })}</span>
