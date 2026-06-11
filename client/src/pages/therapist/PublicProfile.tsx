@@ -25,7 +25,7 @@ export default function TherapistPublicProfile() {
   return (
     <AromaLayout showBack backHref="/therapist/profile" title="公開プロフィール確認">
       {/* Preview banner */}
-      <div className="mx-4 mt-3 mb-1 px-4 py-2.5 rounded-xl bg-primary/10 border border-primary/20 flex items-center gap-2">
+      <div className="mx-4 mt-3 mb-1 py-2.5 rounded-xl bg-primary/10 border border-primary/20 flex items-center gap-2 px-3">
         <Eye className="w-4 h-4 text-primary flex-shrink-0" />
         <p className="text-xs text-primary font-medium">これはお客様に見えるプロフィールのプレビューです</p>
       </div>

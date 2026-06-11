@@ -64,7 +64,7 @@ export function AromaLayout({
 
       {/* Scrollable content */}
       <main className={cn(
-        "flex-1 overflow-y-auto overflow-x-hidden",
+        "flex-1 overflow-y-auto overflow-x-hidden w-full",
         !noPadding && showNav && navItems.length > 0 ? "pb-[calc(49px+env(safe-area-inset-bottom))]" : "",
         className
       )}>

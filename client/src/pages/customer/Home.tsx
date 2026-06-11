@@ -90,7 +90,7 @@ export default function CustomerHome() {
     >
       {/* Stories row (therapist avatars) */}
       <div className="border-b border-gray-100">
-        <div className="flex gap-4 px-3 py-3 overflow-x-auto scrollbar-none">
+        <div className="flex gap-4 px-4 py-3 overflow-x-auto scrollbar-none">
           {/* "あなた" story slot */}
           <div className="flex flex-col items-center gap-1 flex-shrink-0">
             <div className="relative">
@@ -130,7 +130,7 @@ export default function CustomerHome() {
         {/* Therapist grid section */}
         {therapistList.length > 0 && (
           <div>
-            <div className="flex items-center justify-between px-3 py-2 border-t border-gray-100">
+            <div className="flex items-center justify-between px-4 py-2 border-t border-gray-100">
               <span className="text-[13px] font-semibold text-foreground">人気セラピスト</span>
               <Link href="/search?tab=therapist">
                 <span className="text-[13px] text-primary font-medium">すべて見る</span>
@@ -174,7 +174,7 @@ function PostCard({ post, index }: { post: any; index: number }) {
       className="border-b border-gray-100"
     >
       {/* Post header */}
-      <div className="flex items-center gap-2.5 px-3 py-2.5">
+      <div className="flex items-center gap-2.5 px-4 py-2.5">
         <Link href={`/therapist/${post.therapistId}`}>
           <StoryAvatar name={post.therapistName} src={post.therapistImage} size="sm" hasStory={index % 3 === 0} />
         </Link>
@@ -203,7 +203,7 @@ function PostCard({ post, index }: { post: any; index: number }) {
       </div>
 
       {/* Actions */}
-      <div className="px-3 pt-2.5 pb-1">
+      <div className="px-4 pt-2.5 pb-1">
         <div className="flex items-center gap-4 mb-2">
           <button onClick={() => setLiked(!liked)} className="active:scale-90 transition-transform">
             <Heart
@@ -239,7 +239,7 @@ function StoreFeedCard({ store: s, index }: { store: any; index: number }) {
       transition={{ delay: index * 0.04 }}
       className="border-b border-gray-100"
     >
-      <div className="flex items-center gap-2.5 px-3 py-2.5">
+      <div className="flex items-center gap-2.5 px-4 py-2.5">
         <Link href={`/store/${s.id}`}>
           <div className="w-8 h-8 rounded-full overflow-hidden bg-teal-muted flex items-center justify-center font-bold text-primary text-sm flex-shrink-0">
             {s.logoUrl ? <img src={s.logoUrl} alt={s.name} className="w-full h-full object-cover" /> : s.name?.[0]}
@@ -265,7 +265,7 @@ function StoreFeedCard({ store: s, index }: { store: any; index: number }) {
           }
         </div>
       </Link>
-      <div className="px-3 pt-2.5 pb-3">
+      <div className="px-4 pt-2.5 pb-3">
         <div className="flex items-center gap-1 mb-1">
           <Star className="w-3.5 h-3.5 text-yellow-500 fill-yellow-500" />
           <span className="text-[13px] font-semibold">{s.rating?.toFixed(1) ?? "4.5"}</span>
