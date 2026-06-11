@@ -26,7 +26,6 @@ const SessionContext = createContext<SessionContextValue>({
 });
 
 export function SessionProvider({ children }: { children: React.ReactNode }) {
-  const utils = trpc.useUtils();
   const { data, isLoading, refetch } = trpc.aroAuth.getSession.useQuery(undefined, {
     retry: false,
     staleTime: 30000,
@@ -34,14 +33,22 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
 
   const logoutMut = trpc.aroAuth.aroLogout.useMutation({
     onSuccess: () => {
-      // Invalidate all queries so session is cleared
-      utils.aroAuth.getSession.invalidate();
-      utils.invalidate();
+      // Force full page reload to clear all React Query cache and navigate to root
+      window.location.href = "/";
+    },
+    onError: () => {
+      // Even on error, force reload to clear stale state
+      window.location.href = "/";
     },
   });
 
   const logout = async () => {
-    await logoutMut.mutateAsync();
+    try {
+      await logoutMut.mutateAsync();
+    } catch {
+      // Fallback: force reload anyway
+      window.location.href = "/";
+    }
   };
 
   const session: AromaSession | null = data

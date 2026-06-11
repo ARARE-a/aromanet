@@ -3,14 +3,12 @@ import { useLocation, Link } from "wouter";
 import { Mail, Lock } from "lucide-react";
 import { AuthForm } from "@/components/AuthForm";
 import { trpc } from "@/lib/trpc";
-import { useSession } from "@/contexts/SessionContext";
 
 export default function CustomerLogin() {
   const [, navigate] = useLocation();
   const [error, setError] = useState<string | null>(null);
-  const { refetch } = useSession();
   const loginMut = trpc.aroAuth.customerLogin.useMutation({
-    onSuccess: () => { refetch(); navigate("/home"); },
+    onSuccess: () => { window.location.href = "/home"; },
     onError: (e) => { if (e.data?.code === "NOT_FOUND") { navigate("/"); return; } setError(e.message); },
   });
   return (

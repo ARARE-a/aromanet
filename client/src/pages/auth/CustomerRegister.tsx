@@ -3,14 +3,12 @@ import { useLocation, Link } from "wouter";
 import { Mail, Lock, User } from "lucide-react";
 import { AuthForm } from "@/components/AuthForm";
 import { trpc } from "@/lib/trpc";
-import { useSession } from "@/contexts/SessionContext";
 
 export default function CustomerRegister() {
   const [, navigate] = useLocation();
   const [error, setError] = useState<string | null>(null);
-  const { refetch } = useSession();
   const regMut = trpc.aroAuth.customerRegister.useMutation({
-    onSuccess: () => { refetch(); navigate("/home"); },
+    onSuccess: () => { window.location.href = "/home"; },
     onError: (e) => setError(e.message),
   });
   return (

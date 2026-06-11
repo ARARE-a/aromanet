@@ -3,14 +3,12 @@ import { useLocation, Link } from "wouter";
 import { Mail, Lock } from "lucide-react";
 import { AuthForm } from "@/components/AuthForm";
 import { trpc } from "@/lib/trpc";
-import { useSession } from "@/contexts/SessionContext";
 
 export default function TherapistLogin() {
   const [, navigate] = useLocation();
   const [error, setError] = useState<string | null>(null);
-  const { refetch } = useSession();
   const loginMut = trpc.aroAuth.therapistLogin.useMutation({
-    onSuccess: () => { refetch(); navigate("/therapist/dashboard"); },
+    onSuccess: () => { window.location.href = "/therapist/dashboard"; },
     onError: (e) => { if (e.data?.code === "NOT_FOUND") { navigate("/"); return; } setError(e.message); },
   });
   return (

@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { useLocation, Link } from "wouter";
 import { motion } from "framer-motion";
-import { Search, MapPin, Star, SlidersHorizontal } from "lucide-react";
+import { Search, MapPin, Star, SlidersHorizontal, Home, Bookmark, MessageCircle, User } from "lucide-react";
 import { AromaLayout, AromaAvatar } from "@/components/AromaLayout";
 import { trpc } from "@/lib/trpc";
 import { useSession } from "@/contexts/SessionContext";
@@ -10,6 +10,14 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 const AREAS = ["全エリア", "東京都", "大阪府", "愛知県", "福岡県", "北海道", "神奈川県", "兵庫県", "京都府", "広島県", "宮城県"];
+
+const navItems = [
+  { href: "/home", icon: <Home className="w-[26px] h-[26px]" strokeWidth={1.5} />, activeIcon: <Home className="w-[26px] h-[26px]" strokeWidth={2.5} fill="currentColor" />, label: "ホーム" },
+  { href: "/search", icon: <Search className="w-[26px] h-[26px]" strokeWidth={1.5} />, activeIcon: <Search className="w-[26px] h-[26px]" strokeWidth={2.5} />, label: "検索" },
+  { href: "/my/reservations", icon: <Bookmark className="w-[26px] h-[26px]" strokeWidth={1.5} />, activeIcon: <Bookmark className="w-[26px] h-[26px]" strokeWidth={2.5} fill="currentColor" />, label: "予約" },
+  { href: "/messages", icon: <MessageCircle className="w-[26px] h-[26px]" strokeWidth={1.5} />, activeIcon: <MessageCircle className="w-[26px] h-[26px]" strokeWidth={2.5} fill="currentColor" />, label: "DM" },
+  { href: "/my/page", icon: <User className="w-[26px] h-[26px]" strokeWidth={1.5} />, activeIcon: <User className="w-[26px] h-[26px]" strokeWidth={2.5} fill="currentColor" />, label: "マイページ" },
+];
 
 export default function CustomerSearch() {
   const [, navigate] = useLocation();
@@ -41,7 +49,7 @@ export default function CustomerSearch() {
   const therapistList = (therapists as any[]) ?? [];
 
   return (
-    <AromaLayout title="検索">
+    <AromaLayout title="検索" showNav navItems={navItems}>
       <div className="px-4 py-3 space-y-2">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
