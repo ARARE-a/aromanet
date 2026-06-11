@@ -1,8 +1,8 @@
 import { useLocation } from "wouter";
-import { motion } from "framer-motion";
-import { Building2, User, Heart } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { Building2, User, Heart, Download, Smartphone } from "lucide-react";
 import { useSession } from "@/contexts/SessionContext";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 
 const roles = [
   {
@@ -46,6 +46,10 @@ const roles = [
 export default function RoleSelect() {
   const [, navigate] = useLocation();
   const { session, isLoading } = useSession();
+  const [installPrompt, setInstallPrompt] = useState<any>(null);
+  const [isInstalled, setIsInstalled] = useState(false);
+  const [isIOS, setIsIOS] = useState(false);
+  const [showIOSGuide, setShowIOSGuide] = useState(false);
 
   useEffect(() => {
     if (!isLoading && session?.role) {
@@ -53,6 +57,37 @@ export default function RoleSelect() {
       if (role) navigate(role.dashPath);
     }
   }, [session, isLoading]);
+
+  useEffect(() => {
+    // Check if already installed (standalone mode)
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches
+      || (window.navigator as any).standalone === true;
+    if (isStandalone) { setIsInstalled(true); return; }
+
+    // iOS detection
+    const ua = navigator.userAgent;
+    const iosDevice = /iphone|ipad|ipod/i.test(ua);
+    setIsIOS(iosDevice);
+
+    // Android/Chrome install prompt
+    const handler = (e: Event) => {
+      e.preventDefault();
+      setInstallPrompt(e);
+    };
+    window.addEventListener('beforeinstallprompt', handler);
+    return () => window.removeEventListener('beforeinstallprompt', handler);
+  }, []);
+
+  const handleInstall = async () => {
+    if (isIOS) { setShowIOSGuide(true); return; }
+    if (!installPrompt) return;
+    installPrompt.prompt();
+    const result = await installPrompt.userChoice;
+    if (result.outcome === 'accepted') {
+      setIsInstalled(true);
+      setInstallPrompt(null);
+    }
+  };
 
   return (
     <div
@@ -138,11 +173,88 @@ export default function RoleSelect() {
         })}
       </div>
 
+      {/* PWA Install button */}
+      <AnimatePresence>
+        {!isInstalled && (installPrompt || isIOS) && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 10 }}
+            transition={{ delay: 1.0, duration: 0.4 }}
+            className="mt-6 w-full max-w-sm"
+          >
+            <button
+              onClick={handleInstall}
+              className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-2xl border border-dashed border-primary/40 text-primary/70 text-[13px] hover:bg-primary/5 transition-colors active:scale-[0.97]"
+            >
+              <Smartphone className="w-4 h-4" />
+              <span>ホーム画面に追加してアプリとして使う</span>
+              <Download className="w-3.5 h-3.5" />
+            </button>
+          </motion.div>
+        )}
+        {isInstalled && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="mt-6 text-[12px] text-primary/60 flex items-center gap-1"
+          >
+            <Smartphone className="w-3.5 h-3.5" />
+            <span>アプリとして起動中</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* iOS install guide modal */}
+      <AnimatePresence>
+        {showIOSGuide && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 z-50 flex items-end justify-center"
+            onClick={() => setShowIOSGuide(false)}
+          >
+            <motion.div
+              initial={{ y: 100 }}
+              animate={{ y: 0 }}
+              exit={{ y: 100 }}
+              transition={{ type: "spring", damping: 25, stiffness: 300 }}
+              className="bg-white rounded-t-3xl p-6 w-full max-w-sm pb-10"
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="w-10 h-1 bg-gray-200 rounded-full mx-auto mb-5" />
+              <h3 className="text-base font-bold text-foreground mb-3 text-center">ホーム画面に追加する方法</h3>
+              <ol className="space-y-3 text-sm text-muted-foreground">
+                <li className="flex items-start gap-3">
+                  <span className="w-6 h-6 rounded-full bg-primary/10 text-primary text-xs font-bold flex items-center justify-center flex-shrink-0 mt-0.5">1</span>
+                  <span>Safariの下部にある <strong className="text-foreground">共有ボタン（□↑）</strong> をタップ</span>
+                </li>
+                <li className="flex items-start gap-3">
+                  <span className="w-6 h-6 rounded-full bg-primary/10 text-primary text-xs font-bold flex items-center justify-center flex-shrink-0 mt-0.5">2</span>
+                  <span>メニューから <strong className="text-foreground">「ホーム画面に追加」</strong> を選択</span>
+                </li>
+                <li className="flex items-start gap-3">
+                  <span className="w-6 h-6 rounded-full bg-primary/10 text-primary text-xs font-bold flex items-center justify-center flex-shrink-0 mt-0.5">3</span>
+                  <span>右上の <strong className="text-foreground">「追加」</strong> をタップして完了</span>
+                </li>
+              </ol>
+              <button
+                onClick={() => setShowIOSGuide(false)}
+                className="mt-5 w-full py-3 rounded-xl bg-primary text-white text-sm font-semibold"
+              >
+                閉じる
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <motion.p
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ delay: 0.8 }}
-        className="mt-10 text-[11px] text-muted-foreground text-center"
+        className="mt-6 text-[11px] text-muted-foreground text-center"
       >
         © 2024 AromaNet. All rights reserved.
       </motion.p>

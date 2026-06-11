@@ -95,3 +95,11 @@
 - [x] PWA対応（manifest.json・Service Worker・ホーム追加ボタン）
 - [x] Instagram風UI刷新（ボトムナビ・モバイルレイアウト）
 - [x] DBスキーマ追加（rooms・affiliation_requests）
+
+## Phase 10: 最終仕上げ（前セッション引き継ぎ）
+- [x] TherapistDetail: ハート・フォローボタンの視覚的フィードバック修正
+- [x] PWA「ホーム画面に追加」ボタン実装（RoleSelect画面・iOS/Android両対応）
+- [x] 都道府県フィルター用デモデータ追加（大阪府・愛知県の店舗・セラピスト）
+- [x] セラピスト公開プロフィールプレビューページ（/therapist/my-profile）追加
+- [x] TypeScriptエラー 0件確認
+- [x] Vitest テスト通過確認

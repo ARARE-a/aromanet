@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { motion } from "framer-motion";
-import { Camera, Save, Instagram, Twitter, User, ChevronDown } from "lucide-react";
+import { Camera, Save, Instagram, Twitter, User, ChevronDown, Eye } from "lucide-react";
+import { Link } from "wouter";
 import { AromaLayout, AromaAvatar } from "@/components/AromaLayout";
 import { trpc } from "@/lib/trpc";
 import { useSession } from "@/contexts/SessionContext";
@@ -193,6 +194,13 @@ export default function TherapistProfile() {
           <Save className="w-4 h-4 mr-2" />
           {updateMut.isPending ? "保存中..." : "プロフィールを保存"}
         </Button>
+
+        <Link href="/therapist/my-profile">
+          <Button variant="outline" className="w-full h-10 rounded-xl text-sm border-primary text-primary">
+            <Eye className="w-4 h-4 mr-2" />
+            公開プロフィールを確認する
+          </Button>
+        </Link>
       </div>
     </AromaLayout>
   );

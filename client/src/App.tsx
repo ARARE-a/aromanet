@@ -38,6 +38,7 @@ import TherapistPosts from "./pages/therapist/Posts";
 import TherapistMemos from "./pages/therapist/Memos";
 import TherapistSales from "./pages/therapist/Sales";
 import TherapistAffiliations from "./pages/therapist/Affiliations";
+import TherapistPublicProfile from "./pages/therapist/PublicProfile";
 
 // Customer pages
 import CustomerHome from "./pages/customer/Home";
@@ -92,6 +93,7 @@ function Router() {
       <Route path="/therapist/memos" component={TherapistMemos} />
       <Route path="/therapist/sales" component={TherapistSales} />
       <Route path="/therapist/affiliations" component={TherapistAffiliations} />
+      <Route path="/therapist/my-profile" component={TherapistPublicProfile} />
 
       {/* Customer */}
       <Route path="/home" component={CustomerHome} />
