@@ -26,6 +26,8 @@ import StoreReviews from "./pages/store/Reviews";
 import StoreProfile from "./pages/store/Profile";
 import StorePayroll from "./pages/store/Payroll";
 import StoreCustomers from "./pages/store/Customers";
+import StoreRooms from "./pages/store/Rooms";
+import StoreAffiliations from "./pages/store/Affiliations";
 
 // Therapist pages
 import TherapistDashboard from "./pages/therapist/Dashboard";
@@ -35,6 +37,7 @@ import TherapistReservations from "./pages/therapist/Reservations";
 import TherapistPosts from "./pages/therapist/Posts";
 import TherapistMemos from "./pages/therapist/Memos";
 import TherapistSales from "./pages/therapist/Sales";
+import TherapistAffiliations from "./pages/therapist/Affiliations";
 
 // Customer pages
 import CustomerHome from "./pages/customer/Home";
@@ -45,6 +48,9 @@ import CustomerReservations from "./pages/customer/Reservations";
 import CustomerMyPage from "./pages/customer/MyPage";
 import CustomerLevel from "./pages/customer/Level";
 import CustomerNotifications from "./pages/customer/Notifications";
+import CustomerFavorites from "./pages/customer/Favorites";
+import CustomerEditProfile from "./pages/customer/EditProfile";
+import CustomerVerification from "./pages/customer/Verification";
 
 // Shared pages
 import MessagesPage from "./pages/Messages";
@@ -74,6 +80,8 @@ function Router() {
       <Route path="/store/profile" component={StoreProfile} />
       <Route path="/store/payroll" component={StorePayroll} />
       <Route path="/store/customers" component={StoreCustomers} />
+      <Route path="/store/rooms" component={StoreRooms} />
+      <Route path="/store/affiliations" component={StoreAffiliations} />
 
       {/* Therapist */}
       <Route path="/therapist/dashboard" component={TherapistDashboard} />
@@ -83,6 +91,7 @@ function Router() {
       <Route path="/therapist/posts" component={TherapistPosts} />
       <Route path="/therapist/memos" component={TherapistMemos} />
       <Route path="/therapist/sales" component={TherapistSales} />
+      <Route path="/therapist/affiliations" component={TherapistAffiliations} />
 
       {/* Customer */}
       <Route path="/home" component={CustomerHome} />
@@ -93,6 +102,10 @@ function Router() {
       <Route path="/my/page" component={CustomerMyPage} />
       <Route path="/my/level" component={CustomerLevel} />
       <Route path="/my/notifications" component={CustomerNotifications} />
+      <Route path="/my/favorites" component={CustomerFavorites} />
+      <Route path="/my/edit" component={CustomerEditProfile} />
+      <Route path="/my/edit-profile" component={CustomerEditProfile} />
+      <Route path="/my/verification" component={CustomerVerification} />
 
       {/* Shared */}
       <Route path="/messages" component={MessagesPage} />

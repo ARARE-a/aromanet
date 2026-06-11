@@ -13,6 +13,8 @@ import { postRouter } from "./routers/post";
 import { salesRouter } from "./routers/sales";
 import { adminRouter } from "./routers/admin";
 import { seedRouter } from "./routers/seed";
+import { roomRouter } from "./routers/room";
+import { affiliationRouter } from "./routers/affiliation";
 
 export const appRouter = router({
   system: systemRouter,
@@ -35,6 +37,8 @@ export const appRouter = router({
   sales: salesRouter,
   admin: adminRouter,
   seed: seedRouter,
+  room: roomRouter,
+  affiliation: affiliationRouter,
 });
 
 export type AppRouter = typeof appRouter;

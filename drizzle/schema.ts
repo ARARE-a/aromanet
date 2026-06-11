@@ -520,3 +520,64 @@ export type Review = typeof reviews.$inferSelect;
 export type Notification = typeof notifications.$inferSelect;
 export type Sale = typeof sales.$inferSelect;
 export type TherapistPayroll = typeof therapistPayrolls.$inferSelect;
+
+// ─── Rooms ────────────────────────────────────────────────────────────────────
+
+export const rooms = mysqlTable("rooms", {
+  id: int("id").autoincrement().primaryKey(),
+  storeId: int("storeId").notNull().references(() => stores.id),
+  name: varchar("name", { length: 50 }).notNull(),
+  description: text("description"),
+  capacity: int("capacity").default(1).notNull(),
+  isAvailable: boolean("isAvailable").default(true).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+// ─── Affiliation Requests ─────────────────────────────────────────────────────
+
+export const affiliationRequests = mysqlTable("affiliation_requests", {
+  id: int("id").autoincrement().primaryKey(),
+  therapistId: int("therapistId").notNull().references(() => therapists.id),
+  storeId: int("storeId").notNull().references(() => stores.id),
+  status: mysqlEnum("status", ["pending", "approved", "rejected", "cancelled"]).default("pending").notNull(),
+  message: text("message"),
+  responseNote: text("responseNote"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, (t) => [
+  index("idx_affiliation_therapist").on(t.therapistId),
+  index("idx_affiliation_store").on(t.storeId),
+]);
+
+// ─── Therapist Salary Settings ────────────────────────────────────────────────
+
+export const therapistSalarySettings = mysqlTable("therapist_salary_settings", {
+  id: int("id").autoincrement().primaryKey(),
+  therapistId: int("therapistId").notNull().references(() => therapists.id),
+  storeId: int("storeId").notNull().references(() => stores.id),
+  backRate: decimal("backRate", { precision: 5, scale: 2 }).default("50.00").notNull(),
+  nominationFee: int("nominationFee").default(0).notNull(),
+  adjustmentNote: text("adjustmentNote"),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, (t) => [
+  uniqueIndex("idx_salary_settings_unique").on(t.therapistId, t.storeId),
+]);
+
+// ─── Story Posts (Instagram-style) ───────────────────────────────────────────
+
+export const storyPosts = mysqlTable("story_posts", {
+  id: int("id").autoincrement().primaryKey(),
+  therapistId: int("therapistId").notNull().references(() => therapists.id),
+  mediaUrl: text("mediaUrl").notNull(),
+  mediaType: mysqlEnum("mediaType", ["image", "video"]).default("image").notNull(),
+  caption: text("caption"),
+  viewCount: int("viewCount").default(0).notNull(),
+  expiresAt: timestamp("expiresAt").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type Room = typeof rooms.$inferSelect;
+export type AffiliationRequest = typeof affiliationRequests.$inferSelect;
+export type TherapistSalarySetting = typeof therapistSalarySettings.$inferSelect;
+export type StoryPost = typeof storyPosts.$inferSelect;

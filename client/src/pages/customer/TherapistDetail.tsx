@@ -14,6 +14,8 @@ export default function TherapistDetail() {
   const therapistId = parseInt(params.id ?? "0");
   const { session, isLoading } = useSession();
   const [activeTab, setActiveTab] = useState<"info" | "posts" | "reviews">("info");
+  const [isFav, setIsFav] = useState(false);
+  const [isFollowed, setIsFollowed] = useState(false);
 
   useEffect(() => {
     if (!isLoading && (!session || session.role !== "customer")) navigate("/customer/login");
@@ -21,14 +23,19 @@ export default function TherapistDetail() {
 
   const { data: therapist } = trpc.therapist.getById.useQuery({ therapistId: therapistId }, { enabled: !!session && !!therapistId });
   const { data: posts } = trpc.post.getFeed.useQuery({ therapistId, limit: 9 }, { enabled: !!session && !!therapistId });
+  const { data: favs } = trpc.customer.getFavorites.useQuery(undefined, { enabled: !!session });
+  useEffect(() => {
+    const list = (favs as any[]) ?? [];
+    setIsFav(list.some(f => f.targetType === "therapist" && f.targetId === therapistId));
+  }, [favs, therapistId]);
 
   const toggleFavMut = trpc.customer.toggleFavorite.useMutation({
-    onSuccess: () => toast.success("お気に入りを更新しました"),
-    onError: e => toast.error(e.message),
+    onMutate: () => setIsFav(prev => !prev),
+    onError: () => { setIsFav(prev => !prev); toast.error("操作に失敗しました"); },
   });
   const toggleFollowMut = trpc.customer.toggleFollow.useMutation({
-    onSuccess: () => toast.success("フォロー状態を更新しました"),
-    onError: e => toast.error(e.message),
+    onMutate: () => setIsFollowed(prev => !prev),
+    onError: () => { setIsFollowed(prev => !prev); toast.error("操作に失敗しました"); },
   });
 
   const t = therapist as any;
@@ -66,14 +73,14 @@ export default function TherapistDetail() {
 
         {/* Action buttons */}
         <div className="flex gap-2 mt-3">
-          <Button className="flex-1 h-9 rounded-xl gradient-luxury text-white text-sm"
+          <Button className={`flex-1 h-9 rounded-xl text-sm font-semibold transition-all ${isFollowed ? "bg-muted text-foreground border border-border" : "gradient-luxury text-white"}`}
             onClick={() => toggleFollowMut.mutate({ targetType: "therapist", targetId: therapistId })}>
-            <UserPlus className="w-4 h-4 mr-1" />フォロー
+            <UserPlus className="w-4 h-4 mr-1" />{isFollowed ? "フォロー中" : "フォロー"}
           </Button>
-          <button onClick={() => toggleFavMut.mutate({ targetType: "therapist", targetId: therapistId })}
+          <motion.button whileTap={{ scale: 0.8 }} onClick={() => toggleFavMut.mutate({ targetType: "therapist", targetId: therapistId })}
             className="w-9 h-9 rounded-xl border border-border flex items-center justify-center hover:bg-muted transition-colors">
-            <Heart className="w-4 h-4 text-muted-foreground" />
-          </button>
+            <Heart className={`w-4 h-4 transition-colors ${isFav ? "fill-red-500 text-red-500" : "text-muted-foreground"}`} />
+          </motion.button>
           <Link href={`/messages?therapistId=${therapistId}`}>
             <button className="w-9 h-9 rounded-xl border border-border flex items-center justify-center hover:bg-muted transition-colors">
               <MessageCircle className="w-4 h-4 text-muted-foreground" />

@@ -9,6 +9,7 @@ import { registerStorageProxy } from "./storageProxy";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
+import { storagePut } from "../storage";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -38,6 +39,51 @@ async function startServer() {
   app.use(cookieParser());
   registerStorageProxy(app);
   registerOAuthRoutes(app);
+
+  // File upload endpoint
+  app.post("/api/upload", express.raw({ type: "*/*", limit: "10mb" }), async (req, res) => {
+    try {
+      const contentType = req.headers["content-type"] || "application/octet-stream";
+      // Handle multipart form data manually
+      if (contentType.includes("multipart/form-data")) {
+        // Parse multipart manually using boundary
+        const boundary = contentType.split("boundary=")[1];
+        if (!boundary) { res.status(400).json({ error: "No boundary" }); return; }
+        const body = req.body as Buffer;
+        const bodyStr = body.toString("binary");
+        const parts = bodyStr.split(`--${boundary}`);
+        let fileBuffer: Buffer | null = null;
+        let fileMime = "image/jpeg";
+        let fileName = "upload.jpg";
+        for (const part of parts) {
+          if (part.includes("Content-Disposition") && part.includes("filename")) {
+            const nameMatch = part.match(/filename="([^"]+)"/);
+            if (nameMatch) fileName = nameMatch[1];
+            const mimeMatch = part.match(/Content-Type: ([^\r\n]+)/);
+            if (mimeMatch) fileMime = mimeMatch[1].trim();
+            const headerEnd = part.indexOf("\r\n\r\n");
+            if (headerEnd !== -1) {
+              const fileData = part.slice(headerEnd + 4, part.lastIndexOf("\r\n"));
+              fileBuffer = Buffer.from(fileData, "binary");
+            }
+          }
+        }
+        if (!fileBuffer) { res.status(400).json({ error: "No file found" }); return; }
+        const ext = fileName.split(".").pop() || "jpg";
+        const key = `uploads/${Date.now()}.${ext}`;
+        const { url } = await storagePut(key, fileBuffer, fileMime);
+        res.json({ url, key });
+      } else {
+        const ext = contentType.includes("png") ? "png" : contentType.includes("gif") ? "gif" : contentType.includes("webp") ? "webp" : "jpg";
+        const key = `uploads/${Date.now()}.${ext}`;
+        const { url } = await storagePut(key, req.body as Buffer, contentType);
+        res.json({ url, key });
+      }
+    } catch (e: any) {
+      console.error("Upload error:", e);
+      res.status(500).json({ error: e.message });
+    }
+  });
   // tRPC API
   app.use(
     "/api/trpc",

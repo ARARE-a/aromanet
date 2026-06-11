@@ -1,23 +1,27 @@
 import { useEffect } from "react";
 import { useLocation, Link } from "wouter";
 import { motion } from "framer-motion";
-import { Calendar, Heart, TrendingUp, MessageCircle, User, Clock, Image, BookOpen, LogOut, BarChart3 } from "lucide-react";
-import { AromaLayout, AromaLogo, AromaAvatar, StatusBadge } from "@/components/AromaLayout";
+import {
+  Home, Search, PlusSquare, Heart, User, Calendar, Clock, Image, MessageCircle,
+  TrendingUp, BookOpen, LogOut, ChevronRight, Bell, Settings, BarChart3
+} from "lucide-react";
+import { AromaLayout, AromaAvatar, StoryAvatar, LevelBadge, StatusBadge } from "@/components/AromaLayout";
 import { trpc } from "@/lib/trpc";
 import { useSession } from "@/contexts/SessionContext";
 
 const navItems = [
-  { href: "/therapist/dashboard", icon: <BarChart3 className="w-5 h-5" />, label: "ホーム" },
-  { href: "/therapist/shifts", icon: <Clock className="w-5 h-5" />, label: "出勤" },
-  { href: "/therapist/reservations", icon: <Calendar className="w-5 h-5" />, label: "予約" },
-  { href: "/therapist/posts", icon: <Image className="w-5 h-5" />, label: "投稿" },
-  { href: "/messages", icon: <MessageCircle className="w-5 h-5" />, label: "メッセージ" },
+  { href: "/therapist/dashboard", icon: <Home className="w-[26px] h-[26px]" strokeWidth={1.5} />, activeIcon: <Home className="w-[26px] h-[26px]" strokeWidth={2.5} fill="currentColor" />, label: "ホーム" },
+  { href: "/therapist/shifts", icon: <Clock className="w-[26px] h-[26px]" strokeWidth={1.5} />, activeIcon: <Clock className="w-[26px] h-[26px]" strokeWidth={2.5} />, label: "出勤" },
+  { href: "/therapist/posts", icon: <PlusSquare className="w-[26px] h-[26px]" strokeWidth={1.5} />, activeIcon: <PlusSquare className="w-[26px] h-[26px]" strokeWidth={2.5} fill="currentColor" />, label: "投稿" },
+  { href: "/messages", icon: <MessageCircle className="w-[26px] h-[26px]" strokeWidth={1.5} />, activeIcon: <MessageCircle className="w-[26px] h-[26px]" strokeWidth={2.5} fill="currentColor" />, label: "DM" },
+  { href: "/therapist/profile", icon: <User className="w-[26px] h-[26px]" strokeWidth={1.5} />, activeIcon: <User className="w-[26px] h-[26px]" strokeWidth={2.5} fill="currentColor" />, label: "プロフィール" },
 ];
 
 export default function TherapistDashboard() {
   const [, navigate] = useLocation();
-  const { session, isLoading, refetch } = useSession();
-  const logoutMut = trpc.aroAuth.aroLogout.useMutation({ onSuccess: () => { refetch(); navigate("/"); } });
+  const { session, isLoading, logout } = useSession();
+  const handleLogout = async () => { try { await logout(); } catch {} navigate("/"); };
+
   const { data: profile } = trpc.therapist.getMyProfile.useQuery(undefined, { enabled: !!session });
   const { data: dashboard } = trpc.therapist.getDashboard.useQuery(undefined, { enabled: !!session });
 
@@ -25,63 +29,130 @@ export default function TherapistDashboard() {
     if (!isLoading && (!session || session.role !== "therapist")) navigate("/therapist/login");
   }, [session, isLoading]);
 
-  if (isLoading || !session) return <div className="min-h-screen flex items-center justify-center"><div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" /></div>;
+  if (isLoading || !session) return (
+    <div className="min-h-[100dvh] flex items-center justify-center">
+      <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+    </div>
+  );
 
   const p = profile as any;
   const d = dashboard as any;
-
-  const menuItems = [
-    { href: "/therapist/shifts", icon: Clock, label: "出勤管理", color: "bg-blue-50 text-blue-600" },
-    { href: "/therapist/reservations", icon: Calendar, label: "予約確認", color: "bg-teal-50 text-teal-600" },
-    { href: "/therapist/posts", icon: Image, label: "投稿管理", color: "bg-purple-50 text-purple-600" },
-    { href: "/therapist/memos", icon: BookOpen, label: "顧客メモ", color: "bg-pink-50 text-pink-600" },
-    { href: "/therapist/sales", icon: TrendingUp, label: "売上確認", color: "bg-green-50 text-green-600" },
-    { href: "/therapist/profile", icon: User, label: "プロフィール", color: "bg-gray-50 text-gray-600" },
-  ];
+  const todayReservations = (d?.todayReservations ?? []) as any[];
 
   return (
-    <AromaLayout showNav navItems={navItems}
-      headerRight={<button onClick={() => logoutMut.mutate()} className="p-2 rounded-full hover:bg-muted transition-colors"><LogOut className="w-4 h-4 text-muted-foreground" /></button>}
+    <AromaLayout
+      showNav
+      navItems={navItems}
+      title={p?.displayName ?? "セラピスト"}
+      headerRight={
+        <div className="flex items-center gap-2">
+          <Link href="/messages">
+            <button className="p-1"><Bell className="w-[26px] h-[26px]" strokeWidth={1.5} /></button>
+          </Link>
+          <button onClick={handleLogout} className="p-1">
+            <LogOut className="w-[22px] h-[22px] text-gray-400" strokeWidth={1.5} />
+          </button>
+        </div>
+      }
     >
-      <div className="px-4 pt-4 pb-2 flex items-center justify-between">
-        <AromaLogo size="sm" />
-        <Link href="/therapist/profile"><AromaAvatar name={p?.displayName} src={p?.profileImageUrl} size="sm" /></Link>
-      </div>
-      <div className="px-4 py-2">
-        <h2 className="text-lg font-semibold text-foreground">{p?.displayName ?? "セラピスト"}</h2>
-        <p className="text-xs text-muted-foreground">{p?.storeName ?? ""}</p>
-      </div>
-      <div className="px-4 grid grid-cols-3 gap-3 mb-4">
-        {[
-          { label: "今月指名", value: String(d?.nominationCount ?? 0), unit: "本", color: "text-blue-600" },
-          { label: "今月売上", value: d?.totalAmount ? `¥${Math.round(d.totalAmount/10000)}万` : "¥0", unit: "", color: "text-green-600" },
-          { label: "フォロワー", value: String(d?.followerCount ?? 0), unit: "人", color: "text-purple-600" },
-        ].map((stat, i) => (
-          <motion.div key={stat.label} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.08 }}
-            className="bg-white rounded-2xl p-3 shadow-luxury text-center">
-            <div className={`text-xl font-bold ${stat.color}`}>{stat.value}{stat.unit}</div>
-            <div className="text-xs text-muted-foreground mt-0.5">{stat.label}</div>
-          </motion.div>
-        ))}
-      </div>
-      <div className="px-4 mb-4">
-        <h3 className="text-sm font-semibold text-foreground mb-3">管理メニュー</h3>
-        <div className="grid grid-cols-3 gap-3">
-          {menuItems.map((item, i) => {
-            const Icon = item.icon;
-            return (
-              <motion.div key={item.href} initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: i * 0.04 + 0.2 }}>
-                <Link href={item.href}>
-                  <div className="bg-white rounded-2xl p-3 shadow-luxury flex flex-col items-center gap-2 active:scale-95 transition-transform cursor-pointer">
-                    <div className={`w-10 h-10 rounded-xl ${item.color} flex items-center justify-center`}><Icon className="w-5 h-5" /></div>
-                    <span className="text-xs font-medium text-foreground text-center leading-tight">{item.label}</span>
-                  </div>
-                </Link>
-              </motion.div>
-            );
-          })}
+      {/* Profile summary row */}
+      <div className="px-4 pt-4 pb-3 flex items-center gap-4">
+        <Link href="/therapist/profile">
+          <StoryAvatar name={p?.displayName} src={p?.profileImageUrl} size="lg" hasStory={true} />
+        </Link>
+        <div className="flex-1 flex items-center justify-around">
+          <div className="text-center">
+            <div className="text-[17px] font-bold">{d?.nominationCount ?? 0}</div>
+            <div className="text-[11px] text-gray-500">今月指名</div>
+          </div>
+          <div className="text-center">
+            <div className="text-[17px] font-bold">{d?.totalAmount ? `¥${Math.round(d.totalAmount / 1000)}k` : "¥0"}</div>
+            <div className="text-[11px] text-gray-500">今月売上</div>
+          </div>
+          <div className="text-center">
+            <div className="text-[17px] font-bold">{d?.followerCount ?? 0}</div>
+            <div className="text-[11px] text-gray-500">フォロワー</div>
+          </div>
         </div>
       </div>
+
+      <div className="px-4 pb-3">
+        <div className="text-[14px] font-semibold">{p?.displayName}</div>
+        {p?.storeName && <div className="text-[12px] text-gray-500">{p.storeName}</div>}
+        {p?.catchphrase && <div className="text-[13px] text-gray-600 mt-1">{p.catchphrase}</div>}
+        <Link href="/therapist/profile">
+          <button className="w-full mt-2 py-1.5 border border-gray-300 rounded-lg text-[13px] font-semibold text-foreground active:bg-gray-50">
+            プロフィールを編集
+          </button>
+        </Link>
+      </div>
+
+      <div className="h-px bg-gray-100" />
+
+      {/* Quick stats */}
+      <div className="grid grid-cols-3 gap-px bg-gray-100 border-b border-gray-100">
+        {[
+          { label: "今日の予約", value: todayReservations.length, unit: "件", color: "text-primary" },
+          { label: "今月給与", value: d?.payroll ? `¥${Math.round(d.payroll / 1000)}k` : "¥0", unit: "", color: "text-green-600" },
+          { label: "評価", value: p?.rating?.toFixed(1) ?? "4.5", unit: "★", color: "text-yellow-500" },
+        ].map((stat) => (
+          <div key={stat.label} className="bg-white py-3 flex flex-col items-center">
+            <div className={`text-[17px] font-bold ${stat.color}`}>{stat.value}{stat.unit}</div>
+            <div className="text-[11px] text-gray-500">{stat.label}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Today's reservations */}
+      {todayReservations.length > 0 && (
+        <div className="px-4 pt-4 pb-2">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-[14px] font-semibold">本日の予約</h2>
+            <Link href="/therapist/reservations">
+              <span className="text-[13px] text-primary">すべて見る</span>
+            </Link>
+          </div>
+          <div className="space-y-2">
+            {todayReservations.slice(0, 3).map((r: any) => (
+              <div key={r.id} className="flex items-center gap-3 py-2 border-b border-gray-50">
+                <div className="text-[13px] font-medium text-primary w-12">{r.startTime}</div>
+                <div className="flex-1">
+                  <div className="text-[13px] font-medium">{r.customerName ?? "顧客"}</div>
+                  <div className="text-[11px] text-gray-500">{r.menuName}</div>
+                </div>
+                <StatusBadge status={r.status} />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Quick menu grid */}
+      <div className="px-4 pt-4 pb-2">
+        <h2 className="text-[14px] font-semibold mb-3">メニュー</h2>
+        <div className="grid grid-cols-3 gap-3">
+          {[
+            { href: "/therapist/reservations", icon: <Calendar className="w-6 h-6" />, label: "予約", color: "bg-blue-50 text-blue-600" },
+            { href: "/therapist/shifts", icon: <Clock className="w-6 h-6" />, label: "出勤", color: "bg-teal-50 text-teal-600" },
+            { href: "/therapist/posts", icon: <Image className="w-6 h-6" />, label: "投稿", color: "bg-purple-50 text-purple-600" },
+            { href: "/therapist/memos", icon: <BookOpen className="w-6 h-6" />, label: "顧客メモ", color: "bg-pink-50 text-pink-600" },
+            { href: "/therapist/sales", icon: <TrendingUp className="w-6 h-6" />, label: "売上", color: "bg-green-50 text-green-600" },
+            { href: "/therapist/affiliations", icon: <Heart className="w-6 h-6" />, label: "所属申請", color: "bg-red-50 text-red-500" },
+          ].map((item) => (
+            <Link key={item.href} href={item.href}>
+              <motion.div
+                whileTap={{ scale: 0.94 }}
+                className={`rounded-2xl p-3 flex flex-col items-center gap-1.5 cursor-pointer ${item.color} bg-opacity-60`}
+              >
+                {item.icon}
+                <span className="text-[11px] font-medium">{item.label}</span>
+              </motion.div>
+            </Link>
+          ))}
+        </div>
+      </div>
+
+      <div className="h-8" />
     </AromaLayout>
   );
 }

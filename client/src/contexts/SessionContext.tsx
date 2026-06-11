@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
+import React, { createContext, useContext } from "react";
 import { trpc } from "@/lib/trpc";
 
 export type AromaRole = "store" | "therapist" | "customer" | null;
@@ -15,19 +15,34 @@ interface SessionContextValue {
   session: AromaSession | null;
   isLoading: boolean;
   refetch: () => void;
+  logout: () => Promise<void>;
 }
 
 const SessionContext = createContext<SessionContextValue>({
   session: null,
   isLoading: true,
   refetch: () => {},
+  logout: async () => {},
 });
 
 export function SessionProvider({ children }: { children: React.ReactNode }) {
+  const utils = trpc.useUtils();
   const { data, isLoading, refetch } = trpc.aroAuth.getSession.useQuery(undefined, {
     retry: false,
-    staleTime: 60000,
+    staleTime: 30000,
   });
+
+  const logoutMut = trpc.aroAuth.aroLogout.useMutation({
+    onSuccess: () => {
+      // Invalidate all queries so session is cleared
+      utils.aroAuth.getSession.invalidate();
+      utils.invalidate();
+    },
+  });
+
+  const logout = async () => {
+    await logoutMut.mutateAsync();
+  };
 
   const session: AromaSession | null = data
     ? {
@@ -40,7 +55,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     : null;
 
   return (
-    <SessionContext.Provider value={{ session, isLoading, refetch }}>
+    <SessionContext.Provider value={{ session, isLoading, refetch, logout }}>
       {children}
     </SessionContext.Provider>
   );

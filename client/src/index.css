@@ -6,30 +6,30 @@
 /* ─── AromaNet Design Tokens ──────────────────────────────────────────────── */
 @theme inline {
   --color-background: oklch(0.99 0 0);
-  --color-foreground: oklch(0.22 0.01 250);
+  --color-foreground: oklch(0.13 0.01 250);
   --color-card: oklch(1 0 0);
-  --color-card-foreground: oklch(0.22 0.01 250);
+  --color-card-foreground: oklch(0.13 0.01 250);
   --color-popover: oklch(1 0 0);
-  --color-popover-foreground: oklch(0.22 0.01 250);
+  --color-popover-foreground: oklch(0.13 0.01 250);
   --color-primary: oklch(0.35 0.08 195);
   --color-primary-foreground: oklch(0.99 0 0);
   --color-secondary: oklch(0.96 0.01 250);
   --color-secondary-foreground: oklch(0.35 0.08 195);
-  --color-muted: oklch(0.96 0.005 250);
-  --color-muted-foreground: oklch(0.55 0.02 250);
+  --color-muted: oklch(0.97 0.003 250);
+  --color-muted-foreground: oklch(0.52 0.02 250);
   --color-accent: oklch(0.82 0.08 80);
-  --color-accent-foreground: oklch(0.22 0.01 250);
+  --color-accent-foreground: oklch(0.13 0.01 250);
   --color-destructive: oklch(0.55 0.22 25);
   --color-destructive-foreground: oklch(0.99 0 0);
-  --color-border: oklch(0.90 0.01 250);
-  --color-input: oklch(0.90 0.01 250);
+  --color-border: oklch(0.92 0.005 250);
+  --color-input: oklch(0.95 0.005 250);
   --color-ring: oklch(0.35 0.08 195);
   --color-chart-1: oklch(0.35 0.08 195);
   --color-chart-2: oklch(0.82 0.08 80);
   --color-chart-3: oklch(0.65 0.12 195);
   --color-chart-4: oklch(0.72 0.06 80);
   --color-chart-5: oklch(0.45 0.10 195);
-  --radius-sm: 0.375rem;
+  --radius-sm: 0.25rem;
   --radius-md: 0.5rem;
   --radius-lg: 0.75rem;
   --radius-xl: 1rem;
@@ -37,11 +37,11 @@
   /* Custom AromaNet colors */
   --color-teal: oklch(0.35 0.08 195);
   --color-teal-light: oklch(0.65 0.08 195);
-  --color-teal-muted: oklch(0.92 0.03 195);
+  --color-teal-muted: oklch(0.93 0.03 195);
   --color-gold: oklch(0.82 0.08 80);
   --color-gold-light: oklch(0.90 0.06 80);
   --color-gold-muted: oklch(0.96 0.03 80);
-  --color-charcoal: oklch(0.22 0.01 250);
+  --color-charcoal: oklch(0.13 0.01 250);
   --color-charcoal-light: oklch(0.40 0.01 250);
 }
 
@@ -49,10 +49,24 @@
 @layer base {
   * {
     @apply border-border;
+    box-sizing: border-box;
+  }
+  html {
+    /* Prevent text size adjustment on orientation change */
+    -webkit-text-size-adjust: 100%;
+    /* Smooth scroll */
+    scroll-behavior: smooth;
   }
   body {
-    @apply bg-background text-foreground font-sans antialiased;
+    @apply bg-background text-foreground antialiased;
+    font-family: 'Noto Sans JP', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     font-feature-settings: "rlig" 1, "calt" 1;
+    /* Full viewport height for mobile */
+    min-height: 100dvh;
+    /* Prevent overscroll bounce on iOS */
+    overscroll-behavior: none;
+    /* Safe area support */
+    padding-top: env(safe-area-inset-top);
   }
   .flex {
     min-width: 0;
@@ -60,8 +74,25 @@
   }
   .container {
     @apply mx-auto px-4;
-    max-width: 1280px;
+    max-width: 430px;
   }
+  /* Remove default tap highlight on mobile */
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
+  /* Prevent text selection on UI elements */
+  button, a {
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  /* Smooth scrolling for all scroll containers */
+  [data-scroll], .overflow-y-auto, .overflow-x-auto {
+    -webkit-overflow-scrolling: touch;
+    scroll-behavior: smooth;
+  }
+  /* Hide scrollbar but keep functionality */
+  .scrollbar-none::-webkit-scrollbar { display: none; }
+  .scrollbar-none { -ms-overflow-style: none; scrollbar-width: none; }
 }
 
 /* ─── Custom Utilities ────────────────────────────────────────────────────── */
@@ -82,27 +113,45 @@
   .gradient-gold {
     background: linear-gradient(135deg, var(--color-gold) 0%, oklch(0.75 0.10 80) 100%);
   }
+  /* Instagram gradient */
+  .gradient-instagram {
+    background: linear-gradient(45deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%);
+  }
 
   /* Glass effect */
   .glass {
-    background: oklch(1 0 0 / 0.85);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
+    background: oklch(1 0 0 / 0.92);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
   }
 
-  /* Soft shadow */
+  /* Shadows */
   .shadow-luxury {
-    box-shadow: 0 4px 24px oklch(0.35 0.08 195 / 0.12), 0 1px 4px oklch(0 0 0 / 0.06);
+    box-shadow: 0 1px 3px oklch(0 0 0 / 0.08), 0 4px 16px oklch(0 0 0 / 0.04);
   }
   .shadow-gold {
     box-shadow: 0 4px 16px oklch(0.82 0.08 80 / 0.25);
   }
+  .shadow-card {
+    box-shadow: 0 0 0 1px oklch(0 0 0 / 0.06), 0 2px 8px oklch(0 0 0 / 0.06);
+  }
 
   /* Scrollbar */
-  .scrollbar-thin::-webkit-scrollbar { width: 4px; height: 4px; }
+  .scrollbar-thin::-webkit-scrollbar { width: 3px; height: 3px; }
   .scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
   .scrollbar-thin::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 2px; }
-  .scrollbar-thin::-webkit-scrollbar-thumb:hover { background: var(--color-muted-foreground); }
+
+  /* Safe area utilities */
+  .pb-safe { padding-bottom: env(safe-area-inset-bottom); }
+  .pt-safe { padding-top: env(safe-area-inset-top); }
+
+  /* Instagram-style input */
+  .input-insta {
+    @apply bg-gray-50 border-gray-200 rounded-lg text-sm;
+  }
+
+  /* Active scale for touch */
+  .active-scale:active { transform: scale(0.96); }
 }
 
 /* ─── Animation ───────────────────────────────────────────────────────────── */
@@ -114,10 +163,54 @@
 /* Button press effect */
 button:active:not(:disabled) {
   transform: scale(0.97);
-  transition: transform 160ms cubic-bezier(0.23, 1, 0.32, 1);
+  transition: transform 120ms cubic-bezier(0.23, 1, 0.32, 1);
 }
 
-/* ─── Mobile-first Responsive ─────────────────────────────────────────────── */
-@media (max-width: 768px) {
-  .container { @apply px-4; }
+/* ─── Instagram-style Components ──────────────────────────────────────────── */
+
+/* Post grid */
+.post-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 2px;
+}
+
+/* Story circle */
+.story-ring {
+  background: linear-gradient(45deg, #f09433, #e6683c, #dc2743, #cc2366, #bc1888);
+  padding: 2px;
+  border-radius: 50%;
+}
+.story-ring-inner {
+  background: white;
+  border-radius: 50%;
+  padding: 2px;
+}
+
+/* Notification dot */
+.notif-dot {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 8px;
+  height: 8px;
+  background: #ef4444;
+  border-radius: 50%;
+  border: 1.5px solid white;
+}
+
+/* ─── Mobile Viewport Fix ─────────────────────────────────────────────────── */
+#root {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: #f5f5f5;
+}
+
+/* Center the app on desktop */
+@media (min-width: 430px) {
+  #root {
+    background: #e8e8e8;
+  }
 }

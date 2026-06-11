@@ -1,0 +1,135 @@
+import { useEffect } from "react";
+import { useLocation, Link } from "wouter";
+import { motion } from "framer-motion";
+import { Heart, MapPin, Star, User } from "lucide-react";
+import { AromaLayout, AromaAvatar } from "@/components/AromaLayout";
+import { trpc } from "@/lib/trpc";
+import { useSession } from "@/contexts/SessionContext";
+import { toast } from "sonner";
+
+export default function CustomerFavorites() {
+  const [, navigate] = useLocation();
+  const { session, isLoading } = useSession();
+  const utils = trpc.useUtils();
+
+  useEffect(() => {
+    if (!isLoading && (!session || session.role !== "customer")) navigate("/customer/login");
+  }, [session, isLoading]);
+
+  const { data: favs, isLoading: favsLoading } = trpc.customer.getFavorites.useQuery(undefined, { enabled: !!session });
+  const favList = (favs as any[]) ?? [];
+
+  const toggleFavMut = trpc.customer.toggleFavorite.useMutation({
+    onSuccess: (data) => {
+      utils.customer.getFavorites.invalidate();
+      if (!(data as any).favorited) toast.success("お気に入りから削除しました");
+    },
+    onError: () => toast.error("操作に失敗しました"),
+  });
+
+  const storeFavs = favList.filter(f => f.targetType === "store");
+  const therapistFavs = favList.filter(f => f.targetType === "therapist");
+
+  return (
+    <AromaLayout title="お気に入り" showBack>
+      <div className="px-4 py-4 space-y-5 pb-24">
+        {favsLoading ? (
+          <div className="flex justify-center py-12">
+            <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+          </div>
+        ) : favList.length === 0 ? (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+            className="flex flex-col items-center gap-3 py-16 text-center">
+            <div className="w-16 h-16 rounded-full bg-pink-50 flex items-center justify-center">
+              <Heart className="w-8 h-8 text-pink-300" />
+            </div>
+            <p className="text-sm text-muted-foreground">お気に入りがまだありません</p>
+            <Link href="/search" className="text-sm text-primary font-medium">店舗・セラピストを探す</Link>
+          </motion.div>
+        ) : (
+          <>
+            {storeFavs.length > 0 && (
+              <div>
+                <h2 className="text-sm font-semibold text-foreground mb-2 flex items-center gap-1.5">
+                  <MapPin className="w-4 h-4 text-primary" />お気に入り店舗
+                </h2>
+                <div className="space-y-2">
+                  {storeFavs.map((fav: any, i: number) => (
+                    <motion.div key={fav.id} initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.05 }}>
+                      <FavoriteStoreCard fav={fav} onRemove={() => toggleFavMut.mutate({ targetType: "store", targetId: fav.targetId })} />
+                    </motion.div>
+                  ))}
+                </div>
+              </div>
+            )}
+            {therapistFavs.length > 0 && (
+              <div>
+                <h2 className="text-sm font-semibold text-foreground mb-2 flex items-center gap-1.5">
+                  <User className="w-4 h-4 text-primary" />お気に入りセラピスト
+                </h2>
+                <div className="space-y-2">
+                  {therapistFavs.map((fav: any, i: number) => (
+                    <motion.div key={fav.id} initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.05 }}>
+                      <FavoriteTherapistCard fav={fav} onRemove={() => toggleFavMut.mutate({ targetType: "therapist", targetId: fav.targetId })} />
+                    </motion.div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </AromaLayout>
+  );
+}
+
+function FavoriteStoreCard({ fav, onRemove }: { fav: any; onRemove: () => void }) {
+  const { data: store } = trpc.store.getById.useQuery({ storeId: fav.targetId }, { enabled: !!fav.targetId });
+  const s = store as any;
+  return (
+    <div className="bg-white rounded-2xl shadow-luxury overflow-hidden">
+      <Link href={`/store/${fav.targetId}`}>
+        <div className="flex items-center gap-3 p-3">
+          <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-teal-100 to-teal-200 flex items-center justify-center flex-shrink-0 overflow-hidden">
+            {s?.logoUrl ? <img src={s.logoUrl} alt={s.name} className="w-full h-full object-cover" /> : <span className="text-lg font-bold text-teal-600">{s?.name?.[0] ?? "S"}</span>}
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="font-semibold text-sm text-foreground truncate">{s?.name ?? "読み込み中..."}</p>
+            <div className="flex items-center gap-2 mt-0.5">
+              {s?.area && <span className="text-xs text-muted-foreground flex items-center gap-0.5"><MapPin className="w-3 h-3" />{s.area}</span>}
+              {s?.reviewAvg && <span className="text-xs text-muted-foreground flex items-center gap-0.5"><Star className="w-3 h-3 fill-yellow-400 text-yellow-400" />{Number(s.reviewAvg).toFixed(1)}</span>}
+            </div>
+          </div>
+        </div>
+      </Link>
+      <div className="px-3 pb-3">
+        <button onClick={onRemove} className="w-full py-1.5 text-xs text-red-400 border border-red-100 rounded-lg hover:bg-red-50 transition-colors">
+          お気に入りから削除
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function FavoriteTherapistCard({ fav, onRemove }: { fav: any; onRemove: () => void }) {
+  const { data: therapist } = trpc.therapist.getById.useQuery({ therapistId: fav.targetId }, { enabled: !!fav.targetId });
+  const t = therapist as any;
+  return (
+    <div className="bg-white rounded-2xl shadow-luxury overflow-hidden">
+      <Link href={`/therapist/${fav.targetId}`}>
+        <div className="flex items-center gap-3 p-3">
+          <AromaAvatar name={t?.displayName} src={t?.profileImageUrl} size="lg" />
+          <div className="flex-1 min-w-0">
+            <p className="font-semibold text-sm text-foreground truncate">{t?.displayName ?? "読み込み中..."}</p>
+            {t?.catchphrase && <p className="text-xs text-muted-foreground truncate mt-0.5">{t.catchphrase}</p>}
+          </div>
+        </div>
+      </Link>
+      <div className="px-3 pb-3">
+        <button onClick={onRemove} className="w-full py-1.5 text-xs text-red-400 border border-red-100 rounded-lg hover:bg-red-50 transition-colors">
+          お気に入りから削除
+        </button>
+      </div>
+    </div>
+  );
+}

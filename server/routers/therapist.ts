@@ -8,7 +8,7 @@ import {
   posts, postImages, customerMemos, follows, favorites,
   sales, therapistPayrolls,
 } from "../../drizzle/schema";
-import { eq, and, desc, gte, sql } from "drizzle-orm";
+import { eq, and, desc, gte, sql, like } from "drizzle-orm";
 
 export const therapistRouter = router({
   getById: publicProcedure
@@ -34,6 +34,8 @@ export const therapistRouter = router({
   search: publicProcedure
     .input(z.object({
       storeId: z.number().optional(),
+      prefecture: z.string().optional(),
+      keyword: z.string().optional(),
       limit: z.number().default(20),
       offset: z.number().default(0),
     }))
@@ -42,7 +44,15 @@ export const therapistRouter = router({
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       const conditions: any[] = [eq(therapists.isPublic, true)];
       if (input.storeId) conditions.push(eq(therapists.storeId, input.storeId));
-      return db.select().from(therapists).where(and(...conditions)).orderBy(desc(therapists.nominationCount)).limit(input.limit).offset(input.offset);
+      if (input.keyword) conditions.push(like(therapists.displayName, `%${input.keyword}%`));
+      let results = await db.select().from(therapists).where(and(...conditions)).orderBy(desc(therapists.nominationCount)).limit(200);
+      // Filter by prefecture via store
+      if (input.prefecture) {
+        const storeRows = await db.select({ id: stores.id }).from(stores).where(eq(stores.prefecture, input.prefecture));
+        const storeIds = new Set(storeRows.map(s => s.id));
+        results = results.filter(t => t.storeId != null && storeIds.has(t.storeId));
+      }
+      return results.slice(input.offset, input.offset + input.limit);
     }),
 
   getMyProfile: publicProcedure.query(async ({ ctx }) => {
