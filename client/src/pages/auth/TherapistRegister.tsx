@@ -1,44 +1,39 @@
 import { useState } from "react";
 import { Link } from "wouter";
-import { Mail, Lock, User, KeyRound, RefreshCw } from "lucide-react";
+import { Mail, Lock, User } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
-type Step = "email" | "verify" | "register";
-
 export default function TherapistRegister() {
-  const [step, setStep] = useState<Step>("email");
   const [email, setEmail] = useState("");
-  const [code, setCode] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [resendCooldown, setResendCooldown] = useState(0);
-
-  const sendCodeMut = trpc.aroAuth.sendVerificationCode.useMutation({
-    onSuccess: () => { setStep("verify"); setError(null); startCooldown(); },
-    onError: (e) => setError(e.message),
-  });
-
-  const checkCodeMut = trpc.aroAuth.checkVerificationCode.useMutation({
-    onSuccess: () => { setStep("register"); setError(null); },
-    onError: (e) => setError(e.message),
-  });
 
   const regMut = trpc.aroAuth.therapistRegister.useMutation({
     onSuccess: () => { window.location.href = "/therapist/dashboard"; },
     onError: (e) => setError(e.message),
   });
 
-  function startCooldown() {
-    setResendCooldown(60);
-    const timer = setInterval(() => {
-      setResendCooldown((v) => { if (v <= 1) { clearInterval(timer); return 0; } return v - 1; });
-    }, 1000);
-  }
+  const handleSubmit = () => {
+    setError(null);
+    if (!email || !displayName || !password || !confirmPassword) {
+      setError("すべての項目を入力してください");
+      return;
+    }
+    if (password !== confirmPassword) {
+      setError("パスワードが一致しません");
+      return;
+    }
+    if (password.length < 8) {
+      setError("パスワードは8文字以上で入力してください");
+      return;
+    }
+    regMut.mutate({ displayName, email, password, skipEmailVerify: true });
+  };
 
   return (
     <div className="min-h-screen bg-background flex flex-col items-center justify-center px-4 py-8">
@@ -48,103 +43,84 @@ export default function TherapistRegister() {
           <p className="text-sm text-muted-foreground mt-1">セラピスト新規登録</p>
         </div>
 
-        <div className="flex items-center justify-center gap-2 mb-6">
-          {(["email", "verify", "register"] as Step[]).map((s, i) => (
-            <div key={s} className="flex items-center gap-2">
-              <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-colors ${
-                step === s ? "bg-primary text-primary-foreground" :
-                (["email", "verify", "register"].indexOf(step) > i) ? "bg-primary/30 text-primary" :
-                "bg-muted text-muted-foreground"
-              }`}>{i + 1}</div>
-              {i < 2 && <div className={`w-8 h-0.5 ${(["email", "verify", "register"].indexOf(step) > i) ? "bg-primary/50" : "bg-muted"}`} />}
-            </div>
-          ))}
-        </div>
-
         <div className="bg-card rounded-2xl shadow-sm border border-border p-6 space-y-4">
-          {step === "email" && (
-            <>
-              <div>
-                <h2 className="font-semibold text-base mb-1">メールアドレスを入力</h2>
-                <p className="text-xs text-muted-foreground">確認コードを送信します</p>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="email">メールアドレス</Label>
-                <div className="relative">
-                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <Input id="email" type="email" placeholder="therapist@example.com" className="pl-9" value={email} onChange={(e) => setEmail(e.target.value)} onKeyDown={(e) => e.key === "Enter" && sendCodeMut.mutate({ email, role: "therapist" })} />
-                </div>
-              </div>
-              {error && <p className="text-destructive text-xs">{error}</p>}
-              <Button className="w-full" disabled={!email || sendCodeMut.isPending} onClick={() => { setError(null); sendCodeMut.mutate({ email, role: "therapist" }); }}>
-                {sendCodeMut.isPending ? "送信中..." : "確認コードを送信"}
-              </Button>
-            </>
-          )}
+          <div>
+            <h2 className="font-semibold text-base mb-1">アカウント情報を入力</h2>
+            <p className="text-xs text-muted-foreground">メールアドレスとパスワードで登録できます</p>
+          </div>
 
-          {step === "verify" && (
-            <>
-              <div>
-                <h2 className="font-semibold text-base mb-1">認証コードを入力</h2>
-                <p className="text-xs text-muted-foreground">{email} に送信した6桁のコードを入力してください</p>
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="displayName">源氏名（表示名）</Label>
+              <div className="relative">
+                <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  id="displayName"
+                  type="text"
+                  placeholder="源氏名"
+                  className="pl-9"
+                  value={displayName}
+                  onChange={(e) => setDisplayName(e.target.value)}
+                />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="code">認証コード</Label>
-                <div className="relative">
-                  <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <Input id="code" type="text" inputMode="numeric" maxLength={6} placeholder="123456" className="pl-9 text-center tracking-widest text-lg font-mono" value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))} onKeyDown={(e) => e.key === "Enter" && code.length === 6 && checkCodeMut.mutate({ email, code, role: "therapist" })} />
-                </div>
-              </div>
-              {error && <p className="text-destructive text-xs">{error}</p>}
-              <Button className="w-full" disabled={code.length !== 6 || checkCodeMut.isPending} onClick={() => { setError(null); checkCodeMut.mutate({ email, code, role: "therapist" }); }}>
-                {checkCodeMut.isPending ? "確認中..." : "コードを確認"}
-              </Button>
-              <button type="button" className="w-full flex items-center justify-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40" disabled={resendCooldown > 0 || sendCodeMut.isPending} onClick={() => { setError(null); sendCodeMut.mutate({ email, role: "therapist" }); }}>
-                <RefreshCw className="w-3 h-3" />
-                {resendCooldown > 0 ? `再送信 (${resendCooldown}秒後)` : "コードを再送信"}
-              </button>
-            </>
-          )}
+            </div>
 
-          {step === "register" && (
-            <>
-              <div>
-                <h2 className="font-semibold text-base mb-1">アカウント情報を入力</h2>
-                <p className="text-xs text-muted-foreground">メール認証が完了しました</p>
+            <div className="space-y-1.5">
+              <Label htmlFor="email">メールアドレス</Label>
+              <div className="relative">
+                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder="therapist@example.com"
+                  className="pl-9"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                />
               </div>
-              <div className="space-y-3">
-                <div className="space-y-1.5">
-                  <Label htmlFor="displayName">源氏名（表示名）</Label>
-                  <div className="relative">
-                    <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                    <Input id="displayName" type="text" placeholder="源氏名" className="pl-9" value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
-                  </div>
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="password">パスワード（8文字以上）</Label>
-                  <div className="relative">
-                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                    <Input id="password" type="password" placeholder="8文字以上" className="pl-9" value={password} onChange={(e) => setPassword(e.target.value)} />
-                  </div>
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="confirmPassword">パスワード確認</Label>
-                  <div className="relative">
-                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                    <Input id="confirmPassword" type="password" placeholder="••••••••" className="pl-9" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} />
-                  </div>
-                </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="password">パスワード（8文字以上）</Label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  id="password"
+                  type="password"
+                  placeholder="8文字以上"
+                  className="pl-9"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                />
               </div>
-              {error && <p className="text-destructive text-xs">{error}</p>}
-              <Button className="w-full" disabled={!displayName || !password || !confirmPassword || regMut.isPending} onClick={() => {
-                setError(null);
-                if (password !== confirmPassword) { setError("パスワードが一致しません"); return; }
-                regMut.mutateAsync({ displayName, email, password, verificationCode: code });
-              }}>
-                {regMut.isPending ? "登録中..." : "登録する"}
-              </Button>
-            </>
-          )}
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="confirmPassword">パスワード確認</Label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  id="confirmPassword"
+                  type="password"
+                  placeholder="••••••••"
+                  className="pl-9"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
+                />
+              </div>
+            </div>
+          </div>
+
+          {error && <p className="text-destructive text-xs">{error}</p>}
+
+          <Button
+            className="w-full"
+            disabled={!email || !displayName || !password || !confirmPassword || regMut.isPending}
+            onClick={handleSubmit}
+          >
+            {regMut.isPending ? "登録中..." : "登録する"}
+          </Button>
         </div>
 
         <p className="text-center text-xs text-muted-foreground mt-4">

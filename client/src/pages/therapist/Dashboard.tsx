@@ -82,7 +82,7 @@ export default function TherapistDashboard() {
         {p?.catchphrase && <div className="text-[13px] text-gray-600 mt-1">{p.catchphrase}</div>}
         <Link href="/therapist/profile">
           <button className="w-full mt-2 py-1.5 border border-gray-300 rounded-lg text-[13px] font-semibold text-foreground active:bg-gray-50">
-            プロフィールを編集
+            プロフィールを編集（写真・クロップ変更可）
           </button>
         </Link>
       </div>

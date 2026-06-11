@@ -108,7 +108,7 @@ export default function CustomerMyPage() {
 
         <Link href="/my/edit-profile">
           <button className="w-full mt-3 py-1.5 border border-gray-300 rounded-lg text-[13px] font-semibold text-foreground active:bg-gray-50 transition-colors">
-            プロフィールを編集
+            プロフィールを編集（アイコン・クロップ変更可）
           </button>
         </Link>
       </div>

@@ -108,7 +108,7 @@ export default function StoreDashboard() {
         {store?.area && <div className="text-[12px] text-gray-500">{store.area}</div>}
         <Link href="/store/profile">
           <button className="w-full mt-2 py-1.5 border border-gray-300 rounded-lg text-[13px] font-semibold active:bg-gray-50">
-            店舗プロフィールを編集
+            店舗プロフィールを編集（ロゴ・クロップ変更可）
           </button>
         </Link>
       </div>

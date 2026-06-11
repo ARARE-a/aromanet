@@ -7,12 +7,11 @@ import {
   stores, therapists, customerProfiles, auditLogs,
   reservations, reviews, posts, postImages, messageThreads, messages,
   shifts, sales, therapistPayrolls, follows, favorites, customerMemos,
-  ngCustomers, notifications, emailVerificationCodes,
+  ngCustomers, notifications,
 } from "../../drizzle/schema";
-import { eq, and, lt } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import { SignJWT, jwtVerify, type JWTPayload } from "jose";
-import { sendEmail, buildVerificationEmail } from "../_core/email";
 
 const JWT_SECRET_KEY = new TextEncoder().encode(process.env.JWT_SECRET || "aromanet-secret-key");
 const SESSION_COOKIE = "aromanet_session";
@@ -62,67 +61,7 @@ async function logAudit(db: any, role: string, accountId: number, action: string
   } catch {}
 }
 
-function generateCode(): string {
-  return Math.floor(100000 + Math.random() * 900000).toString();
-}
-
 export const authRouter = router({
-  // Send email verification code
-  sendVerificationCode: publicProcedure
-    .input(z.object({
-      email: z.string().email(),
-      role: z.enum(["store", "therapist", "customer"]),
-    }))
-    .mutation(async ({ input }) => {
-      const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      // Check if email already registered
-      if (input.role === "store") {
-        const ex = await db.select().from(storeAccounts).where(eq(storeAccounts.email, input.email)).limit(1);
-        if (ex.length > 0) throw new TRPCError({ code: "CONFLICT", message: "このメールアドレスは既に登録されています" });
-      } else if (input.role === "therapist") {
-        const ex = await db.select().from(therapistAccounts).where(eq(therapistAccounts.email, input.email)).limit(1);
-        if (ex.length > 0) throw new TRPCError({ code: "CONFLICT", message: "このメールアドレスは既に登録されています" });
-      } else {
-        const ex = await db.select().from(customerAccounts).where(eq(customerAccounts.email, input.email)).limit(1);
-        if (ex.length > 0) throw new TRPCError({ code: "CONFLICT", message: "このメールアドレスは既に登録されています" });
-      }
-      // Delete old codes for this email+role
-      await db.delete(emailVerificationCodes).where(
-        and(eq(emailVerificationCodes.email, input.email), eq(emailVerificationCodes.role, input.role))
-      );
-      const code = generateCode();
-      const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
-      await db.insert(emailVerificationCodes).values({ email: input.email, code, role: input.role, expiresAt });
-      const html = buildVerificationEmail(code, input.role);
-      await sendEmail({ to: input.email, subject: "【AromaNet】メールアドレス確認コード", html });
-      return { success: true };
-    }),
-
-  // Verify email code (check only, don't consume)
-  checkVerificationCode: publicProcedure
-    .input(z.object({
-      email: z.string().email(),
-      code: z.string().length(6),
-      role: z.enum(["store", "therapist", "customer"]),
-    }))
-    .mutation(async ({ input }) => {
-      const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      const rows = await db.select().from(emailVerificationCodes).where(
-        and(
-          eq(emailVerificationCodes.email, input.email),
-          eq(emailVerificationCodes.role, input.role),
-          eq(emailVerificationCodes.code, input.code),
-          eq(emailVerificationCodes.verified, false),
-        )
-      ).limit(1);
-      if (!rows[0]) throw new TRPCError({ code: "BAD_REQUEST", message: "認証コードが正しくありません" });
-      if (new Date() > rows[0].expiresAt) throw new TRPCError({ code: "BAD_REQUEST", message: "認証コードの有効期限が切れています。再送信してください" });
-      await db.update(emailVerificationCodes).set({ verified: true }).where(eq(emailVerificationCodes.id, rows[0].id));
-      return { success: true };
-    }),
-
   // Get current session info
   getSession: publicProcedure.query(async ({ ctx }) => {
     const token = ctx.req.cookies?.[SESSION_COOKIE];
@@ -140,21 +79,10 @@ export const authRouter = router({
       email: z.string().email(),
       password: z.string().min(8),
       storeName: z.string().min(1),
-      verificationCode: z.string().length(6),
     }))
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      // Verify email code
-      const codeRows = await db.select().from(emailVerificationCodes).where(
-        and(
-          eq(emailVerificationCodes.email, input.email),
-          eq(emailVerificationCodes.role, "store"),
-          eq(emailVerificationCodes.code, input.verificationCode),
-          eq(emailVerificationCodes.verified, true),
-        )
-      ).limit(1);
-      if (!codeRows[0]) throw new TRPCError({ code: "BAD_REQUEST", message: "メール認証が完了していません。認証コードを確認してください" });
       const existing = await db.select().from(storeAccounts).where(eq(storeAccounts.email, input.email)).limit(1);
       if (existing.length > 0) throw new TRPCError({ code: "CONFLICT", message: "このメールアドレスは既に登録されています" });
       const passwordHash = await bcrypt.hash(input.password, 12);
@@ -206,24 +134,11 @@ export const authRouter = router({
       email: z.string().email(),
       password: z.string().min(8),
       displayName: z.string().min(1),
-      verificationCode: z.string().length(6),
-      skipEmailVerify: z.boolean().optional(), // for store-added therapists
+      skipEmailVerify: z.boolean().optional(), // kept for backward compat (store-added therapists)
     }))
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      // Verify email code (skip if store is adding therapist)
-      if (!input.skipEmailVerify && input.verificationCode !== "000000") {
-        const codeRows = await db.select().from(emailVerificationCodes).where(
-          and(
-            eq(emailVerificationCodes.email, input.email),
-            eq(emailVerificationCodes.role, "therapist"),
-            eq(emailVerificationCodes.code, input.verificationCode),
-            eq(emailVerificationCodes.verified, true),
-          )
-        ).limit(1);
-        if (!codeRows[0]) throw new TRPCError({ code: "BAD_REQUEST", message: "メール認証が完了していません。認証コードを確認してください" });
-      }
       const existing = await db.select().from(therapistAccounts).where(eq(therapistAccounts.email, input.email)).limit(1);
       if (existing.length > 0) throw new TRPCError({ code: "CONFLICT", message: "このメールアドレスは既に登録されています" });
       const passwordHash = await bcrypt.hash(input.password, 12);
@@ -274,22 +189,11 @@ export const authRouter = router({
       password: z.string().min(8),
       displayName: z.string().min(1),
       ageConfirmed: z.boolean(),
-      verificationCode: z.string().length(6),
     }))
     .mutation(async ({ input, ctx }) => {
       if (!input.ageConfirmed) throw new TRPCError({ code: "BAD_REQUEST", message: "年齢確認が必要です" });
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      // Verify email code
-      const codeRows = await db.select().from(emailVerificationCodes).where(
-        and(
-          eq(emailVerificationCodes.email, input.email),
-          eq(emailVerificationCodes.role, "customer"),
-          eq(emailVerificationCodes.code, input.verificationCode),
-          eq(emailVerificationCodes.verified, true),
-        )
-      ).limit(1);
-      if (!codeRows[0]) throw new TRPCError({ code: "BAD_REQUEST", message: "メール認証が完了していません。認証コードを確認してください" });
       const existing = await db.select().from(customerAccounts).where(eq(customerAccounts.email, input.email)).limit(1);
       if (existing.length > 0) throw new TRPCError({ code: "CONFLICT", message: "このメールアドレスは既に登録されています" });
       const passwordHash = await bcrypt.hash(input.password, 12);

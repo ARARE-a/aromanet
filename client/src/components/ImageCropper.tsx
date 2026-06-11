@@ -1,10 +1,10 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import ReactCrop, { type Crop, type PixelCrop, centerCrop, makeAspectCrop } from "react-image-crop";
 import "react-image-crop/dist/ReactCrop.css";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
-import { ZoomIn, ZoomOut, RotateCw } from "lucide-react";
+import { ZoomIn, ZoomOut, RotateCw, Crop as CropIcon } from "lucide-react";
 
 interface ImageCropperProps {
   open: boolean;
@@ -39,26 +39,33 @@ export function ImageCropper({
   const imgRef = useRef<HTMLImageElement>(null);
   const [isProcessing, setIsProcessing] = useState(false);
 
-  // Load image when file changes
-  const loadImage = useCallback(() => {
-    if (!imageFile) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      setImgSrc(reader.result as string);
-      setScale(1);
-      setRotate(0);
+  // Load image whenever dialog opens with a new file
+  useEffect(() => {
+    if (open && imageFile) {
+      const reader = new FileReader();
+      reader.onload = () => {
+        setImgSrc(reader.result as string);
+        setScale(1);
+        setRotate(0);
+        setCrop(undefined);
+        setCompletedCrop(undefined);
+      };
+      reader.readAsDataURL(imageFile);
+    } else if (!open) {
+      setImgSrc("");
       setCrop(undefined);
-    };
-    reader.readAsDataURL(imageFile);
-  }, [imageFile]);
+      setCompletedCrop(undefined);
+    }
+  }, [open, imageFile]);
 
   // Initialize crop when image loads
   const onImageLoad = useCallback((e: React.SyntheticEvent<HTMLImageElement>) => {
     const { naturalWidth: width, naturalHeight: height } = e.currentTarget;
-    setCrop(centerAspectCrop(width, height, aspectRatio));
+    const initialCrop = centerAspectCrop(width, height, aspectRatio);
+    setCrop(initialCrop);
   }, [aspectRatio]);
 
-  // Generate cropped canvas
+  // Generate cropped canvas with correct zoom/rotate applied
   const getCroppedImg = useCallback(async (): Promise<{ url: string; blob: Blob } | null> => {
     const image = imgRef.current;
     if (!image || !completedCrop) return null;
@@ -67,24 +74,27 @@ export function ImageCropper({
     const ctx = canvas.getContext("2d");
     if (!ctx) return null;
 
+    // Scale from displayed size to natural size
     const scaleX = image.naturalWidth / image.width;
     const scaleY = image.naturalHeight / image.height;
 
-    const pixelRatio = window.devicePixelRatio;
-    const outputSize = 400; // output 400x400 for avatars
+    const outputSize = 400; // 400x400 output for avatars
+    const pixelRatio = window.devicePixelRatio || 1;
     canvas.width = outputSize * pixelRatio;
     canvas.height = outputSize * pixelRatio;
     ctx.scale(pixelRatio, pixelRatio);
     ctx.imageSmoothingQuality = "high";
 
+    // Crop coordinates in natural image pixels
     const cropX = completedCrop.x * scaleX;
     const cropY = completedCrop.y * scaleY;
     const cropWidth = completedCrop.width * scaleX;
     const cropHeight = completedCrop.height * scaleY;
 
-    // Apply rotation
+    // Apply rotation and zoom around the center of the output canvas
     const centerX = outputSize / 2;
     const centerY = outputSize / 2;
+
     ctx.save();
     ctx.translate(centerX, centerY);
     ctx.rotate((rotate * Math.PI) / 180);
@@ -93,8 +103,14 @@ export function ImageCropper({
 
     ctx.drawImage(
       image,
-      cropX, cropY, cropWidth, cropHeight,
-      0, 0, outputSize, outputSize
+      cropX,
+      cropY,
+      cropWidth,
+      cropHeight,
+      0,
+      0,
+      outputSize,
+      outputSize
     );
     ctx.restore();
 
@@ -106,7 +122,7 @@ export function ImageCropper({
           resolve({ url, blob });
         },
         "image/jpeg",
-        0.9
+        0.92
       );
     });
   }, [completedCrop, rotate, scale]);
@@ -120,18 +136,14 @@ export function ImageCropper({
         onClose();
       }
     } catch (e) {
-      console.error(e);
+      console.error("Crop error:", e);
     } finally {
       setIsProcessing(false);
     }
   };
 
-  // Load image when dialog opens
   const handleOpenChange = (isOpen: boolean) => {
-    if (isOpen && imageFile) {
-      loadImage();
-    } else if (!isOpen) {
-      setImgSrc("");
+    if (!isOpen) {
       onClose();
     }
   };
@@ -140,7 +152,10 @@ export function ImageCropper({
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="max-w-sm rounded-2xl p-4">
         <DialogHeader>
-          <DialogTitle className="text-base">{title}</DialogTitle>
+          <DialogTitle className="text-base flex items-center gap-2">
+            <CropIcon className="w-4 h-4 text-primary" />
+            {title}
+          </DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4">
@@ -167,10 +182,16 @@ export function ImageCropper({
                       maxHeight: "280px",
                       maxWidth: "100%",
                       objectFit: "contain",
+                      transformOrigin: "center center",
                     }}
                   />
                 </ReactCrop>
               </div>
+
+              {/* Usage hint */}
+              <p className="text-xs text-muted-foreground text-center">
+                枠をドラッグして切り取り範囲を調整できます
+              </p>
 
               {/* Zoom control */}
               <div className="space-y-2">
@@ -190,10 +211,10 @@ export function ImageCropper({
                   <span className="text-xs text-muted-foreground">ズーム: {Math.round(scale * 100)}%</span>
                   <button
                     onClick={() => setRotate(r => (r + 90) % 360)}
-                    className="flex items-center gap-1 text-xs text-primary"
+                    className="flex items-center gap-1 text-xs text-primary font-medium"
                   >
                     <RotateCw className="w-3.5 h-3.5" />
-                    回転
+                    90°回転
                   </button>
                 </div>
               </div>
@@ -214,6 +235,7 @@ export function ImageCropper({
             </>
           ) : (
             <div className="text-center py-8 text-muted-foreground text-sm">
+              <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-2" />
               画像を読み込んでいます...
             </div>
           )}
@@ -235,7 +257,8 @@ export function useAvatarCrop() {
 
   const closeCropper = () => {
     setCropOpen(false);
-    setPendingFile(null);
+    // Delay clearing file so dialog close animation completes
+    setTimeout(() => setPendingFile(null), 300);
   };
 
   return { cropOpen, pendingFile, openCropper, closeCropper };
