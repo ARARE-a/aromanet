@@ -157,7 +157,6 @@ export default function StoreDashboard() {
         </div>
       </div>
 
-      <div className="h-8" />
     </AromaLayout>
   );
 }

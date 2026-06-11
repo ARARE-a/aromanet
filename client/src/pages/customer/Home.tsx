@@ -159,8 +159,6 @@ export default function CustomerHome() {
           </div>
         )}
 
-        {/* Bottom padding */}
-        <div className="h-8" />
       </div>
     </AromaLayout>
   );

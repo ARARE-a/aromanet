@@ -58,7 +58,7 @@
     scroll-behavior: smooth;
   }
   body {
-    @apply bg-background text-foreground antialiased;
+    @apply bg-gray-100 text-foreground antialiased;
     font-family: 'Noto Sans JP', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     font-feature-settings: "rlig" 1, "calt" 1;
     /* Full viewport height for mobile */
@@ -67,6 +67,14 @@
     overscroll-behavior: none;
     /* Safe area support */
     padding-top: env(safe-area-inset-top);
+  }
+  #root {
+    /* Center the app column on wide screens */
+    max-width: 430px;
+    margin: 0 auto;
+    min-height: 100dvh;
+    background: var(--color-background);
+    position: relative;
   }
   .flex {
     min-width: 0;

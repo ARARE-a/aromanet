@@ -3,7 +3,7 @@ import { publicProcedure, router } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import { getSession } from "../session";
-import { messageThreads, messages, reports } from "../../drizzle/schema";
+import { messageThreads, messages, reports, therapists, stores, customerProfiles } from "../../drizzle/schema";
 import { eq, and, desc, sql } from "drizzle-orm";
 
 const BANNED_WORDS = ["LINE", "ライン", "連絡先", "個人連絡", "個人情報", "電話番号"];
@@ -21,7 +21,49 @@ export const messageRouter = router({
     if (session.role === "store") conditions.push(eq(messageThreads.storeId, session.storeId!));
     else if (session.role === "therapist") conditions.push(eq(messageThreads.therapistId, session.therapistId!));
     else conditions.push(eq(messageThreads.customerId, session.accountId));
-    return db.select().from(messageThreads).where(and(...conditions)).orderBy(desc(messageThreads.lastMessageAt)).limit(50);
+    const threadRows = await db.select().from(messageThreads).where(and(...conditions)).orderBy(desc(messageThreads.lastMessageAt)).limit(50);
+    // Attach last message and other participant info
+    const result = [];
+    for (const thread of threadRows) {
+      const lastMsgRows = await db.select({ content: messages.content, createdAt: messages.createdAt })
+        .from(messages).where(and(eq(messages.threadId, thread.id), eq(messages.isDeleted, false)))
+        .orderBy(desc(messages.createdAt)).limit(1);
+      let otherName: string | null = null;
+      let otherAvatar: string | null = null;
+      let otherRole: string | null = null;
+      let unreadCount = 0;
+      if (session.role === "store") {
+        unreadCount = thread.storeUnread;
+        if (thread.therapistId && thread.threadType === "store_therapist") {
+          const tRows = await db.select({ displayName: therapists.displayName, profileImageUrl: therapists.profileImageUrl }).from(therapists).where(eq(therapists.id, thread.therapistId)).limit(1);
+          otherName = tRows[0]?.displayName ?? null; otherAvatar = tRows[0]?.profileImageUrl ?? null; otherRole = "セラピスト";
+        } else if (thread.customerId) {
+          const cpRows = await db.select({ displayName: customerProfiles.displayName, profileImageUrl: customerProfiles.profileImageUrl }).from(customerProfiles).where(eq(customerProfiles.accountId, thread.customerId)).limit(1);
+          otherName = cpRows[0]?.displayName ?? `顧客#${thread.customerId}`; otherAvatar = cpRows[0]?.profileImageUrl ?? null; otherRole = "お客様";
+        }
+      } else if (session.role === "therapist") {
+        unreadCount = thread.therapistUnread;
+        if (thread.storeId && thread.threadType === "store_therapist") {
+          const sRows = await db.select({ name: stores.name, logoUrl: stores.logoUrl }).from(stores).where(eq(stores.id, thread.storeId)).limit(1);
+          otherName = sRows[0]?.name ?? null; otherAvatar = sRows[0]?.logoUrl ?? null; otherRole = "店舗";
+        } else if (thread.customerId) {
+          const cpRows = await db.select({ displayName: customerProfiles.displayName, profileImageUrl: customerProfiles.profileImageUrl }).from(customerProfiles).where(eq(customerProfiles.accountId, thread.customerId)).limit(1);
+          otherName = cpRows[0]?.displayName ?? `顧客#${thread.customerId}`; otherAvatar = cpRows[0]?.profileImageUrl ?? null; otherRole = "お客様";
+        }
+      } else {
+        // customer
+        unreadCount = thread.customerUnread;
+        if (thread.therapistId) {
+          const tRows = await db.select({ displayName: therapists.displayName, profileImageUrl: therapists.profileImageUrl }).from(therapists).where(eq(therapists.id, thread.therapistId)).limit(1);
+          otherName = tRows[0]?.displayName ?? null; otherAvatar = tRows[0]?.profileImageUrl ?? null; otherRole = "セラピスト";
+        } else if (thread.storeId) {
+          const sRows = await db.select({ name: stores.name, logoUrl: stores.logoUrl }).from(stores).where(eq(stores.id, thread.storeId)).limit(1);
+          otherName = sRows[0]?.name ?? null; otherAvatar = sRows[0]?.logoUrl ?? null; otherRole = "店舗";
+        }
+      }
+      result.push({ ...thread, otherName, otherAvatar, otherRole, unreadCount, lastMessage: lastMsgRows[0]?.content ?? null });
+    }
+    return result;
   }),
 
   getOrCreateThread: publicProcedure

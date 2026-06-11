@@ -35,7 +35,7 @@ export function AromaLayout({
   const hasHeader = title || titleLogo || showBack || headerRight || headerLeft;
 
   return (
-    <div className="min-h-[100dvh] max-h-[100dvh] bg-background flex flex-col max-w-[430px] mx-auto relative overflow-hidden">
+    <div className="min-h-[100dvh] max-h-[100dvh] bg-background flex flex-col relative overflow-hidden">
       {/* Instagram-style header */}
       {hasHeader && (
         <header className="flex-shrink-0 sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-gray-100 px-3 h-[44px] flex items-center gap-2">
@@ -181,6 +181,9 @@ export function AromaAvatar({
   size?: "xs" | "sm" | "md" | "lg" | "xl";
   className?: string;
 }) {
+  const [imgError, setImgError] = React.useState(false);
+  // Reset error state when src changes
+  React.useEffect(() => { setImgError(false); }, [src]);
   const sizes = {
     xs: "w-6 h-6 text-[9px]",
     sm: "w-8 h-8 text-xs",
@@ -189,13 +192,14 @@ export function AromaAvatar({
     xl: "w-20 h-20 text-xl"
   };
   const initials = name ? name.slice(0, 2) : "?";
+  const showImage = src && !imgError;
   return (
     <div className={cn(
       "rounded-full overflow-hidden bg-teal-muted flex items-center justify-center font-semibold text-primary flex-shrink-0",
       sizes[size], className
     )}>
-      {src
-        ? <img src={src} alt={name ?? ""} className="w-full h-full object-cover" />
+      {showImage
+        ? <img src={src} alt={name ?? ""} className="w-full h-full object-cover" onError={() => setImgError(true)} />
         : <span>{initials}</span>
       }
     </div>
@@ -212,9 +216,12 @@ export function StoryAvatar({
   hasStory?: boolean;
   className?: string;
 }) {
+  const [imgError, setImgError] = React.useState(false);
+  React.useEffect(() => { setImgError(false); }, [src]);
   const outerSizes = { sm: "w-10 h-10", md: "w-14 h-14", lg: "w-18 h-18", xl: "w-24 h-24" };
   const innerSizes = { sm: "w-8 h-8 text-xs", md: "w-12 h-12 text-sm", lg: "w-16 h-16 text-base", xl: "w-22 h-22 text-xl" };
   const initials = name ? name.slice(0, 2) : "?";
+  const showImage = src && !imgError;
   return (
     <div className={cn("relative flex items-center justify-center", outerSizes[size], className)}>
       {hasStory && (
@@ -228,8 +235,8 @@ export function StoryAvatar({
         innerSizes[size],
         hasStory ? "ring-2 ring-white" : ""
       )}>
-        {src
-          ? <img src={src} alt={name ?? ""} className="w-full h-full object-cover" />
+        {showImage
+          ? <img src={src} alt={name ?? ""} className="w-full h-full object-cover" onError={() => setImgError(true)} />
           : <span>{initials}</span>
         }
       </div>

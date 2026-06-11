@@ -17,10 +17,32 @@ export const postRouter = router({
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const { therapists, stores } = await import("../../drizzle/schema");
       const conditions: any[] = [eq(posts.isPublic, true)];
       if (input.storeId) conditions.push(eq(posts.storeId, input.storeId));
       if (input.therapistId) conditions.push(eq(posts.therapistId, input.therapistId));
-      return db.select().from(posts).where(and(...conditions)).orderBy(desc(posts.createdAt)).limit(input.limit).offset(input.offset);
+      const postRows = await db.select().from(posts).where(and(...conditions)).orderBy(desc(posts.createdAt)).limit(input.limit).offset(input.offset);
+      // Attach therapist info and first image
+      const result = [];
+      for (const post of postRows) {
+        const imgRows = await db.select({ imageUrl: postImages.imageUrl }).from(postImages)
+          .where(eq(postImages.postId, post.id)).orderBy(postImages.sortOrder).limit(1);
+        let therapistName: string | null = null;
+        let therapistImage: string | null = null;
+        let storeName: string | null = null;
+        if (post.therapistId) {
+          const tRows = await db.select({ displayName: therapists.displayName, profileImageUrl: therapists.profileImageUrl })
+            .from(therapists).where(eq(therapists.id, post.therapistId)).limit(1);
+          therapistName = tRows[0]?.displayName ?? null;
+          therapistImage = tRows[0]?.profileImageUrl ?? null;
+        }
+        if (post.storeId) {
+          const sRows = await db.select({ name: stores.name }).from(stores).where(eq(stores.id, post.storeId)).limit(1);
+          storeName = sRows[0]?.name ?? null;
+        }
+        result.push({ ...post, imageUrl: imgRows[0]?.imageUrl ?? null, therapistName, therapistImage, storeName });
+      }
+      return result;
     }),
 
   create: publicProcedure
@@ -61,7 +83,15 @@ export const postRouter = router({
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     if (!session.therapistId) return [];
-    return db.select().from(posts).where(eq(posts.therapistId, session.therapistId)).orderBy(desc(posts.createdAt)).limit(50);
+    const postRows = await db.select().from(posts).where(eq(posts.therapistId, session.therapistId)).orderBy(desc(posts.createdAt)).limit(50);
+    // Attach first image URL for each post
+    const result = [];
+    for (const post of postRows) {
+      const imgRows = await db.select({ imageUrl: postImages.imageUrl }).from(postImages)
+        .where(eq(postImages.postId, post.id)).orderBy(postImages.sortOrder).limit(1);
+      result.push({ ...post, imageUrl: imgRows[0]?.imageUrl ?? null });
+    }
+    return result;
   }),
 
 });

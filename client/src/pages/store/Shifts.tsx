@@ -24,7 +24,7 @@ export default function StoreShifts() {
         ) : list.map((s: any, i: number) => (
           <motion.div key={s.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}
             className="bg-white rounded-2xl p-4 shadow-luxury flex items-center gap-3">
-            <AromaAvatar name={s.therapistName} size="sm" />
+            <AromaAvatar name={s.therapistName} src={s.therapistImage} size="sm" />
             <div className="flex-1">
               <div className="text-sm font-semibold text-foreground">{s.therapistName}</div>
               <div className="text-xs text-muted-foreground">{s.date} {s.startTime}〜{s.endTime}</div>

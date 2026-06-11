@@ -80,7 +80,13 @@ export const affiliationRouter = router({
       const result = [];
       for (const req of reqs) {
         const therapistRows = await db.select({ id: therapists.id, displayName: therapists.displayName, profileImageUrl: therapists.profileImageUrl }).from(therapists).where(eq(therapists.id, req.therapistId)).limit(1);
-        result.push({ ...req, therapist: therapistRows[0] ?? null });
+        const t = therapistRows[0];
+        result.push({
+          ...req,
+          therapist: t ?? null,
+          therapistName: t?.displayName ?? null,
+          therapistImage: t?.profileImageUrl ?? null,
+        });
       }
       return result;
     }),

@@ -119,9 +119,13 @@ export default function TherapistPosts() {
                 <motion.button key={post.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: i * 0.03 }}
                   onClick={() => setSelectedPost(post)}
                   className="aspect-square bg-white overflow-hidden relative">
-                  <div className={`w-full h-full flex items-center justify-center text-3xl ${post.postType === "attendance" ? "bg-teal-50" : "bg-purple-50"}`}>
-                    {post.postType === "attendance" ? "📅" : "📝"}
-                  </div>
+                  {post.imageUrl ? (
+                    <img src={post.imageUrl} alt="" className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                  ) : (
+                    <div className={`w-full h-full flex items-center justify-center text-3xl ${post.postType === "attendance" ? "bg-teal-50" : "bg-purple-50"}`}>
+                      {post.postType === "attendance" ? "📅" : "📝"}
+                    </div>
+                  )}
                 </motion.button>
               ))
             )}

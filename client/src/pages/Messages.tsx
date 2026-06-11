@@ -58,7 +58,7 @@ export default function Messages() {
 
   if (selectedThread) {
     return (
-      <div className="min-h-screen bg-background flex flex-col max-w-md mx-auto">
+      <div className="min-h-screen bg-background flex flex-col">
         {/* Header */}
         <header className="sticky top-0 z-40 glass border-b border-border/50 px-4 py-3 flex items-center gap-3">
           <button onClick={() => setSelectedThread(null)} className="p-1 -ml-1 rounded-full hover:bg-muted transition-colors">
@@ -100,7 +100,7 @@ export default function Messages() {
         </div>
 
         {/* Quick replies */}
-        <div className="fixed bottom-16 left-1/2 -translate-x-1/2 w-full max-w-md px-4 pb-1">
+        <div className="fixed bottom-16 left-1/2 -translate-x-1/2 w-full max-w-[430px] px-4 pb-1">
           <div className="flex gap-1 overflow-x-auto scrollbar-none pb-1">
             {QUICK_REPLIES.map(q => (
               <button key={q} onClick={() => setMessage(q)}
@@ -112,7 +112,7 @@ export default function Messages() {
         </div>
 
         {/* Input */}
-        <div className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md glass border-t border-border/50 px-4 py-3 flex items-center gap-2">
+        <div className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[430px] glass border-t border-border/50 px-4 py-3 flex items-center gap-2">
           <Input value={message} onChange={e => setMessage(e.target.value)}
             onKeyDown={e => e.key === "Enter" && !e.shiftKey && handleSend()}
             placeholder="メッセージを入力..." className="flex-1 rounded-xl h-9" />

@@ -152,7 +152,6 @@ export default function TherapistDashboard() {
         </div>
       </div>
 
-      <div className="h-8" />
     </AromaLayout>
   );
 }

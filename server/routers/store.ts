@@ -210,7 +210,8 @@ export const storeRouter = router({
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     if (!session.storeId) return [];
-    return db.select({
+    const { customerProfiles } = await import("../../drizzle/schema");
+    const agg = await db.select({
       customerId: reservations.customerId,
       lastVisit: sql<string>`MAX(${reservations.date})`,
       visitCount: sql<number>`COUNT(*)`,
@@ -219,6 +220,26 @@ export const storeRouter = router({
       .groupBy(reservations.customerId)
       .orderBy(desc(sql`MAX(${reservations.date})`))
       .limit(100);
+    // Attach customer profile info
+    const result = [];
+    for (const row of agg) {
+      const cpRows = await db.select({
+        displayName: customerProfiles.displayName,
+        nickname: customerProfiles.nickname,
+        profileImageUrl: customerProfiles.profileImageUrl,
+        memberLevel: customerProfiles.memberLevel,
+        totalSpent: customerProfiles.totalSpent,
+      }).from(customerProfiles).where(eq(customerProfiles.accountId, row.customerId)).limit(1);
+      const cp = cpRows[0];
+      result.push({
+        ...row,
+        displayName: cp?.displayName ?? cp?.nickname ?? `顧客#${row.customerId}`,
+        profileImageUrl: cp?.profileImageUrl ?? null,
+        level: cp?.memberLevel ?? 1,
+        totalSpent: cp?.totalSpent ?? 0,
+      });
+    }
+    return result;
   }),
 
   getNgCustomers: publicProcedure.query(async ({ ctx }) => {
@@ -277,6 +298,14 @@ export const storeRouter = router({
       const { shifts } = await import("../../drizzle/schema");
       const conditions: any[] = [eq(shifts.storeId, session.storeId)];
       if (input.date) conditions.push(eq(shifts.date, input.date));
-      return db.select().from(shifts).where(and(...conditions)).orderBy(shifts.date, shifts.startTime);
+      const rows = await db.select().from(shifts).where(and(...conditions)).orderBy(shifts.date, shifts.startTime);
+      // Attach therapist name and image
+      const result = [];
+      for (const shift of rows) {
+        const tRows = await db.select({ displayName: therapists.displayName, profileImageUrl: therapists.profileImageUrl })
+          .from(therapists).where(eq(therapists.id, shift.therapistId)).limit(1);
+        result.push({ ...shift, therapistName: tRows[0]?.displayName ?? null, therapistImage: tRows[0]?.profileImageUrl ?? null });
+      }
+      return result;
     }),
 });

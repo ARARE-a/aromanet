@@ -24,7 +24,7 @@ export default function StoreCustomers() {
       </div>
       <div className="px-4 space-y-3">
         {list.map((c: any, i: number) => (
-          <motion.div key={c.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}
+          <motion.div key={c.customerId} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}
             className="bg-white rounded-2xl p-4 shadow-luxury flex items-center gap-3">
             <AromaAvatar name={c.displayName} src={c.profileImageUrl} size="md" />
             <div className="flex-1">
@@ -35,7 +35,7 @@ export default function StoreCustomers() {
               </div>
             </div>
             <Button variant="outline" size="sm" className="h-7 text-xs rounded-lg text-red-500 border-red-200 hover:bg-red-50"
-              onClick={() => addNgMut.mutate({ customerId: c.id, reason: "店舗判断" })}>
+              onClick={() => addNgMut.mutate({ customerId: c.customerId, reason: "店舗判断" })}>
               <ShieldX className="w-3 h-3 mr-1" />NG
             </Button>
           </motion.div>
