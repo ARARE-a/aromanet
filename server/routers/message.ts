@@ -43,7 +43,7 @@ export const messageRouter = router({
       const existing = await db.select().from(messageThreads).where(and(...conditions)).limit(1);
       if (existing[0]) return existing[0];
       const result = await db.insert(messageThreads).values(input);
-      const threadId = (result as any).insertId as number;
+      const threadId = (result as any)[0].insertId as number;
       const rows = await db.select().from(messageThreads).where(eq(messageThreads.id, threadId)).limit(1);
       return rows[0];
     }),

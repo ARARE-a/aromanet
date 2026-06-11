@@ -89,7 +89,7 @@ export const reservationRouter = router({
         customerNote: input.customerNote,
         status: "pending",
       });
-      const reservationId = (result as any).insertId as number;
+      const reservationId = (result as any)[0].insertId as number;
 
       for (const opt of optionDetails) {
         await db.insert(reservationOptions).values({ reservationId, ...opt });

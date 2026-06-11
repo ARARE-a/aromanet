@@ -42,7 +42,7 @@ export const seedRouter = router({
 
     // Store 1
     const storeAccResult = await db.insert(storeAccounts).values({ email: "store1@example.com", passwordHash: hash, crashPasswordHash: crashHash });
-    const storeAccId = (storeAccResult as any).insertId as number;
+    const storeAccId = (storeAccResult as any)[0].insertId as number;
     const storeResult = await db.insert(stores).values({
       accountId: storeAccId,
       name: "アロマサロン LUXE",
@@ -59,11 +59,11 @@ export const seedRouter = router({
       reviewAvg: "4.80",
       reviewCount: 42,
     });
-    const storeId = (storeResult as any).insertId as number;
+    const storeId = (storeResult as any)[0].insertId as number;
 
     // Store 2
     const storeAccResult2 = await db.insert(storeAccounts).values({ email: "store2@example.com", passwordHash: hash });
-    const storeAccId2 = (storeAccResult2 as any).insertId as number;
+    const storeAccId2 = (storeAccResult2 as any)[0].insertId as number;
     const storeResult2 = await db.insert(stores).values({
       accountId: storeAccId2,
       name: "プレミアムエステ BLANC",
@@ -80,11 +80,11 @@ export const seedRouter = router({
       reviewAvg: "4.60",
       reviewCount: 28,
     });
-    const storeId2 = (storeResult2 as any).insertId as number;
+    const storeId2 = (storeResult2 as any)[0].insertId as number;
 
     // Therapist 1
     const tAccResult = await db.insert(therapistAccounts).values({ email: "therapist1@example.com", passwordHash: hash, crashPasswordHash: crashHash });
-    const tAccId = (tAccResult as any).insertId as number;
+    const tAccId = (tAccResult as any)[0].insertId as number;
     const tResult = await db.insert(therapists).values({
       accountId: tAccId,
       storeId,
@@ -100,11 +100,11 @@ export const seedRouter = router({
       reviewCount: 38,
       backRate: "55.00",
     });
-    const therapistId = (tResult as any).insertId as number;
+    const therapistId = (tResult as any)[0].insertId as number;
 
     // Therapist 2
     const tAccResult2 = await db.insert(therapistAccounts).values({ email: "therapist2@example.com", passwordHash: hash });
-    const tAccId2 = (tAccResult2 as any).insertId as number;
+    const tAccId2 = (tAccResult2 as any)[0].insertId as number;
     const tResult2 = await db.insert(therapists).values({
       accountId: tAccId2,
       storeId,
@@ -120,11 +120,11 @@ export const seedRouter = router({
       reviewCount: 22,
       backRate: "50.00",
     });
-    const therapistId2 = (tResult2 as any).insertId as number;
+    const therapistId2 = (tResult2 as any)[0].insertId as number;
 
     // Therapist 3 (store 2)
     const tAccResult3 = await db.insert(therapistAccounts).values({ email: "therapist3@example.com", passwordHash: hash });
-    const tAccId3 = (tAccResult3 as any).insertId as number;
+    const tAccId3 = (tAccResult3 as any)[0].insertId as number;
     await db.insert(therapists).values({
       accountId: tAccId3,
       storeId: storeId2,
@@ -143,9 +143,9 @@ export const seedRouter = router({
 
     // Menus for store 1
     const menuResult = await db.insert(menus).values({ storeId, name: "60分コース", description: "全身アロマオイルマッサージ", durationMinutes: 60, price: 8000, nominationFee: 1000, isPublic: true });
-    const menuId = (menuResult as any).insertId as number;
+    const menuId = (menuResult as any)[0].insertId as number;
     const menuResult2 = await db.insert(menus).values({ storeId, name: "90分コース", description: "全身アロマ + ヘッドスパ", durationMinutes: 90, price: 12000, nominationFee: 1500, isPublic: true });
-    const menuId2 = (menuResult2 as any).insertId as number;
+    const menuId2 = (menuResult2 as any)[0].insertId as number;
     await db.insert(menus).values({ storeId, name: "120分プレミアムコース", description: "全身アロマ + ヘッドスパ + フット", durationMinutes: 120, price: 16000, nominationFee: 2000, isPublic: true });
 
     // Menu options
@@ -159,12 +159,12 @@ export const seedRouter = router({
 
     // Customer 1
     const cAccResult = await db.insert(customerAccounts).values({ email: "customer1@example.com", passwordHash: hash, crashPasswordHash: crashHash, ageVerified: true });
-    const cAccId = (cAccResult as any).insertId as number;
+    const cAccId = (cAccResult as any)[0].insertId as number;
     await db.insert(customerProfiles).values({ accountId: cAccId, displayName: "田中 太郎", nickname: "タナカ", totalSpent: 85000, memberLevel: 3 });
 
     // Customer 2
     const cAccResult2 = await db.insert(customerAccounts).values({ email: "customer2@example.com", passwordHash: hash, ageVerified: true });
-    const cAccId2 = (cAccResult2 as any).insertId as number;
+    const cAccId2 = (cAccResult2 as any)[0].insertId as number;
     await db.insert(customerProfiles).values({ accountId: cAccId2, displayName: "鈴木 一郎", nickname: "スズキ", totalSpent: 320000, memberLevel: 5 });
 
     // Shifts
@@ -187,7 +187,7 @@ export const seedRouter = router({
       isNomination: true, nominationFee: 1000, totalPrice: 9000,
       status: "confirmed",
     });
-    const res1Id = (res1Result as any).insertId as number;
+    const res1Id = (res1Result as any)[0].insertId as number;
 
     const yesterday = new Date(today);
     yesterday.setDate(yesterday.getDate() - 1);
@@ -198,7 +198,7 @@ export const seedRouter = router({
       isNomination: true, nominationFee: 1500, totalPrice: 13500,
       status: "completed",
     });
-    const res2Id = (res2Result as any).insertId as number;
+    const res2Id = (res2Result as any)[0].insertId as number;
 
     // Sales
     await db.insert(sales).values({
@@ -220,7 +220,7 @@ export const seedRouter = router({
       content: "本日も出勤しています！14時から空きがあります。お気軽にご予約ください🌸",
       isPublic: true,
     });
-    const postId = (postResult as any).insertId as number;
+    const postId = (postResult as any)[0].insertId as number;
 
     await db.insert(posts).values({
       authorRole: "store", storeId,

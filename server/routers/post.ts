@@ -37,7 +37,7 @@ export const postRouter = router({
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       const { imageUrls, ...postData } = input;
       const result = await db.insert(posts).values({ ...postData, authorRole: "therapist", therapistId: session.therapistId });
-      const postId = (result as any).insertId as number;
+      const postId = (result as any)[0].insertId as number;
       for (let i = 0; i < imageUrls.length; i++) {
         await db.insert(postImages).values({ postId, imageUrl: imageUrls[i], sortOrder: i });
       }

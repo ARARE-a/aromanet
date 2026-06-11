@@ -87,9 +87,9 @@ export const authRouter = router({
       if (existing.length > 0) throw new TRPCError({ code: "CONFLICT", message: "このメールアドレスは既に登録されています" });
       const passwordHash = await bcrypt.hash(input.password, 12);
       const result = await db.insert(storeAccounts).values({ email: input.email, passwordHash });
-      const accountId = (result as any).insertId as number;
+      const accountId = (result as any)[0].insertId as number;
       const storeResult = await db.insert(stores).values({ accountId, name: input.storeName });
-      const storeId = (storeResult as any).insertId as number;
+      const storeId = (storeResult as any)[0].insertId as number;
       const token = setSessionCookie(ctx.res, { role: "store", accountId, storeId, email: input.email });
       await logAudit(db, "store", accountId, "register", input.email, ctx.req);
       return { success: true, role: "store", accountId, storeId };
@@ -142,9 +142,9 @@ export const authRouter = router({
       if (existing.length > 0) throw new TRPCError({ code: "CONFLICT", message: "このメールアドレスは既に登録されています" });
       const passwordHash = await bcrypt.hash(input.password, 12);
       const result = await db.insert(therapistAccounts).values({ email: input.email, passwordHash });
-      const accountId = (result as any).insertId as number;
+      const accountId = (result as any)[0].insertId as number;
       const tResult = await db.insert(therapists).values({ accountId, displayName: input.displayName });
-      const therapistId = (tResult as any).insertId as number;
+      const therapistId = (tResult as any)[0].insertId as number;
       setSessionCookie(ctx.res, { role: "therapist", accountId, therapistId, email: input.email });
       await logAudit(db, "therapist", accountId, "register", input.email, ctx.req);
       return { success: true, role: "therapist", accountId, therapistId };
@@ -197,7 +197,7 @@ export const authRouter = router({
       if (existing.length > 0) throw new TRPCError({ code: "CONFLICT", message: "このメールアドレスは既に登録されています" });
       const passwordHash = await bcrypt.hash(input.password, 12);
       const result = await db.insert(customerAccounts).values({ email: input.email, passwordHash, ageVerified: true });
-      const accountId = (result as any).insertId as number;
+      const accountId = (result as any)[0].insertId as number;
       await db.insert(customerProfiles).values({ accountId, displayName: input.displayName });
       setSessionCookie(ctx.res, { role: "customer", accountId, email: input.email });
       await logAudit(db, "customer", accountId, "register", input.email, ctx.req);
