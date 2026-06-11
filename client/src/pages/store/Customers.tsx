@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { motion } from "framer-motion";
-import { UserCheck, Search, ShieldX } from "lucide-react";
+import { UserCheck, Search, ShieldX, MessageCircle } from "lucide-react";
 import { AromaLayout, AromaAvatar, LevelBadge } from "@/components/AromaLayout";
 import { trpc } from "@/lib/trpc";
 import { useSession } from "@/contexts/SessionContext";
@@ -34,10 +34,16 @@ export default function StoreCustomers() {
                 <span className="text-xs text-muted-foreground">累計¥{(c.totalSpent ?? 0).toLocaleString()}</span>
               </div>
             </div>
-            <Button variant="outline" size="sm" className="h-7 text-xs rounded-lg text-red-500 border-red-200 hover:bg-red-50"
-              onClick={() => addNgMut.mutate({ customerId: c.customerId, reason: "店舗判断" })}>
-              <ShieldX className="w-3 h-3 mr-1" />NG
-            </Button>
+            <div className="flex gap-1.5">
+              <Button variant="outline" size="sm" className="h-7 text-xs rounded-lg"
+                onClick={() => navigate(`/messages?customerId=${c.customerId}&storeId=${session?.storeId}&type=store_customer`)}>
+                <MessageCircle className="w-3 h-3 mr-1" />DM
+              </Button>
+              <Button variant="outline" size="sm" className="h-7 text-xs rounded-lg text-red-500 border-red-200 hover:bg-red-50"
+                onClick={() => addNgMut.mutate({ customerId: c.customerId, reason: "店舗判断" })}>
+                <ShieldX className="w-3 h-3 mr-1" />NG
+              </Button>
+            </div>
           </motion.div>
         ))}
         {list.length === 0 && <div className="text-center py-12 text-muted-foreground"><UserCheck className="w-10 h-10 mx-auto mb-2 opacity-30" /><p className="text-sm">顧客データがありません</p></div>}

@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useLocation, Link } from "wouter";
 import { motion } from "framer-motion";
-import { Plus, Search, UserX, Star, Edit } from "lucide-react";
+import { Plus, Search, UserX, Star, MessageCircle } from "lucide-react";
 import { AromaLayout, AromaAvatar } from "@/components/AromaLayout";
 import { trpc } from "@/lib/trpc";
 import { useSession } from "@/contexts/SessionContext";
@@ -54,9 +54,15 @@ export default function StoreTherapists() {
                 <Star className="w-3 h-3 text-yellow-500" />{t.rating?.toFixed(1) ?? "4.5"} · {t.reviewCount ?? 0}件
               </div>
             </div>
-            <Link href={`/therapist/${t.id}`}>
-              <Button variant="outline" size="sm" className="h-7 text-xs rounded-lg">プロフィール</Button>
-            </Link>
+            <div className="flex gap-1.5">
+              <Button variant="outline" size="sm" className="h-7 text-xs rounded-lg"
+                onClick={() => navigate(`/messages?therapistId=${t.id}&storeId=${session?.storeId}&type=store_therapist`)}>
+                <MessageCircle className="w-3 h-3 mr-1" />DM
+              </Button>
+              <Link href={`/therapist/${t.id}`}>
+                <Button variant="outline" size="sm" className="h-7 text-xs rounded-lg">プロフィール</Button>
+              </Link>
+            </div>
           </motion.div>
         ))}
         {list.length === 0 && (

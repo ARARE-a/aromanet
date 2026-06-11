@@ -44,19 +44,48 @@ export default function Messages() {
     onError: (e: any) => toast.error(e.message),
   });
 
-  // Auto-open thread from URL params (e.g. ?therapistId=5)
+  // Auto-open thread from URL params
   useEffect(() => {
     if (!session || autoOpenDone || !searchStr) return;
     const params = new URLSearchParams(searchStr);
     const therapistId = params.get("therapistId");
     const storeId = params.get("storeId");
-    if (therapistId && session.role === "customer") {
+    const customerId = params.get("customerId");
+    const type = params.get("type");
+
+    // 店舗 → セラピスト DM
+    if (type === "store_therapist" && therapistId && storeId && session.role === "store") {
+      setAutoOpenDone(true);
+      getOrCreateThreadMut.mutate({
+        threadType: "store_therapist",
+        storeId: parseInt(storeId),
+        therapistId: parseInt(therapistId),
+      });
+    // 店舗 → 顧客 DM
+    } else if (type === "store_customer" && customerId && storeId && session.role === "store") {
+      setAutoOpenDone(true);
+      getOrCreateThreadMut.mutate({
+        threadType: "store_customer",
+        storeId: parseInt(storeId),
+        customerId: parseInt(customerId),
+      });
+    // セラピスト → 店舗 DM
+    } else if (type === "store_therapist" && storeId && session.role === "therapist") {
+      setAutoOpenDone(true);
+      getOrCreateThreadMut.mutate({
+        threadType: "store_therapist",
+        storeId: parseInt(storeId),
+        therapistId: session.therapistId ?? undefined,
+      });
+    // お客様 → セラピスト DM
+    } else if (therapistId && session.role === "customer") {
       setAutoOpenDone(true);
       getOrCreateThreadMut.mutate({
         threadType: "therapist_customer",
         therapistId: parseInt(therapistId),
         customerId: session.accountId ?? undefined,
       });
+    // お客様 → 店舗 DM
     } else if (storeId && session.role === "customer") {
       setAutoOpenDone(true);
       getOrCreateThreadMut.mutate({
