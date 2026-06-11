@@ -581,3 +581,15 @@ export type Room = typeof rooms.$inferSelect;
 export type AffiliationRequest = typeof affiliationRequests.$inferSelect;
 export type TherapistSalarySetting = typeof therapistSalarySettings.$inferSelect;
 export type StoryPost = typeof storyPosts.$inferSelect;
+
+// ─── Email Verification Codes ─────────────────────────────────────────────────
+export const emailVerificationCodes = mysqlTable("email_verification_codes", {
+  id: int("id").autoincrement().primaryKey(),
+  email: varchar("email", { length: 320 }).notNull(),
+  code: varchar("code", { length: 8 }).notNull(),
+  role: mysqlEnum("role", ["store", "therapist", "customer"]).notNull(),
+  expiresAt: timestamp("expiresAt").notNull(),
+  verified: boolean("verified").default(false).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+export type EmailVerificationCode = typeof emailVerificationCodes.$inferSelect;

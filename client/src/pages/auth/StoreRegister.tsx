@@ -1,33 +1,157 @@
 import { useState } from "react";
-import { useLocation, Link } from "wouter";
-import { Mail, Lock, Building2 } from "lucide-react";
-import { AuthForm } from "@/components/AuthForm";
+import { Link } from "wouter";
+import { Mail, Lock, Building2, KeyRound, RefreshCw } from "lucide-react";
 import { trpc } from "@/lib/trpc";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+
+type Step = "email" | "verify" | "register";
 
 export default function StoreRegister() {
-  const [, navigate] = useLocation();
+  const [step, setStep] = useState<Step>("email");
+  const [email, setEmail] = useState("");
+  const [code, setCode] = useState("");
+  const [storeName, setStoreName] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [resendCooldown, setResendCooldown] = useState(0);
+
+  const sendCodeMut = trpc.aroAuth.sendVerificationCode.useMutation({
+    onSuccess: () => { setStep("verify"); setError(null); startCooldown(); },
+    onError: (e) => setError(e.message),
+  });
+
+  const checkCodeMut = trpc.aroAuth.checkVerificationCode.useMutation({
+    onSuccess: () => { setStep("register"); setError(null); },
+    onError: (e) => setError(e.message),
+  });
+
   const regMut = trpc.aroAuth.storeRegister.useMutation({
     onSuccess: () => { window.location.href = "/store/dashboard"; },
     onError: (e) => setError(e.message),
   });
+
+  function startCooldown() {
+    setResendCooldown(60);
+    const timer = setInterval(() => {
+      setResendCooldown((v) => { if (v <= 1) { clearInterval(timer); return 0; } return v - 1; });
+    }, 1000);
+  }
+
   return (
-    <AuthForm
-      title="店舗新規登録" subtitle="Store Registration"
-      fields={[
-        { name: "storeName", label: "店舗名", type: "text", placeholder: "サロン名", icon: <Building2 className="w-4 h-4" /> },
-        { name: "email", label: "メールアドレス", type: "email", placeholder: "store@example.com", icon: <Mail className="w-4 h-4" /> },
-        { name: "password", label: "パスワード（8文字以上）", type: "password", placeholder: "8文字以上", icon: <Lock className="w-4 h-4" /> },
-        { name: "confirmPassword", label: "パスワード確認", type: "password", placeholder: "••••••••", icon: <Lock className="w-4 h-4" /> },
-      ]}
-      submitLabel="登録する"
-      onSubmit={async (d) => {
-        setError(null);
-        if (d.password !== d.confirmPassword) { setError("パスワードが一致しません"); return; }
-        await regMut.mutateAsync({ storeName: d.storeName, email: d.email, password: d.password });
-      }}
-      isLoading={regMut.isPending} error={error}
-      footer={<>すでにアカウントをお持ちの方は{" "}<Link href="/store/login" className="text-primary font-medium hover:underline">ログイン</Link></>}
-    />
+    <div className="min-h-screen bg-background flex flex-col items-center justify-center px-4 py-8">
+      <div className="w-full max-w-sm">
+        <div className="text-center mb-8">
+          <h1 className="text-2xl font-bold tracking-widest text-primary">AromaNet</h1>
+          <p className="text-sm text-muted-foreground mt-1">店舗新規登録</p>
+        </div>
+
+        <div className="flex items-center justify-center gap-2 mb-6">
+          {(["email", "verify", "register"] as Step[]).map((s, i) => (
+            <div key={s} className="flex items-center gap-2">
+              <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-colors ${
+                step === s ? "bg-primary text-primary-foreground" :
+                (["email", "verify", "register"].indexOf(step) > i) ? "bg-primary/30 text-primary" :
+                "bg-muted text-muted-foreground"
+              }`}>{i + 1}</div>
+              {i < 2 && <div className={`w-8 h-0.5 ${(["email", "verify", "register"].indexOf(step) > i) ? "bg-primary/50" : "bg-muted"}`} />}
+            </div>
+          ))}
+        </div>
+
+        <div className="bg-card rounded-2xl shadow-sm border border-border p-6 space-y-4">
+          {step === "email" && (
+            <>
+              <div>
+                <h2 className="font-semibold text-base mb-1">メールアドレスを入力</h2>
+                <p className="text-xs text-muted-foreground">確認コードを送信します</p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="email">メールアドレス</Label>
+                <div className="relative">
+                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Input id="email" type="email" placeholder="store@example.com" className="pl-9" value={email} onChange={(e) => setEmail(e.target.value)} onKeyDown={(e) => e.key === "Enter" && sendCodeMut.mutate({ email, role: "store" })} />
+                </div>
+              </div>
+              {error && <p className="text-destructive text-xs">{error}</p>}
+              <Button className="w-full" disabled={!email || sendCodeMut.isPending} onClick={() => { setError(null); sendCodeMut.mutate({ email, role: "store" }); }}>
+                {sendCodeMut.isPending ? "送信中..." : "確認コードを送信"}
+              </Button>
+            </>
+          )}
+
+          {step === "verify" && (
+            <>
+              <div>
+                <h2 className="font-semibold text-base mb-1">認証コードを入力</h2>
+                <p className="text-xs text-muted-foreground">{email} に送信した6桁のコードを入力してください</p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="code">認証コード</Label>
+                <div className="relative">
+                  <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Input id="code" type="text" inputMode="numeric" maxLength={6} placeholder="123456" className="pl-9 text-center tracking-widest text-lg font-mono" value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))} onKeyDown={(e) => e.key === "Enter" && code.length === 6 && checkCodeMut.mutate({ email, code, role: "store" })} />
+                </div>
+              </div>
+              {error && <p className="text-destructive text-xs">{error}</p>}
+              <Button className="w-full" disabled={code.length !== 6 || checkCodeMut.isPending} onClick={() => { setError(null); checkCodeMut.mutate({ email, code, role: "store" }); }}>
+                {checkCodeMut.isPending ? "確認中..." : "コードを確認"}
+              </Button>
+              <button type="button" className="w-full flex items-center justify-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40" disabled={resendCooldown > 0 || sendCodeMut.isPending} onClick={() => { setError(null); sendCodeMut.mutate({ email, role: "store" }); }}>
+                <RefreshCw className="w-3 h-3" />
+                {resendCooldown > 0 ? `再送信 (${resendCooldown}秒後)` : "コードを再送信"}
+              </button>
+            </>
+          )}
+
+          {step === "register" && (
+            <>
+              <div>
+                <h2 className="font-semibold text-base mb-1">店舗情報を入力</h2>
+                <p className="text-xs text-muted-foreground">メール認証が完了しました</p>
+              </div>
+              <div className="space-y-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="storeName">店舗名</Label>
+                  <div className="relative">
+                    <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <Input id="storeName" type="text" placeholder="サロン名" className="pl-9" value={storeName} onChange={(e) => setStoreName(e.target.value)} />
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="password">パスワード（8文字以上）</Label>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <Input id="password" type="password" placeholder="8文字以上" className="pl-9" value={password} onChange={(e) => setPassword(e.target.value)} />
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="confirmPassword">パスワード確認</Label>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <Input id="confirmPassword" type="password" placeholder="••••••••" className="pl-9" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} />
+                  </div>
+                </div>
+              </div>
+              {error && <p className="text-destructive text-xs">{error}</p>}
+              <Button className="w-full" disabled={!storeName || !password || !confirmPassword || regMut.isPending} onClick={() => {
+                setError(null);
+                if (password !== confirmPassword) { setError("パスワードが一致しません"); return; }
+                regMut.mutateAsync({ storeName, email, password, verificationCode: code });
+              }}>
+                {regMut.isPending ? "登録中..." : "登録する"}
+              </Button>
+            </>
+          )}
+        </div>
+
+        <p className="text-center text-xs text-muted-foreground mt-4">
+          すでにアカウントをお持ちの方は{" "}
+          <Link href="/store/login" className="text-primary font-medium hover:underline">ログイン</Link>
+        </p>
+      </div>
+    </div>
   );
 }

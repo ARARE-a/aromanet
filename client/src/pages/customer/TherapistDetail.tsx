@@ -26,11 +26,23 @@ export default function TherapistDetail() {
   const { data: therapist } = trpc.therapist.getById.useQuery({ therapistId: therapistId }, { enabled: !!session && !!therapistId });
   const { data: posts } = trpc.post.getFeed.useQuery({ therapistId, limit: 9 }, { enabled: !!session && !!therapistId });
   const { data: favs } = trpc.customer.getFavorites.useQuery(undefined, { enabled: !!session && isCustomer });
+  const { data: followStatus } = trpc.customer.getFollowStatus.useQuery(
+    { targetType: "therapist", targetId: therapistId },
+    { enabled: !!session && isCustomer && !!therapistId }
+  );
+
   useEffect(() => {
     const list = (favs as any[]) ?? [];
     setIsFav(list.some(f => f.targetType === "therapist" && f.targetId === therapistId));
   }, [favs, therapistId]);
 
+  useEffect(() => {
+    if (followStatus !== undefined) {
+      setIsFollowed((followStatus as any).following ?? false);
+    }
+  }, [followStatus]);
+
+  const utils = trpc.useUtils();
   const toggleFavMut = trpc.customer.toggleFavorite.useMutation({
     onMutate: () => setIsFav(prev => !prev),
     onError: () => { setIsFav(prev => !prev); toast.error("操作に失敗しました"); },
@@ -38,6 +50,7 @@ export default function TherapistDetail() {
   const toggleFollowMut = trpc.customer.toggleFollow.useMutation({
     onMutate: () => setIsFollowed(prev => !prev),
     onError: () => { setIsFollowed(prev => !prev); toast.error("操作に失敗しました"); },
+    onSuccess: () => utils.customer.getFollowStatus.invalidate({ targetType: "therapist", targetId: therapistId }),
   });
 
   const t = therapist as any;

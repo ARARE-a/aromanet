@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { useLocation } from "wouter";
+import { useLocation, useSearch } from "wouter";
 import { motion } from "framer-motion";
 import { Send, Image, AlertTriangle, ChevronLeft, MessageCircle } from "lucide-react";
 import { AromaLayout, AromaAvatar } from "@/components/AromaLayout";
@@ -19,10 +19,12 @@ const QUICK_REPLIES = [
 
 export default function Messages() {
   const [, navigate] = useLocation();
+  const searchStr = useSearch();
   const { session, isLoading } = useSession();
   const [selectedThread, setSelectedThread] = useState<number | null>(null);
   const [message, setMessage] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [autoOpenDone, setAutoOpenDone] = useState(false);
 
   useEffect(() => {
     if (!isLoading && !session) navigate("/");
@@ -33,6 +35,37 @@ export default function Messages() {
     { threadId: selectedThread! },
     { enabled: !!session && !!selectedThread, refetchInterval: 5000 }
   );
+
+  const getOrCreateThreadMut = trpc.message.getOrCreateThread.useMutation({
+    onSuccess: (thread: any) => {
+      setSelectedThread(thread.id);
+      refetchThreads();
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  // Auto-open thread from URL params (e.g. ?therapistId=5)
+  useEffect(() => {
+    if (!session || autoOpenDone || !searchStr) return;
+    const params = new URLSearchParams(searchStr);
+    const therapistId = params.get("therapistId");
+    const storeId = params.get("storeId");
+    if (therapistId && session.role === "customer") {
+      setAutoOpenDone(true);
+      getOrCreateThreadMut.mutate({
+        threadType: "therapist_customer",
+        therapistId: parseInt(therapistId),
+        customerId: session.accountId ?? undefined,
+      });
+    } else if (storeId && session.role === "customer") {
+      setAutoOpenDone(true);
+      getOrCreateThreadMut.mutate({
+        threadType: "store_customer",
+        storeId: parseInt(storeId),
+        customerId: session.accountId ?? undefined,
+      });
+    }
+  }, [session, searchStr, autoOpenDone]);
 
   const sendMut = trpc.message.send.useMutation({
     onSuccess: () => { setMessage(""); refetchMessages(); refetchThreads(); },

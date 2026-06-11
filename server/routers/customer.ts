@@ -111,6 +111,16 @@ export const customerRouter = router({
       return { favorited: true };
     }),
 
+  getFollowStatus: publicProcedure
+    .input(z.object({ targetType: z.enum(["store", "therapist"]), targetId: z.number() }))
+    .query(async ({ input, ctx }) => {
+      const session = await getSession(ctx.req);
+      if (!session || session.role !== "customer") return { following: false };
+      const db = await getDb();
+      if (!db) return { following: false };
+      const existing = await db.select().from(follows).where(and(eq(follows.customerId, session.accountId), eq(follows.targetType, input.targetType), eq(follows.targetId, input.targetId))).limit(1);
+      return { following: existing.length > 0 };
+    }),
   toggleFollow: publicProcedure
     .input(z.object({ targetType: z.enum(["store", "therapist"]), targetId: z.number() }))
     .mutation(async ({ input, ctx }) => {
