@@ -77,7 +77,12 @@ export default function CustomerEditProfile() {
   };
 
   const handleSave = () => {
-    updateMut.mutate({ nickname: nickname || undefined, profileImageUrl: avatarUrl || undefined });
+    // displayName と nickname を両方更新して表示の不一致を防ぐ
+    updateMut.mutate({
+      displayName: nickname || undefined,
+      nickname: nickname || undefined,
+      profileImageUrl: avatarUrl || undefined,
+    });
   };
 
   return (

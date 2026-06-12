@@ -181,3 +181,8 @@
 - [x] メール認証ステップを削除してメールアドレスのみで登録できる仕様に戻す（顧客・セラピスト・店舗全ロール）
 - [x] クロップ機能の動作確認・修正（セラピスト・店舗・顧客プロフィール編集）
 - [x] クロップ機能が使える場所をUIで明示する
+
+## Phase 17: プロフィール名前変更バグ修正
+- [x] セラピストDBスキーマにcatchphrase・selfIntroduction・bodyType・instagramUrl・twitterUrlカラムを追加（マイグレーション実行済み）
+- [x] therapist.tsのupdateProfileに新カラムを追加してフロントエンドのフォームと一致させる
+- [x] 顧客プロフィール編集でdisplayNameとnicknameを同時に更新して表示の不一致を修正
