@@ -234,6 +234,40 @@ export const authRouter = router({
       return { success: true, role: "customer", accountId: acc.id };
     }),
 
+  // Change password
+  changePassword: publicProcedure
+    .input(z.object({ currentPassword: z.string(), newPassword: z.string().min(8) }))
+    .mutation(async ({ input, ctx }) => {
+      const token = ctx.req.cookies?.[SESSION_COOKIE];
+      if (!token) throw new TRPCError({ code: "UNAUTHORIZED" });
+      const session = await verifyToken(token);
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      let currentHash: string | null = null;
+      if (session.role === "store") {
+        const rows = await db.select().from(storeAccounts).where(eq(storeAccounts.id, session.accountId)).limit(1);
+        currentHash = rows[0]?.passwordHash ?? null;
+      } else if (session.role === "therapist") {
+        const rows = await db.select().from(therapistAccounts).where(eq(therapistAccounts.id, session.accountId)).limit(1);
+        currentHash = rows[0]?.passwordHash ?? null;
+      } else {
+        const rows = await db.select().from(customerAccounts).where(eq(customerAccounts.id, session.accountId)).limit(1);
+        currentHash = rows[0]?.passwordHash ?? null;
+      }
+      if (!currentHash) throw new TRPCError({ code: "NOT_FOUND" });
+      const isValid = await bcrypt.compare(input.currentPassword, currentHash);
+      if (!isValid) throw new TRPCError({ code: "UNAUTHORIZED", message: "現在のパスワードが正しくありません" });
+      const newHash = await bcrypt.hash(input.newPassword, 12);
+      if (session.role === "store") {
+        await db.update(storeAccounts).set({ passwordHash: newHash }).where(eq(storeAccounts.id, session.accountId));
+      } else if (session.role === "therapist") {
+        await db.update(therapistAccounts).set({ passwordHash: newHash }).where(eq(therapistAccounts.id, session.accountId));
+      } else {
+        await db.update(customerAccounts).set({ passwordHash: newHash }).where(eq(customerAccounts.id, session.accountId));
+      }
+      return { success: true };
+    }),
+
   // Set crash password
   setCrashPassword: publicProcedure
     .input(z.object({ crashPassword: z.string().min(8) }))

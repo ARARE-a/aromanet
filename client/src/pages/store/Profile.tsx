@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
-import { Home, Calendar, Users, TrendingUp, MessageCircle, Camera } from "lucide-react";
+import { Home, Calendar, Users, TrendingUp, MessageCircle, Camera, Shield } from "lucide-react";
+import { Link } from "wouter";
 import { AromaLayout, AromaAvatar } from "@/components/AromaLayout";
 import { ImageCropper, useAvatarCrop } from "@/components/ImageCropper";
 import { trpc } from "@/lib/trpc";
@@ -201,6 +202,12 @@ export default function StoreProfile() {
         <Button className="w-full h-11 rounded-xl gradient-luxury text-white" onClick={handleSave} disabled={updateMut.isPending}>
           保存する
         </Button>
+        <Link href="/security">
+          <Button variant="outline" className="w-full h-10 rounded-xl text-sm border-gray-300 text-gray-600">
+            <Shield className="w-4 h-4 mr-2" />
+            セキュリティ設定（パスワード・クラッシュ）
+          </Button>
+        </Link>
       </div>
 
       {/* Image Cropper Dialog */}

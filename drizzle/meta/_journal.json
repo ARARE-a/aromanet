@@ -36,6 +36,13 @@
       "when": 1781224025469,
       "tag": "0004_workable_warbound",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "5",
+      "when": 1781225074552,
+      "tag": "0005_awesome_susan_delgado",
+      "breakpoints": true
     }
   ]
 }

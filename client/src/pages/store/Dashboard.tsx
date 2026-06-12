@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useState, useEffect } from "react";
 import { useLocation, Link } from "wouter";
 import { motion } from "framer-motion";
 import {
@@ -7,6 +7,9 @@ import {
   Star, Bell, DoorOpen, ChevronRight
 } from "lucide-react";
 import { AromaLayout, AromaLogo, AromaAvatar, StatusBadge } from "@/components/AromaLayout";
+import { StoryRing } from "@/components/StoryRing";
+import { StoryUpload } from "@/components/StoryUpload";
+import { StoryViewer, type StoryAuthor } from "@/components/StoryViewer";
 import { trpc } from "@/lib/trpc";
 import { useSession } from "@/contexts/SessionContext";
 
@@ -30,6 +33,9 @@ export default function StoreDashboard() {
   const { data: salesSummary } = trpc.sales.getStoreSummary.useQuery(
     { month: new Date().toISOString().slice(0, 7) }, { enabled: !!session }
   );
+  const { data: myStories } = trpc.story.getMyStories.useQuery(undefined, { enabled: !!session });
+  const [storyUploadOpen, setStoryUploadOpen] = useState(false);
+  const [viewerAuthors, setViewerAuthors] = useState<StoryAuthor[] | null>(null);
 
   useEffect(() => {
     if (!isLoading && (!session || session.role !== "store")) navigate("/store/login");
@@ -77,14 +83,29 @@ export default function StoreDashboard() {
     >
       {/* Store header */}
       <div className="px-4 pt-4 pb-3 flex items-center gap-4">
-        <Link href="/store/profile">
-          <div className="w-16 h-16 rounded-2xl overflow-hidden bg-teal-muted flex items-center justify-center flex-shrink-0 cursor-pointer">
-            {store?.logoUrl
-              ? <img src={store.logoUrl} alt={store.name} className="w-full h-full object-cover" />
-              : <span className="text-2xl font-bold text-primary">{store?.name?.[0] ?? "S"}</span>
-            }
-          </div>
-        </Link>
+        <div className="relative">
+          <StoryRing hasStory={!!(myStories && myStories.length > 0)} size="lg"
+            onClick={() => {
+              if (myStories && myStories.length > 0) {
+                setViewerAuthors([{ id: store?.id ?? 0, name: store?.name ?? "", avatarUrl: store?.logoUrl, role: "store", stories: myStories as any }]);
+              } else {
+                setStoryUploadOpen(true);
+              }
+            }}>
+            <div className="w-14 h-14 rounded-full overflow-hidden bg-teal-muted flex items-center justify-center">
+              {store?.logoUrl
+                ? <img src={store.logoUrl} alt={store.name} className="w-full h-full object-cover" />
+                : <span className="text-2xl font-bold text-primary">{store?.name?.[0] ?? "S"}</span>
+              }
+            </div>
+          </StoryRing>
+          <button
+            onClick={() => setStoryUploadOpen(true)}
+            className="absolute -bottom-0.5 -right-0.5 w-6 h-6 bg-primary rounded-full flex items-center justify-center border-2 border-white text-white"
+          >
+            <span className="text-[14px] leading-none font-bold">+</span>
+          </button>
+        </div>
         <div className="flex-1 flex items-center justify-around">
           <div className="text-center">
             <div className="text-[17px] font-bold">{today.length}</div>
@@ -157,6 +178,16 @@ export default function StoreDashboard() {
         </div>
       </div>
 
+      {/* Story Upload Dialog */}
+      <StoryUpload open={storyUploadOpen} onClose={() => setStoryUploadOpen(false)} />
+
+      {/* Story Viewer */}
+      {viewerAuthors && (
+        <StoryViewer
+          authors={viewerAuthors}
+          onClose={() => setViewerAuthors(null)}
+        />
+      )}
     </AromaLayout>
   );
 }

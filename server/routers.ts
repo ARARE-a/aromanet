@@ -15,6 +15,7 @@ import { adminRouter } from "./routers/admin";
 import { seedRouter } from "./routers/seed";
 import { roomRouter } from "./routers/room";
 import { affiliationRouter } from "./routers/affiliation";
+import { storyRouter } from "./routers/story";
 
 export const appRouter = router({
   system: systemRouter,
@@ -39,6 +40,7 @@ export const appRouter = router({
   seed: seedRouter,
   room: roomRouter,
   affiliation: affiliationRouter,
+  story: storyRouter,
 });
 
 export type AppRouter = typeof appRouter;

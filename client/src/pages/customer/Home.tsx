@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useLocation, Link } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -6,6 +6,8 @@ import {
   Compass, Grid3x3, Plus
 } from "lucide-react";
 import { AromaLayout, AromaLogo, AromaAvatar, StoryAvatar, LevelBadge } from "@/components/AromaLayout";
+import { StoryRing } from "@/components/StoryRing";
+import { StoryViewer, type StoryAuthor } from "@/components/StoryViewer";
 import { trpc } from "@/lib/trpc";
 import { useSession } from "@/contexts/SessionContext";
 
@@ -54,10 +56,28 @@ export default function CustomerHome() {
   const { data: stores } = trpc.store.search.useQuery({ limit: 8 }, { enabled: !!session });
   const { data: therapists } = trpc.therapist.search.useQuery({ limit: 10 }, { enabled: !!session });
   const { data: posts } = trpc.post.getFeed.useQuery({ limit: 12 }, { enabled: !!session });
+  const [viewerAuthors, setViewerAuthors] = useState<StoryAuthor[] | null>(null);
+  const therapistIds = useMemo(() => (therapists as any[] ?? []).map((t: any) => t.id), [therapists]);
+  const { data: activeTherapistIds } = trpc.story.getActiveTherapistIds.useQuery(
+    { therapistIds },
+    { enabled: therapistIds.length > 0 }
+  );
+  const activeSet = useMemo(() => new Set(activeTherapistIds ?? []), [activeTherapistIds]);
 
   const p = profile as any;
   const storeList = (stores as any[]) ?? [];
   const therapistList = (therapists as any[]) ?? [];
+
+  const handleOpenStory = async (t: any) => {
+    if (!activeSet.has(t.id)) return;
+    // Fetch stories for this therapist
+    const res = await fetch(`/api/trpc/story.getByTherapistId?input=${encodeURIComponent(JSON.stringify({ json: { therapistId: t.id } }))}`);
+    const json = await res.json();
+    const stories = json?.result?.data?.json ?? [];
+    if (stories.length > 0) {
+      setViewerAuthors([{ id: t.id, name: t.displayName, avatarUrl: t.profileImageUrl, role: "therapist", stories }]);
+    }
+  };
   const postList = (posts as any[]) ?? [];
 
   if (isLoading || !session) {
@@ -103,14 +123,21 @@ export default function CustomerHome() {
           </div>
 
           {/* Therapist stories */}
-          {therapistList.map((t: any) => (
-            <Link key={t.id} href={`/therapist/${t.id}`}>
-              <div className="flex flex-col items-center gap-1 flex-shrink-0 cursor-pointer">
-                <StoryAvatar name={t.displayName} src={t.profileImageUrl} size="md" hasStory={true} />
+          {therapistList.map((t: any) => {
+            const hasStory = activeSet.has(t.id);
+            return (
+              <div key={t.id} className="flex flex-col items-center gap-1 flex-shrink-0">
+                <StoryRing hasStory={hasStory} size="md"
+                  onClick={() => hasStory ? handleOpenStory(t) : undefined}
+                  className={hasStory ? "cursor-pointer" : "cursor-default"}>
+                  <Link href={`/therapist/${t.id}`}>
+                    <AromaAvatar name={t.displayName} src={t.profileImageUrl} size="md" />
+                  </Link>
+                </StoryRing>
                 <span className="text-[11px] text-gray-700 truncate w-16 text-center">{t.displayName?.split(" ")[0] ?? t.displayName}</span>
               </div>
-            </Link>
-          ))}
+            );
+          })}
         </div>
       </div>
 
@@ -160,6 +187,14 @@ export default function CustomerHome() {
         )}
 
       </div>
+
+      {/* Story Viewer */}
+      {viewerAuthors && (
+        <StoryViewer
+          authors={viewerAuthors}
+          onClose={() => setViewerAuthors(null)}
+        />
+      )}
     </AromaLayout>
   );
 }

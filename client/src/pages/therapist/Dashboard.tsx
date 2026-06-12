@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useState, useEffect } from "react";
 import { useLocation, Link } from "wouter";
 import { motion } from "framer-motion";
 import {
@@ -6,6 +6,9 @@ import {
   TrendingUp, BookOpen, LogOut, ChevronRight, Bell, Settings, BarChart3
 } from "lucide-react";
 import { AromaLayout, AromaAvatar, StoryAvatar, LevelBadge, StatusBadge } from "@/components/AromaLayout";
+import { StoryRing } from "@/components/StoryRing";
+import { StoryUpload } from "@/components/StoryUpload";
+import { StoryViewer, type StoryAuthor } from "@/components/StoryViewer";
 import { trpc } from "@/lib/trpc";
 import { useSession } from "@/contexts/SessionContext";
 
@@ -24,6 +27,9 @@ export default function TherapistDashboard() {
 
   const { data: profile } = trpc.therapist.getMyProfile.useQuery(undefined, { enabled: !!session });
   const { data: dashboard } = trpc.therapist.getDashboard.useQuery(undefined, { enabled: !!session });
+  const { data: myStories } = trpc.story.getMyStories.useQuery(undefined, { enabled: !!session });
+  const [storyUploadOpen, setStoryUploadOpen] = useState(false);
+  const [viewerAuthors, setViewerAuthors] = useState<StoryAuthor[] | null>(null);
 
   useEffect(() => {
     if (!isLoading && (!session || session.role !== "therapist")) navigate("/therapist/login");
@@ -57,9 +63,24 @@ export default function TherapistDashboard() {
     >
       {/* Profile summary row */}
       <div className="px-4 pt-4 pb-3 flex items-center gap-4">
-        <Link href="/therapist/profile">
-          <StoryAvatar name={p?.displayName} src={p?.profileImageUrl} size="lg" hasStory={true} />
-        </Link>
+        <div className="relative">
+          <StoryRing hasStory={!!(myStories && myStories.length > 0)} size="lg"
+            onClick={() => {
+              if (myStories && myStories.length > 0) {
+                setViewerAuthors([{ id: p?.id ?? 0, name: p?.displayName ?? "", avatarUrl: p?.profileImageUrl, role: "therapist", stories: myStories as any }]);
+              } else {
+                setStoryUploadOpen(true);
+              }
+            }}>
+            <AromaAvatar name={p?.displayName} src={p?.profileImageUrl} size="lg" />
+          </StoryRing>
+          <button
+            onClick={() => setStoryUploadOpen(true)}
+            className="absolute -bottom-0.5 -right-0.5 w-6 h-6 bg-primary rounded-full flex items-center justify-center border-2 border-white text-white"
+          >
+            <span className="text-[14px] leading-none font-bold">+</span>
+          </button>
+        </div>
         <div className="flex-1 flex items-center justify-around">
           <div className="text-center">
             <div className="text-[17px] font-bold">{d?.nominationCount ?? 0}</div>
@@ -152,6 +173,16 @@ export default function TherapistDashboard() {
         </div>
       </div>
 
+      {/* Story Upload Dialog */}
+      <StoryUpload open={storyUploadOpen} onClose={() => setStoryUploadOpen(false)} />
+
+      {/* Story Viewer */}
+      {viewerAuthors && (
+        <StoryViewer
+          authors={viewerAuthors}
+          onClose={() => setViewerAuthors(null)}
+        />
+      )}
     </AromaLayout>
   );
 }

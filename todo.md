@@ -186,3 +186,15 @@
 - [x] セラピストDBスキーマにcatchphrase・selfIntroduction・bodyType・instagramUrl・twitterUrlカラムを追加（マイグレーション実行済み）
 - [x] therapist.tsのupdateProfileに新カラムを追加してフロントエンドのフォームと一致させる
 - [x] 顧客プロフィール編集でdisplayNameとnicknameを同時に更新して表示の不一致を修正
+
+## Phase 18: クラッシュ/パスワード/SNS/ストーリー機能実装
+- [x] セキュリティ設定ページ新規作成（全3ロール共通: クラッシュパスワード設定・パスワード変更）
+- [x] auth.tsにchangePassword APIを追加
+- [x] プロフィール編集ページにセキュリティ設定ボタンを追加（セラピスト・店舗・顧客）
+- [x] セラピスト公開プロフィールページにInstagram/TwitterのSNSリンクボタンを追加
+- [x] story_postsテーブルにstoreIdカラムを追加してマイグレーション
+- [x] ストーリーバックエンドAPI実装（投稿・閲覧・有効期限24時間）
+- [x] AromaLayoutのStoryAvatarを実際のストーリー有無データと連携
+- [x] 顧客ホームのストーリーstripを実データと連携（セラピスト・店舗）
+- [x] セラピスト/店舗ダッシュボードにストーリー投稿ボタン追加
+- [x] ストーリー閲覧モーダル（Instagram風フルスクリーン表示・24時間有効）

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { motion } from "framer-motion";
-import { Camera, Save } from "lucide-react";
+import { Camera, Save, Shield } from "lucide-react";
 import { AromaLayout, AromaAvatar } from "@/components/AromaLayout";
 import { ImageCropper, useAvatarCrop } from "@/components/ImageCropper";
 import { trpc } from "@/lib/trpc";
@@ -124,6 +124,12 @@ export default function CustomerEditProfile() {
           <Save className="w-4 h-4 mr-2" />
           {updateMut.isPending ? "保存中..." : "保存する"}
         </Button>
+        <a href="/security">
+          <Button variant="outline" className="w-full h-10 rounded-xl text-sm border-gray-300 text-gray-600">
+            <Shield className="w-4 h-4 mr-2" />
+            セキュリティ設定（パスワード・クラッシュ）
+          </Button>
+        </a>
       </div>
 
       {/* Image Cropper Dialog */}

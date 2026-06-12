@@ -55,6 +55,7 @@ import CustomerVerification from "./pages/customer/Verification";
 
 // Shared pages
 import MessagesPage from "./pages/Messages";
+import SecurityPage from "./pages/shared/Security";
 
 function Router() {
   return (
@@ -112,6 +113,7 @@ function Router() {
       {/* Shared */}
       <Route path="/messages" component={MessagesPage} />
       <Route path="/messages/:threadId" component={MessagesPage} />
+      <Route path="/security" component={SecurityPage} />
 
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />

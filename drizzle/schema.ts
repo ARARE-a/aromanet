@@ -573,7 +573,9 @@ export const therapistSalarySettings = mysqlTable("therapist_salary_settings", {
 
 export const storyPosts = mysqlTable("story_posts", {
   id: int("id").autoincrement().primaryKey(),
-  therapistId: int("therapistId").notNull().references(() => therapists.id),
+  therapistId: int("therapistId").references(() => therapists.id),
+  storeId: int("storeId").references(() => stores.id),
+  authorRole: mysqlEnum("authorRole", ["therapist", "store"]).default("therapist").notNull(),
   mediaUrl: text("mediaUrl").notNull(),
   mediaType: mysqlEnum("mediaType", ["image", "video"]).default("image").notNull(),
   caption: text("caption"),
