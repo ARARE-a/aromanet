@@ -14,6 +14,7 @@ import CustomerLogin from "./pages/auth/CustomerLogin";
 import StoreRegister from "./pages/auth/StoreRegister";
 import TherapistRegister from "./pages/auth/TherapistRegister";
 import CustomerRegister from "./pages/auth/CustomerRegister";
+import AccountNotFound from "./pages/auth/AccountNotFound";
 
 // Store pages
 import StoreDashboard from "./pages/store/Dashboard";
@@ -70,6 +71,7 @@ function Router() {
       <Route path="/therapist/register" component={TherapistRegister} />
       <Route path="/customer/login" component={CustomerLogin} />
       <Route path="/customer/register" component={CustomerRegister} />
+      <Route path="/account-not-found" component={AccountNotFound} />
 
       {/* Store */}
       <Route path="/store/dashboard" component={StoreDashboard} />

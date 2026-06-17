@@ -30,10 +30,20 @@ export default function Messages() {
     if (!isLoading && !session) navigate("/");
   }, [session, isLoading]);
 
-  const { data: threads, refetch: refetchThreads } = trpc.message.getThreads.useQuery(undefined, { enabled: !!session });
+  const { data: threads, refetch: refetchThreads } = trpc.message.getThreads.useQuery(undefined, {
+    enabled: !!session,
+    refetchInterval: 5000,
+    refetchIntervalInBackground: true,
+    refetchOnWindowFocus: true,
+  });
   const { data: messages, refetch: refetchMessages } = trpc.message.getMessages.useQuery(
     { threadId: selectedThread! },
-    { enabled: !!session && !!selectedThread, refetchInterval: 5000 }
+    {
+      enabled: !!session && !!selectedThread,
+      refetchInterval: 3000,
+      refetchIntervalInBackground: true,
+      refetchOnWindowFocus: true,
+    }
   );
 
   const getOrCreateThreadMut = trpc.message.getOrCreateThread.useMutation({
@@ -108,6 +118,12 @@ export default function Messages() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  useEffect(() => {
+    if (selectedThread && messages) {
+      refetchThreads();
+    }
+  }, [selectedThread, messages, refetchThreads]);
 
   const threadList = (threads as any[]) ?? [];
   const messageList = (messages as any[]) ?? [];

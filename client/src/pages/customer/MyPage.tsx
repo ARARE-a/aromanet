@@ -57,7 +57,7 @@ export default function CustomerMyPage() {
         </Link>
       }
     >
-      {/* Profile header - Instagram style */}
+      {/* Profile header */}
       <div className="px-4 pt-4 pb-3">
         <div className="flex items-start gap-5">
           <Link href="/my/edit-profile">

@@ -6,10 +6,13 @@ import {
   storeAccounts, therapistAccounts, customerAccounts,
   stores, therapists, customerProfiles, auditLogs,
   reservations, reviews, posts, postImages, messageThreads, messages,
+  reservationOptions, menus, menuOptions, coupons,
   shifts, sales, therapistPayrolls, follows, favorites, customerMemos,
-  ngCustomers, notifications,
+  ngCustomers, notifications, blocks, reports, identityVerifications,
+  ageVerifications, rooms, affiliationRequests, therapistSalarySettings,
+  storyPosts,
 } from "../../drizzle/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, inArray, or } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import { SignJWT, jwtVerify, type JWTPayload } from "jose";
 
@@ -52,8 +55,8 @@ function clearSessionCookie(res: any) {
 async function logAudit(db: any, role: string, accountId: number, action: string, detail?: string, req?: any) {
   try {
     await db.insert(auditLogs).values({
-      role,
-      accountId,
+      actorRole: role,
+      actorId: accountId,
       action,
       detail,
       ipAddress: req?.ip ?? req?.headers?.["x-forwarded-for"] ?? "unknown",
@@ -244,19 +247,26 @@ export const authRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       let currentHash: string | null = null;
+      let crashHash: string | null = null;
       if (session.role === "store") {
         const rows = await db.select().from(storeAccounts).where(eq(storeAccounts.id, session.accountId)).limit(1);
         currentHash = rows[0]?.passwordHash ?? null;
+        crashHash = rows[0]?.crashPasswordHash ?? null;
       } else if (session.role === "therapist") {
         const rows = await db.select().from(therapistAccounts).where(eq(therapistAccounts.id, session.accountId)).limit(1);
         currentHash = rows[0]?.passwordHash ?? null;
+        crashHash = rows[0]?.crashPasswordHash ?? null;
       } else {
         const rows = await db.select().from(customerAccounts).where(eq(customerAccounts.id, session.accountId)).limit(1);
         currentHash = rows[0]?.passwordHash ?? null;
+        crashHash = rows[0]?.crashPasswordHash ?? null;
       }
       if (!currentHash) throw new TRPCError({ code: "NOT_FOUND" });
       const isValid = await bcrypt.compare(input.currentPassword, currentHash);
       if (!isValid) throw new TRPCError({ code: "UNAUTHORIZED", message: "現在のパスワードが正しくありません" });
+      if (crashHash && await bcrypt.compare(input.newPassword, crashHash)) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "クラッシュパスワードと同じ通常パスワードは設定できません" });
+      }
       const newHash = await bcrypt.hash(input.newPassword, 12);
       if (session.role === "store") {
         await db.update(storeAccounts).set({ passwordHash: newHash }).where(eq(storeAccounts.id, session.accountId));
@@ -277,6 +287,23 @@ export const authRouter = router({
       const session = await verifyToken(token);
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      let passwordHash: string | null = null;
+      if (session.role === "store") {
+        const rows = await db.select().from(storeAccounts).where(eq(storeAccounts.id, session.accountId)).limit(1);
+        passwordHash = rows[0]?.passwordHash ?? null;
+      } else if (session.role === "therapist") {
+        const rows = await db.select().from(therapistAccounts).where(eq(therapistAccounts.id, session.accountId)).limit(1);
+        passwordHash = rows[0]?.passwordHash ?? null;
+      } else {
+        const rows = await db.select().from(customerAccounts).where(eq(customerAccounts.id, session.accountId)).limit(1);
+        passwordHash = rows[0]?.passwordHash ?? null;
+      }
+      if (!passwordHash) throw new TRPCError({ code: "NOT_FOUND" });
+      const sameAsPassword = await bcrypt.compare(input.crashPassword, passwordHash);
+      if (sameAsPassword) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "通常パスワードと同じクラッシュパスワードは設定できません" });
+      }
+
       const crashPasswordHash = await bcrypt.hash(input.crashPassword, 12);
       if (session.role === "store") {
         await db.update(storeAccounts).set({ crashPasswordHash }).where(eq(storeAccounts.id, session.accountId));
@@ -295,44 +322,170 @@ export const authRouter = router({
   }),
 });
 
+type EntityRole = "store" | "therapist" | "customer";
+
+function compactIds(ids: Array<number | null | undefined>) {
+  return Array.from(new Set(ids.filter((id): id is number => typeof id === "number")));
+}
+
+async function deleteByIds(db: any, table: any, column: any, ids: number[]) {
+  if (ids.length === 0) return;
+  await db.delete(table).where(inArray(column, ids));
+}
+
+async function deleteReportsForTargets(db: any, targetType: string, targetIds: number[]) {
+  if (targetIds.length === 0) return;
+  await db.delete(reports).where(and(eq(reports.targetType, targetType as any), inArray(reports.targetId, targetIds)));
+}
+
+async function deleteActorSafetyRows(db: any, role: EntityRole, id: number) {
+  await db.delete(blocks).where(or(
+    and(eq(blocks.blockerRole, role), eq(blocks.blockerId, id)),
+    and(eq(blocks.blockedRole, role), eq(blocks.blockedId, id)),
+  ));
+  await db.delete(reports).where(or(
+    and(eq(reports.reporterRole, role), eq(reports.reporterId, id)),
+    and(eq(reports.targetType, role), eq(reports.targetId, id)),
+  ));
+}
+
+async function deleteMessageThreadsWhere(db: any, condition: any) {
+  const threadRows = await db.select({ id: messageThreads.id }).from(messageThreads).where(condition);
+  const threadIds = compactIds(threadRows.map((row: { id: number }) => row.id));
+  if (threadIds.length === 0) return;
+  const messageRows = await db.select({ id: messages.id }).from(messages).where(inArray(messages.threadId, threadIds));
+  const messageIds = compactIds(messageRows.map((row: { id: number }) => row.id));
+  await deleteReportsForTargets(db, "message", messageIds);
+  await deleteByIds(db, messages, messages.id, messageIds);
+  await deleteByIds(db, messageThreads, messageThreads.id, threadIds);
+}
+
+async function deletePostsWhere(db: any, condition: any) {
+  const postRows = await db.select({ id: posts.id }).from(posts).where(condition);
+  const postIds = compactIds(postRows.map((row: { id: number }) => row.id));
+  if (postIds.length === 0) return;
+  await deleteReportsForTargets(db, "post", postIds);
+  await deleteByIds(db, postImages, postImages.postId, postIds);
+  await deleteByIds(db, posts, posts.id, postIds);
+}
+
+async function deleteReviewsWhere(db: any, condition: any) {
+  const reviewRows = await db.select({ id: reviews.id }).from(reviews).where(condition);
+  const reviewIds = compactIds(reviewRows.map((row: { id: number }) => row.id));
+  if (reviewIds.length === 0) return;
+  await deleteReportsForTargets(db, "review", reviewIds);
+  await deleteByIds(db, reviews, reviews.id, reviewIds);
+}
+
+async function deleteReservationsWhere(db: any, condition: any) {
+  const reservationRows = await db.select({ id: reservations.id }).from(reservations).where(condition);
+  const reservationIds = compactIds(reservationRows.map((row: { id: number }) => row.id));
+  if (reservationIds.length === 0) return;
+  await deleteByIds(db, sales, sales.reservationId, reservationIds);
+  await deleteReviewsWhere(db, inArray(reviews.reservationId, reservationIds));
+  await deleteByIds(db, reservationOptions, reservationOptions.reservationId, reservationIds);
+  await deleteByIds(db, reservations, reservations.id, reservationIds);
+}
+
+async function deleteFollowsAndFavoritesForTarget(db: any, targetType: "store" | "therapist", targetId: number) {
+  await db.delete(follows).where(and(eq(follows.targetType, targetType), eq(follows.targetId, targetId)));
+  await db.delete(favorites).where(and(eq(favorites.targetType, targetType), eq(favorites.targetId, targetId)));
+}
+
+async function deleteTherapistScope(db: any, therapistId: number, accountId?: number | null, deleteAccount = true) {
+  await deleteMessageThreadsWhere(db, eq(messageThreads.therapistId, therapistId));
+  await deleteReservationsWhere(db, eq(reservations.therapistId, therapistId));
+  await deletePostsWhere(db, eq(posts.therapistId, therapistId));
+  await db.delete(storyPosts).where(eq(storyPosts.therapistId, therapistId));
+  await db.delete(shifts).where(eq(shifts.therapistId, therapistId));
+  await db.delete(sales).where(eq(sales.therapistId, therapistId));
+  await db.delete(therapistPayrolls).where(eq(therapistPayrolls.therapistId, therapistId));
+  await db.delete(therapistSalarySettings).where(eq(therapistSalarySettings.therapistId, therapistId));
+  await db.delete(customerMemos).where(eq(customerMemos.therapistId, therapistId));
+  await db.delete(ngCustomers).where(eq(ngCustomers.therapistId, therapistId));
+  await db.delete(affiliationRequests).where(eq(affiliationRequests.therapistId, therapistId));
+  await deleteFollowsAndFavoritesForTarget(db, "therapist", therapistId);
+  await db.delete(notifications).where(and(eq(notifications.recipientRole, "therapist"), eq(notifications.recipientId, therapistId)));
+  await deleteActorSafetyRows(db, "therapist", therapistId);
+  await db.delete(therapists).where(eq(therapists.id, therapistId));
+
+  if (deleteAccount && accountId) {
+    await db.delete(identityVerifications).where(and(eq(identityVerifications.role, "therapist"), eq(identityVerifications.accountId, accountId)));
+    await db.delete(auditLogs).where(and(eq(auditLogs.actorRole, "therapist"), eq(auditLogs.actorId, accountId)));
+    await db.delete(therapistAccounts).where(eq(therapistAccounts.id, accountId));
+  }
+}
+
+async function deleteStoreScope(db: any, storeId: number, accountId?: number | null) {
+  const therapistRows = await db.select({ id: therapists.id, accountId: therapists.accountId })
+    .from(therapists)
+    .where(eq(therapists.storeId, storeId));
+  for (const therapist of therapistRows) {
+    await deleteTherapistScope(db, therapist.id, therapist.accountId, true);
+  }
+
+  await deleteMessageThreadsWhere(db, eq(messageThreads.storeId, storeId));
+  await deleteReservationsWhere(db, eq(reservations.storeId, storeId));
+  await deletePostsWhere(db, eq(posts.storeId, storeId));
+  await db.delete(storyPosts).where(eq(storyPosts.storeId, storeId));
+  await deleteReviewsWhere(db, eq(reviews.storeId, storeId));
+  await db.delete(shifts).where(eq(shifts.storeId, storeId));
+  await db.delete(sales).where(eq(sales.storeId, storeId));
+  await db.delete(therapistPayrolls).where(eq(therapistPayrolls.storeId, storeId));
+  await db.delete(therapistSalarySettings).where(eq(therapistSalarySettings.storeId, storeId));
+  await db.delete(ngCustomers).where(eq(ngCustomers.storeId, storeId));
+  await db.delete(affiliationRequests).where(eq(affiliationRequests.storeId, storeId));
+  await db.delete(rooms).where(eq(rooms.storeId, storeId));
+  await db.delete(menuOptions).where(eq(menuOptions.storeId, storeId));
+  await db.delete(coupons).where(eq(coupons.storeId, storeId));
+  await db.delete(menus).where(eq(menus.storeId, storeId));
+  await deleteFollowsAndFavoritesForTarget(db, "store", storeId);
+  await db.delete(notifications).where(and(eq(notifications.recipientRole, "store"), eq(notifications.recipientId, storeId)));
+  await deleteActorSafetyRows(db, "store", storeId);
+  await db.delete(stores).where(eq(stores.id, storeId));
+
+  if (accountId) {
+    await db.delete(identityVerifications).where(and(eq(identityVerifications.role, "store"), eq(identityVerifications.accountId, accountId)));
+    await db.delete(auditLogs).where(and(eq(auditLogs.actorRole, "store"), eq(auditLogs.actorId, accountId)));
+    await db.delete(storeAccounts).where(eq(storeAccounts.id, accountId));
+  }
+}
+
+async function deleteCustomerScope(db: any, accountId: number) {
+  await deleteMessageThreadsWhere(db, eq(messageThreads.customerId, accountId));
+  await deleteReservationsWhere(db, eq(reservations.customerId, accountId));
+  await deleteReviewsWhere(db, eq(reviews.customerId, accountId));
+  await db.delete(customerMemos).where(eq(customerMemos.customerId, accountId));
+  await db.delete(ngCustomers).where(eq(ngCustomers.customerId, accountId));
+  await db.delete(follows).where(eq(follows.customerId, accountId));
+  await db.delete(favorites).where(eq(favorites.customerId, accountId));
+  await db.delete(ageVerifications).where(eq(ageVerifications.customerId, accountId));
+  await db.delete(notifications).where(and(eq(notifications.recipientRole, "customer"), eq(notifications.recipientId, accountId)));
+  await deleteActorSafetyRows(db, "customer", accountId);
+  await db.delete(auditLogs).where(and(eq(auditLogs.actorRole, "customer"), eq(auditLogs.actorId, accountId)));
+  await db.delete(customerProfiles).where(eq(customerProfiles.accountId, accountId));
+  await db.delete(customerAccounts).where(eq(customerAccounts.id, accountId));
+}
+
 // Execute crash: delete all account data
 async function executeCrash(db: any, role: string, accountId: number) {
-  try {
-    if (role === "store") {
-      const storeRows = await db.select().from(stores).where(eq(stores.accountId, accountId));
-      for (const s of storeRows) {
-        await db.delete(reservations).where(eq(reservations.storeId, s.id));
-        await db.delete(reviews).where(eq(reviews.storeId, s.id));
-        await db.delete(posts).where(eq(posts.storeId, s.id));
-        await db.delete(shifts).where(eq(shifts.storeId, s.id));
-        await db.delete(sales).where(eq(sales.storeId, s.id));
-        await db.delete(notifications).where(and(eq(notifications.recipientRole, "store"), eq(notifications.recipientId, s.id)));
-        await db.delete(stores).where(eq(stores.id, s.id));
-      }
-      await db.delete(storeAccounts).where(eq(storeAccounts.id, accountId));
-    } else if (role === "therapist") {
-      const tRows = await db.select().from(therapists).where(eq(therapists.accountId, accountId));
-      for (const t of tRows) {
-        await db.delete(reservations).where(eq(reservations.therapistId, t.id));
-        await db.delete(reviews).where(eq(reviews.therapistId, t.id));
-        await db.delete(posts).where(eq(posts.therapistId, t.id));
-        await db.delete(shifts).where(eq(shifts.therapistId, t.id));
-        await db.delete(sales).where(eq(sales.therapistId, t.id));
-        await db.delete(therapistPayrolls).where(eq(therapistPayrolls.therapistId, t.id));
-        await db.delete(customerMemos).where(eq(customerMemos.therapistId, t.id));
-        await db.delete(therapists).where(eq(therapists.id, t.id));
-      }
-      await db.delete(therapistAccounts).where(eq(therapistAccounts.id, accountId));
-    } else {
-      await db.delete(reservations).where(eq(reservations.customerId, accountId));
-      await db.delete(reviews).where(eq(reviews.customerId, accountId));
-      await db.delete(follows).where(eq(follows.customerId, accountId));
-      await db.delete(favorites).where(eq(favorites.customerId, accountId));
-      await db.delete(notifications).where(and(eq(notifications.recipientRole, "customer"), eq(notifications.recipientId, accountId)));
-      await db.delete(customerProfiles).where(eq(customerProfiles.accountId, accountId));
-      await db.delete(customerAccounts).where(eq(customerAccounts.id, accountId));
+  if (role === "store") {
+    const storeRows = await db.select({ id: stores.id }).from(stores).where(eq(stores.accountId, accountId));
+    for (const store of storeRows) {
+      await deleteStoreScope(db, store.id, accountId);
     }
-  } catch (e) {
-    console.error("Crash execution error:", e);
+    if (storeRows.length === 0) {
+      await db.delete(storeAccounts).where(eq(storeAccounts.id, accountId));
+    }
+  } else if (role === "therapist") {
+    const therapistRows = await db.select({ id: therapists.id, accountId: therapists.accountId }).from(therapists).where(eq(therapists.accountId, accountId));
+    for (const therapist of therapistRows) {
+      await deleteTherapistScope(db, therapist.id, therapist.accountId, true);
+    }
+    if (therapistRows.length === 0) {
+      await db.delete(therapistAccounts).where(eq(therapistAccounts.id, accountId));
+    }
+  } else {
+    await deleteCustomerScope(db, accountId);
   }
 }

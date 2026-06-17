@@ -1,10 +1,22 @@
 import { TRPCError } from "@trpc/server";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
-import { affiliationRequests, therapists, stores, therapistSalarySettings, notifications } from "../../drizzle/schema";
+import { affiliationRequests, therapists, stores, therapistSalarySettings, notifications, messageThreads, messages, therapistPayrolls } from "../../drizzle/schema";
 import { getDb } from "../db";
 import { getSession } from "../session";
 import { publicProcedure, router } from "../_core/trpc";
+
+function getTokyoYearMonth() {
+  const parts = new Intl.DateTimeFormat("ja-JP", {
+    timeZone: "Asia/Tokyo",
+    year: "numeric",
+    month: "numeric",
+  }).formatToParts(new Date());
+  return {
+    year: Number(parts.find((part) => part.type === "year")?.value),
+    month: Number(parts.find((part) => part.type === "month")?.value),
+  };
+}
 
 export const affiliationRouter = router({
   // Therapist sends affiliation request to a store
@@ -212,14 +224,73 @@ export const affiliationRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       const today = new Date().toLocaleDateString("ja-JP", { year: "numeric", month: "long", day: "numeric" });
+      const body = input.message?.trim() || `${today}の女子給は ¥${input.amount.toLocaleString()} です。`;
       await db.insert(notifications).values({
         recipientRole: "therapist",
         recipientId: input.therapistId,
         type: "system",
         title: `本日の女子給: ¥${input.amount.toLocaleString()}`,
-        body: input.message ?? `${today}の女子給は ¥${input.amount.toLocaleString()} です。`,
+        body,
         isRead: false,
       });
+      const { year, month } = getTokyoYearMonth();
+      const payrollRows = await db.select().from(therapistPayrolls)
+        .where(and(
+          eq(therapistPayrolls.therapistId, input.therapistId),
+          eq(therapistPayrolls.storeId, session.storeId!),
+          eq(therapistPayrolls.year, year),
+          eq(therapistPayrolls.month, month),
+        ))
+        .limit(1);
+      const adjustmentNote = body.length > 0 ? body : `女子給送信 ¥${input.amount.toLocaleString()}`;
+      if (payrollRows[0]) {
+        const payroll = payrollRows[0];
+        const adjustmentAmount = Number(payroll.adjustmentAmount ?? 0) + input.amount;
+        const backAmount = Number(payroll.backAmount ?? 0);
+        const noteParts = [payroll.adjustmentNote, adjustmentNote].filter(Boolean);
+        await db.update(therapistPayrolls).set({
+          adjustmentAmount,
+          adjustmentNote: noteParts.join("\n"),
+          totalPayroll: backAmount + adjustmentAmount,
+        }).where(eq(therapistPayrolls.id, payroll.id));
+      } else {
+        await db.insert(therapistPayrolls).values({
+          therapistId: input.therapistId,
+          storeId: session.storeId!,
+          year,
+          month,
+          adjustmentAmount: input.amount,
+          adjustmentNote,
+          totalPayroll: input.amount,
+        });
+      }
+      const threadRows = await db.select().from(messageThreads)
+        .where(and(
+          eq(messageThreads.threadType, "store_therapist"),
+          eq(messageThreads.storeId, session.storeId!),
+          eq(messageThreads.therapistId, input.therapistId),
+        ))
+        .limit(1);
+      let threadId = threadRows[0]?.id;
+      if (!threadId) {
+        const result = await db.insert(messageThreads).values({
+          threadType: "store_therapist",
+          storeId: session.storeId!,
+          therapistId: input.therapistId,
+        });
+        threadId = (result as any)[0].insertId as number;
+      }
+      const content = `本日の女子給: ¥${input.amount.toLocaleString()}\n${body}`;
+      await db.insert(messages).values({
+        threadId,
+        senderRole: "store",
+        senderId: session.storeId!,
+        content,
+      });
+      await db.update(messageThreads).set({
+        lastMessageAt: new Date(),
+        therapistUnread: sql`${messageThreads.therapistUnread} + 1`,
+      }).where(eq(messageThreads.id, threadId));
       return { success: true };
     }),
 });

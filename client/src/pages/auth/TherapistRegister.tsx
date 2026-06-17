@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link } from "wouter";
 import { Mail, Lock, User } from "lucide-react";
 import { trpc } from "@/lib/trpc";
+import { getAuthErrorMessage } from "@/lib/errors";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,7 +16,7 @@ export default function TherapistRegister() {
 
   const regMut = trpc.aroAuth.therapistRegister.useMutation({
     onSuccess: () => { window.location.href = "/therapist/dashboard"; },
-    onError: (e) => setError(e.message),
+    onError: (e) => setError(getAuthErrorMessage(e)),
   });
 
   const handleSubmit = () => {
@@ -32,7 +33,7 @@ export default function TherapistRegister() {
       setError("パスワードは8文字以上で入力してください");
       return;
     }
-    regMut.mutate({ displayName, email, password, skipEmailVerify: true });
+    regMut.mutate({ displayName: displayName.trim(), email: email.trim(), password, skipEmailVerify: true });
   };
 
   return (

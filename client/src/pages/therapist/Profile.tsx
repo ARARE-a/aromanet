@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { motion } from "framer-motion";
-import { Camera, Save, Instagram, Twitter, User, Eye, Home, Clock, PlusSquare, MessageCircle, Shield } from "lucide-react";
+import { Camera, Save, Link as LinkIcon, Twitter, User, Eye, Home, Clock, PlusSquare, MessageCircle, Shield } from "lucide-react";
 import { Link } from "wouter";
 import { AromaLayout, AromaAvatar } from "@/components/AromaLayout";
 import { ImageCropper, useAvatarCrop } from "@/components/ImageCropper";
@@ -181,12 +181,12 @@ export default function TherapistProfile() {
           <div className="space-y-3">
             <div className="space-y-1">
               <Label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
-                <Instagram className="w-3.5 h-3.5 text-pink-500" />Instagram URL
+                <LinkIcon className="w-3.5 h-3.5 text-primary" />フォトSNS URL
               </Label>
               <Input
                 value={form.instagramUrl}
                 onChange={e => setForm(f => ({ ...f, instagramUrl: e.target.value }))}
-                placeholder="https://instagram.com/..."
+                placeholder="https://example.com/..."
                 className="rounded-xl h-10 text-sm"
               />
             </div>

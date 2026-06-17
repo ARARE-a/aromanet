@@ -569,7 +569,7 @@ export const therapistSalarySettings = mysqlTable("therapist_salary_settings", {
   uniqueIndex("idx_salary_settings_unique").on(t.therapistId, t.storeId),
 ]);
 
-// ─── Story Posts (Instagram-style) ───────────────────────────────────────────
+// ─── Story Posts ─────────────────────────────────────────────────────────────
 
 export const storyPosts = mysqlTable("story_posts", {
   id: int("id").autoincrement().primaryKey(),

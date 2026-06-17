@@ -23,7 +23,7 @@ export function StoryRing({ hasStory, size = "md", children, onClick, className 
         "rounded-full flex-shrink-0 cursor-pointer",
         ring,
         hasStory
-          ? "bg-gradient-to-tr from-yellow-400 via-pink-500 to-purple-600"
+          ? "gradient-aroma-social"
           : "bg-gray-200",
         className
       )}

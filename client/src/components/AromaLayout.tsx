@@ -36,7 +36,7 @@ export function AromaLayout({
 
   return (
     <div className="min-h-[100dvh] max-h-[100dvh] bg-background flex flex-col relative overflow-hidden">
-      {/* Instagram-style header */}
+      {/* Compact app header */}
       {hasHeader && (
         <header className="flex-shrink-0 sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-gray-100 px-3 h-[44px] flex items-center gap-2">
           {headerLeft && <div className="flex items-center">{headerLeft}</div>}
@@ -71,7 +71,7 @@ export function AromaLayout({
         {children}
       </main>
 
-      {/* Instagram-style bottom nav */}
+      {/* Compact bottom nav */}
       {showNav && navItems.length > 0 && (
         <nav className="flex-shrink-0 bg-white/95 backdrop-blur-md border-t border-gray-100 z-40"
           style={{ paddingBottom: "env(safe-area-inset-bottom)" }}>
@@ -101,7 +101,7 @@ function NavItem({ href, icon, activeIcon, label }: { href: string; icon: React.
         )}>
           {isActive && activeIcon ? activeIcon : icon}
         </div>
-        {/* Instagram hides labels, shows only icons */}
+        {/* Labels remain available for accessibility through nav item data. */}
       </div>
     </Link>
   );
@@ -206,7 +206,7 @@ export function AromaAvatar({
   );
 }
 
-// Instagram-style story ring around avatar
+// AromaNet story ring around avatar
 export function StoryAvatar({
   src, name, size = "md", hasStory = false, className
 }: {
@@ -226,7 +226,7 @@ export function StoryAvatar({
     <div className={cn("relative flex items-center justify-center", outerSizes[size], className)}>
       {hasStory && (
         <div className="absolute inset-0 rounded-full"
-          style={{ background: "linear-gradient(45deg, #f09433, #e6683c, #dc2743, #cc2366, #bc1888)", padding: "2px" }}>
+          style={{ background: "linear-gradient(45deg, var(--color-teal), var(--color-teal-light), var(--color-gold))", padding: "2px" }}>
           <div className="w-full h-full rounded-full bg-white" />
         </div>
       )}

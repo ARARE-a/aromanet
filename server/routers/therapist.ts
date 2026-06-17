@@ -6,9 +6,19 @@ import { getSession } from "../session";
 import {
   therapists, stores, shifts, reservations,
   posts, postImages, customerMemos, follows, favorites,
-  sales, therapistPayrolls,
+  sales, therapistPayrolls, customerProfiles, menus,
 } from "../../drizzle/schema";
-import { eq, and, desc, gte, sql, like } from "drizzle-orm";
+import { eq, and, desc, gte, lt, sql, like } from "drizzle-orm";
+
+function getMonthBounds(month: string) {
+  const [yearValue, monthValue] = month.split("-").map(Number);
+  const nextYear = monthValue === 12 ? yearValue + 1 : yearValue;
+  const nextMonth = monthValue === 12 ? 1 : monthValue + 1;
+  return {
+    start: `${yearValue}-${String(monthValue).padStart(2, "0")}-01`,
+    end: `${nextYear}-${String(nextMonth).padStart(2, "0")}-01`,
+  };
+}
 
 export const therapistRouter = router({
   getById: publicProcedure
@@ -61,7 +71,14 @@ export const therapistRouter = router({
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const rows = await db.select().from(therapists).where(eq(therapists.accountId, session.accountId)).limit(1);
-    return rows[0] ?? null;
+    const profile = rows[0];
+    if (!profile) return null;
+    let storeName: string | null = null;
+    if (profile.storeId) {
+      const storeRows = await db.select({ name: stores.name }).from(stores).where(eq(stores.id, profile.storeId)).limit(1);
+      storeName = storeRows[0]?.name ?? null;
+    }
+    return { ...profile, storeName };
   }),
 
   updateProfile: publicProcedure
@@ -158,7 +175,31 @@ export const therapistRouter = router({
       if (!session.therapistId) return [];
       const conditions: any[] = [eq(reservations.therapistId, session.therapistId)];
       if (input.date) conditions.push(eq(reservations.date, input.date));
-      return db.select().from(reservations).where(and(...conditions)).orderBy(desc(reservations.date), reservations.startTime);
+      return db.select({
+        id: reservations.id,
+        storeId: reservations.storeId,
+        therapistId: reservations.therapistId,
+        customerId: reservations.customerId,
+        menuId: reservations.menuId,
+        date: reservations.date,
+        startTime: reservations.startTime,
+        endTime: reservations.endTime,
+        status: reservations.status,
+        totalPrice: reservations.totalPrice,
+        totalAmount: reservations.totalPrice,
+        customerNote: reservations.customerNote,
+        note: reservations.note,
+        notes: sql<string>`COALESCE(${reservations.note}, ${reservations.customerNote})`,
+        customerName: sql<string>`COALESCE(${customerProfiles.displayName}, ${customerProfiles.nickname}, CONCAT('顧客#', ${reservations.customerId}))`,
+        customerImage: customerProfiles.profileImageUrl,
+        storeName: stores.name,
+        menuName: menus.name,
+      }).from(reservations)
+        .leftJoin(customerProfiles, eq(reservations.customerId, customerProfiles.accountId))
+        .leftJoin(stores, eq(reservations.storeId, stores.id))
+        .leftJoin(menus, eq(reservations.menuId, menus.id))
+        .where(and(...conditions))
+        .orderBy(desc(reservations.date), reservations.startTime);
     }),
 
   getCustomerMemos: publicProcedure.query(async ({ ctx }) => {
@@ -198,12 +239,59 @@ export const therapistRouter = router({
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       if (!session.therapistId) return null;
       const month = input.month ?? new Date().toISOString().slice(0, 7);
+      const { start, end } = getMonthBounds(month);
       const rows = await db.select({
-        totalSales: sql<number>`SUM(totalAmount)`,
-        therapistBack: sql<number>`SUM(therapistBack)`,
+        totalSales: sql<number>`COALESCE(SUM(${sales.totalAmount}), 0)`,
+        therapistBack: sql<number>`COALESCE(SUM(${sales.therapistBack}), 0)`,
+        nominationCount: sql<number>`SUM(CASE WHEN ${sales.nominationFee} > 0 THEN 1 ELSE 0 END)`,
         count: sql<number>`COUNT(*)`,
-      }).from(sales).where(and(eq(sales.therapistId, session.therapistId), gte(sales.date, month + "-01")));
+      }).from(sales).where(and(eq(sales.therapistId, session.therapistId), gte(sales.date, start), lt(sales.date, end)));
       return rows[0] ?? { totalSales: 0, therapistBack: 0, count: 0 };
+    }),
+
+  getSalesDetails: publicProcedure
+    .input(z.object({ month: z.string().optional() }))
+    .query(async ({ input, ctx }) => {
+      const session = await getSession(ctx.req);
+      if (!session || session.role !== "therapist") throw new TRPCError({ code: "UNAUTHORIZED" });
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      if (!session.therapistId) return [];
+      const month = input.month ?? new Date().toISOString().slice(0, 7);
+      const { start, end } = getMonthBounds(month);
+      return db.select({
+        id: sales.id,
+        reservationId: sales.reservationId,
+        date: sales.date,
+        storeId: sales.storeId,
+        storeName: stores.name,
+        therapistId: sales.therapistId,
+        customerId: reservations.customerId,
+        customerName: sql<string>`COALESCE(${customerProfiles.displayName}, ${customerProfiles.nickname}, CONCAT('顧客#', ${reservations.customerId}))`,
+        customerImage: customerProfiles.profileImageUrl,
+        menuId: reservations.menuId,
+        menuName: menus.name,
+        startTime: reservations.startTime,
+        endTime: reservations.endTime,
+        reservationStatus: reservations.status,
+        isNomination: reservations.isNomination,
+        reservationNote: reservations.note,
+        customerNote: reservations.customerNote,
+        menuAmount: sales.menuAmount,
+        nominationFee: sales.nominationFee,
+        optionAmount: sales.optionAmount,
+        discountAmount: sales.discountAmount,
+        cancelFee: sales.cancelFee,
+        totalAmount: sales.totalAmount,
+        therapistBack: sales.therapistBack,
+        createdAt: sales.createdAt,
+      }).from(sales)
+        .leftJoin(reservations, eq(sales.reservationId, reservations.id))
+        .leftJoin(customerProfiles, eq(reservations.customerId, customerProfiles.accountId))
+        .leftJoin(stores, eq(sales.storeId, stores.id))
+        .leftJoin(menus, eq(reservations.menuId, menus.id))
+        .where(and(eq(sales.therapistId, session.therapistId), gte(sales.date, start), lt(sales.date, end)))
+        .orderBy(desc(sales.date), desc(sales.createdAt));
     }),
 
   getPayroll: publicProcedure
@@ -215,7 +303,16 @@ export const therapistRouter = router({
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       if (!session.therapistId) return null;
       const rows = await db.select().from(therapistPayrolls).where(and(eq(therapistPayrolls.therapistId, session.therapistId), eq(therapistPayrolls.year, input.year), eq(therapistPayrolls.month, input.month))).limit(1);
-      return rows[0] ?? null;
+      const payroll = rows[0];
+      if (!payroll) return null;
+      const totalAmount = payroll.totalPayroll || payroll.backAmount + payroll.adjustmentAmount;
+      return {
+        ...payroll,
+        salesAmount: payroll.totalSales,
+        baseAmount: payroll.backAmount,
+        totalAmount,
+        paymentStatus: payroll.isPaid ? "paid" : "unpaid",
+      };
     }),
 
   getDashboard: publicProcedure.query(async ({ ctx }) => {
@@ -226,17 +323,34 @@ export const therapistRouter = router({
     if (!session.therapistId) return null;
     const therapistId = session.therapistId;
     const today = new Date().toISOString().split("T")[0];
+    const { start: monthStart, end: monthEnd } = getMonthBounds(today.slice(0, 7));
     const [tRows, todayReservations, pendingCount, monthlySalesRows] = await Promise.all([
       db.select().from(therapists).where(eq(therapists.id, therapistId)).limit(1),
-      db.select().from(reservations).where(and(eq(reservations.therapistId, therapistId), eq(reservations.date, today))),
+      db.select({
+        id: reservations.id,
+        date: reservations.date,
+        startTime: reservations.startTime,
+        endTime: reservations.endTime,
+        status: reservations.status,
+        customerName: sql<string>`COALESCE(${customerProfiles.displayName}, ${customerProfiles.nickname}, CONCAT('顧客#', ${reservations.customerId}))`,
+        menuName: menus.name,
+      }).from(reservations)
+        .leftJoin(customerProfiles, eq(reservations.customerId, customerProfiles.accountId))
+        .leftJoin(menus, eq(reservations.menuId, menus.id))
+        .where(and(eq(reservations.therapistId, therapistId), eq(reservations.date, today))),
       db.select({ count: sql<number>`COUNT(*)` }).from(reservations).where(and(eq(reservations.therapistId, therapistId), eq(reservations.status, "pending"))),
-      db.select({ total: sql<number>`SUM(therapistBack)` }).from(sales).where(and(eq(sales.therapistId, therapistId), gte(sales.date, today.slice(0, 7) + "-01"))),
+      db.select({ total: sql<number>`COALESCE(SUM(${sales.therapistBack}), 0)` }).from(sales).where(and(eq(sales.therapistId, therapistId), gte(sales.date, monthStart), lt(sales.date, monthEnd))),
     ]);
+    const payrollRows = await db.select({ total: sql<number>`SUM(${therapistPayrolls.totalPayroll})` }).from(therapistPayrolls).where(and(eq(therapistPayrolls.therapistId, therapistId), eq(therapistPayrolls.year, Number(today.slice(0, 4))), eq(therapistPayrolls.month, Number(today.slice(5, 7)))));
     return {
       therapist: tRows[0] ?? null,
       todayReservations,
       pendingCount: pendingCount[0]?.count ?? 0,
       monthlyBack: monthlySalesRows[0]?.total ?? 0,
+      nominationCount: tRows[0]?.nominationCount ?? 0,
+      totalAmount: monthlySalesRows[0]?.total ?? 0,
+      payroll: payrollRows[0]?.total ?? 0,
+      followerCount: tRows[0]?.followerCount ?? 0,
     };
   }),
 });

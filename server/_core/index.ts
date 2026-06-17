@@ -3,6 +3,7 @@ import express from "express";
 import cookieParser from "cookie-parser";
 import { createServer } from "http";
 import net from "net";
+import { sql } from "drizzle-orm";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { registerOAuthRoutes } from "./oauth";
 import { registerStorageProxy } from "./storageProxy";
@@ -10,6 +11,7 @@ import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { storagePut } from "../storage";
+import { getDb } from "../db";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -39,6 +41,24 @@ async function startServer() {
   app.use(cookieParser());
   registerStorageProxy(app);
   registerOAuthRoutes(app);
+
+  app.get("/api/health", (_req, res) => {
+    res.json({ ok: true });
+  });
+
+  app.get("/api/ready", async (_req, res) => {
+    try {
+      const db = await getDb();
+      if (!db) {
+        res.status(503).json({ ok: false, database: false });
+        return;
+      }
+      await (db as any).execute(sql`select 1`);
+      res.json({ ok: true, database: true });
+    } catch (error: any) {
+      res.status(503).json({ ok: false, database: false, message: error?.message ?? "Database unavailable" });
+    }
+  });
 
   // File upload endpoint
   app.post("/api/upload", express.raw({ type: "*/*", limit: "10mb" }), async (req, res) => {

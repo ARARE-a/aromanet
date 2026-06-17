@@ -121,9 +121,9 @@
   .gradient-gold {
     background: linear-gradient(135deg, var(--color-gold) 0%, oklch(0.75 0.10 80) 100%);
   }
-  /* Instagram gradient */
-  .gradient-instagram {
-    background: linear-gradient(45deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%);
+  /* AromaNet social accent */
+  .gradient-aroma-social {
+    background: linear-gradient(45deg, var(--color-teal) 0%, var(--color-teal-light) 45%, var(--color-gold) 100%);
   }
 
   /* Glass effect */
@@ -153,8 +153,8 @@
   .pb-safe { padding-bottom: env(safe-area-inset-bottom); }
   .pt-safe { padding-top: env(safe-area-inset-top); }
 
-  /* Instagram-style input */
-  .input-insta {
+  /* Compact mobile input */
+  .input-soft {
     @apply bg-gray-50 border-gray-200 rounded-lg text-sm;
   }
 
@@ -174,7 +174,7 @@ button:active:not(:disabled) {
   transition: transform 120ms cubic-bezier(0.23, 1, 0.32, 1);
 }
 
-/* ─── Instagram-style Components ──────────────────────────────────────────── */
+/* ─── Social Profile Components ──────────────────────────────────────────── */
 
 /* Post grid */
 .post-grid {
@@ -185,7 +185,7 @@ button:active:not(:disabled) {
 
 /* Story circle */
 .story-ring {
-  background: linear-gradient(45deg, #f09433, #e6683c, #dc2743, #cc2366, #bc1888);
+  background: linear-gradient(45deg, var(--color-teal), var(--color-teal-light), var(--color-gold));
   padding: 2px;
   border-radius: 50%;
 }

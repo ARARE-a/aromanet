@@ -51,7 +51,7 @@ export default function TherapistPosts() {
 
   return (
     <AromaLayout showBack backHref="/therapist/dashboard">
-      {/* Instagram-style profile header */}
+      {/* Social profile header */}
       <div className="px-4 pt-4 pb-3 bg-white border-b border-border/30">
         <div className="flex items-start gap-5">
           <AromaAvatar name={p?.displayName} src={p?.profileImageUrl} size="xl" />

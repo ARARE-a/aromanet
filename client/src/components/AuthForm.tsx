@@ -46,7 +46,11 @@ export function AuthForm({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    await onSubmit(values);
+    try {
+      await onSubmit(values);
+    } catch {
+      // The caller's mutation onError updates the visible error state.
+    }
   };
 
   return (

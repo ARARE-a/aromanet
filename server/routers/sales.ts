@@ -4,7 +4,17 @@ import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import { getSession } from "../session";
 import { sales, therapistPayrolls, therapists } from "../../drizzle/schema";
-import { eq, and, desc, gte, sql } from "drizzle-orm";
+import { eq, and, desc, gte, lt, sql } from "drizzle-orm";
+
+function getMonthBounds(month: string) {
+  const [yearValue, monthValue] = month.split("-").map(Number);
+  const nextYear = monthValue === 12 ? yearValue + 1 : yearValue;
+  const nextMonth = monthValue === 12 ? 1 : monthValue + 1;
+  return {
+    start: `${yearValue}-${String(monthValue).padStart(2, "0")}-01`,
+    end: `${nextYear}-${String(nextMonth).padStart(2, "0")}-01`,
+  };
+}
 
 export const salesRouter = router({
   getStoreSales: publicProcedure
@@ -16,7 +26,8 @@ export const salesRouter = router({
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       if (!session.storeId) return [];
       const month = input.month ?? new Date().toISOString().slice(0, 7);
-      return db.select().from(sales).where(and(eq(sales.storeId, session.storeId), gte(sales.date, month + "-01"))).orderBy(desc(sales.date)).limit(input.limit);
+      const { start, end } = getMonthBounds(month);
+      return db.select().from(sales).where(and(eq(sales.storeId, session.storeId), gte(sales.date, start), lt(sales.date, end))).orderBy(desc(sales.date)).limit(input.limit);
     }),
 
   getStoreSummary: publicProcedure
@@ -28,15 +39,16 @@ export const salesRouter = router({
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       if (!session.storeId) return null;
       const month = input.month ?? new Date().toISOString().slice(0, 7);
+      const { start, end } = getMonthBounds(month);
       const rows = await db.select({
-        totalAmount: sql<number>`SUM(totalAmount)`,
-        menuAmount: sql<number>`SUM(menuAmount)`,
-        nominationFee: sql<number>`SUM(nominationFee)`,
-        optionAmount: sql<number>`SUM(optionAmount)`,
-        discountAmount: sql<number>`SUM(discountAmount)`,
-        therapistBack: sql<number>`SUM(therapistBack)`,
+        totalAmount: sql<number>`COALESCE(SUM(${sales.totalAmount}), 0)`,
+        menuAmount: sql<number>`COALESCE(SUM(${sales.menuAmount}), 0)`,
+        nominationFee: sql<number>`COALESCE(SUM(${sales.nominationFee}), 0)`,
+        optionAmount: sql<number>`COALESCE(SUM(${sales.optionAmount}), 0)`,
+        discountAmount: sql<number>`COALESCE(SUM(${sales.discountAmount}), 0)`,
+        therapistBack: sql<number>`COALESCE(SUM(${sales.therapistBack}), 0)`,
         count: sql<number>`COUNT(*)`,
-      }).from(sales).where(and(eq(sales.storeId, session.storeId), gte(sales.date, month + "-01")));
+      }).from(sales).where(and(eq(sales.storeId, session.storeId), gte(sales.date, start), lt(sales.date, end)));
       return rows[0] ?? null;
     }),
 
@@ -48,11 +60,12 @@ export const salesRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       if (!session.storeId) return [];
+      const { start, end } = getMonthBounds(input.month);
       return db.select({
         date: sales.date,
-        totalAmount: sql<number>`SUM(totalAmount)`,
+        totalAmount: sql<number>`COALESCE(SUM(${sales.totalAmount}), 0)`,
         count: sql<number>`COUNT(*)`,
-      }).from(sales).where(and(eq(sales.storeId, session.storeId), gte(sales.date, input.month + "-01"))).groupBy(sales.date).orderBy(sales.date);
+      }).from(sales).where(and(eq(sales.storeId, session.storeId), gte(sales.date, start), lt(sales.date, end))).groupBy(sales.date).orderBy(sales.date);
     }),
 
   getTherapistPayrolls: publicProcedure
@@ -63,7 +76,34 @@ export const salesRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       if (!session.storeId) return [];
-      return db.select().from(therapistPayrolls).where(and(eq(therapistPayrolls.storeId, session.storeId), eq(therapistPayrolls.year, input.year), eq(therapistPayrolls.month, input.month)));
+      const rows = await db.select({
+        id: therapistPayrolls.id,
+        therapistId: therapistPayrolls.therapistId,
+        storeId: therapistPayrolls.storeId,
+        year: therapistPayrolls.year,
+        month: therapistPayrolls.month,
+        nominationCount: therapistPayrolls.nominationCount,
+        salesAmount: therapistPayrolls.totalSales,
+        totalSales: therapistPayrolls.totalSales,
+        backRate: therapistPayrolls.backRate,
+        baseAmount: therapistPayrolls.backAmount,
+        backAmount: therapistPayrolls.backAmount,
+        optionAmount: therapistPayrolls.optionAmount,
+        adjustmentAmount: therapistPayrolls.adjustmentAmount,
+        adjustmentNote: therapistPayrolls.adjustmentNote,
+        totalPayroll: therapistPayrolls.totalPayroll,
+        totalAmount: sql<number>`CASE WHEN ${therapistPayrolls.totalPayroll} <> 0 THEN ${therapistPayrolls.totalPayroll} ELSE ${therapistPayrolls.backAmount} + ${therapistPayrolls.adjustmentAmount} END`,
+        paymentStatus: sql<string>`CASE WHEN ${therapistPayrolls.isPaid} THEN 'paid' ELSE 'unpaid' END`,
+        isPaid: therapistPayrolls.isPaid,
+        paidAt: therapistPayrolls.paidAt,
+        therapistName: therapists.displayName,
+        therapistImage: therapists.profileImageUrl,
+        createdAt: therapistPayrolls.createdAt,
+        updatedAt: therapistPayrolls.updatedAt,
+      }).from(therapistPayrolls)
+        .leftJoin(therapists, eq(therapistPayrolls.therapistId, therapists.id))
+        .where(and(eq(therapistPayrolls.storeId, session.storeId), eq(therapistPayrolls.year, input.year), eq(therapistPayrolls.month, input.month)));
+      return rows;
     }),
 
   calculatePayroll: publicProcedure
@@ -75,26 +115,34 @@ export const salesRouter = router({
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       if (!session.storeId) throw new TRPCError({ code: "NOT_FOUND" });
       const monthStr = `${input.year}-${String(input.month).padStart(2, "0")}`;
+      const { start, end } = getMonthBounds(monthStr);
       const therapistRows = await db.select().from(therapists).where(eq(therapists.storeId, session.storeId));
       for (const t of therapistRows) {
         const salesRows = await db.select({
-          totalBack: sql<number>`SUM(therapistBack)`,
-          nominationCount: sql<number>`COUNT(CASE WHEN nominationFee > 0 THEN 1 END)`,
+          totalSales: sql<number>`COALESCE(SUM(${sales.totalAmount}), 0)`,
+          totalBack: sql<number>`COALESCE(SUM(${sales.therapistBack}), 0)`,
+          optionAmount: sql<number>`COALESCE(SUM(${sales.optionAmount}), 0)`,
+          nominationCount: sql<number>`SUM(CASE WHEN ${sales.nominationFee} > 0 THEN 1 ELSE 0 END)`,
           count: sql<number>`COUNT(*)`,
-        }).from(sales).where(and(eq(sales.therapistId, t.id), gte(sales.date, monthStr + "-01")));
+        }).from(sales).where(and(eq(sales.therapistId, t.id), gte(sales.date, start), lt(sales.date, end)));
         const s = salesRows[0];
         const existing = await db.select().from(therapistPayrolls).where(and(eq(therapistPayrolls.therapistId, t.id), eq(therapistPayrolls.year, input.year), eq(therapistPayrolls.month, input.month))).limit(1);
+        const existingPayroll = existing[0];
+        const backAmount = Number(s?.totalBack ?? 0);
+        const adjustmentAmount = existingPayroll?.adjustmentAmount ?? 0;
         const payrollData = {
           storeId: session.storeId,
           therapistId: t.id,
           year: input.year,
           month: input.month,
           nominationCount: s?.nominationCount ?? 0,
-          totalSales: s?.totalBack ?? 0,
-          backAmount: s?.totalBack ?? 0,
-          adjustmentAmount: 0,
-          finalAmount: s?.totalBack ?? 0,
-          isPaid: false,
+          totalSales: Number(s?.totalSales ?? 0),
+          backRate: String(t.backRate ?? "50.00"),
+          backAmount,
+          optionAmount: Number(s?.optionAmount ?? 0),
+          adjustmentAmount,
+          totalPayroll: backAmount + adjustmentAmount,
+          isPaid: existingPayroll?.isPaid ?? false,
         };
         if (existing.length > 0) {
           await db.update(therapistPayrolls).set(payrollData).where(eq(therapistPayrolls.id, existing[0].id));
@@ -119,6 +167,12 @@ export const salesRouter = router({
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       const { id, ...data } = input;
       const updateData: any = { ...data };
+      if (data.adjustmentAmount !== undefined) {
+        const rows = await db.select().from(therapistPayrolls).where(eq(therapistPayrolls.id, id)).limit(1);
+        if (rows[0]) {
+          updateData.totalPayroll = rows[0].backAmount + data.adjustmentAmount;
+        }
+      }
       if (data.isPaid) updateData.paidAt = new Date();
       await db.update(therapistPayrolls).set(updateData).where(eq(therapistPayrolls.id, id));
       return { success: true };

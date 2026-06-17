@@ -11,6 +11,34 @@ function containsBannedWord(text: string) {
   return BANNED_WORDS.some(w => text.includes(w));
 }
 
+function customerDisplayName(row: { displayName?: string | null; nickname?: string | null } | undefined, customerId: number | null) {
+  return row?.displayName ?? row?.nickname ?? (customerId ? `顧客#${customerId}` : null);
+}
+
+function canAccessThread(session: any, thread: any) {
+  if (session.role === "store") return thread.storeId === session.storeId;
+  if (session.role === "therapist") return thread.therapistId === session.therapistId;
+  return thread.customerId === session.accountId;
+}
+
+async function markThreadRead(db: any, threadId: number, thread: any, role: "store" | "therapist" | "customer") {
+  const updateSet: any = {};
+  if (role === "store") updateSet.storeUnread = 0;
+  if (role === "therapist") updateSet.therapistUnread = 0;
+  if (role === "customer") updateSet.customerUnread = 0;
+  if (!thread.storeId) updateSet.storeUnread = 0;
+  if (!thread.therapistId) updateSet.therapistUnread = 0;
+  if (!thread.customerId) updateSet.customerUnread = 0;
+
+  await db.update(messageThreads).set(updateSet).where(eq(messageThreads.id, threadId));
+  await db.update(messages).set({ isRead: true })
+    .where(and(
+      eq(messages.threadId, threadId),
+      eq(messages.isDeleted, false),
+      sql`${messages.senderRole} <> ${role}`,
+    ));
+}
+
 export const messageRouter = router({
   getThreads: publicProcedure.query(async ({ ctx }) => {
     const session = await getSession(ctx.req);
@@ -38,8 +66,8 @@ export const messageRouter = router({
           const tRows = await db.select({ displayName: therapists.displayName, profileImageUrl: therapists.profileImageUrl }).from(therapists).where(eq(therapists.id, thread.therapistId)).limit(1);
           otherName = tRows[0]?.displayName ?? null; otherAvatar = tRows[0]?.profileImageUrl ?? null; otherRole = "セラピスト";
         } else if (thread.customerId) {
-          const cpRows = await db.select({ displayName: customerProfiles.displayName, profileImageUrl: customerProfiles.profileImageUrl }).from(customerProfiles).where(eq(customerProfiles.accountId, thread.customerId)).limit(1);
-          otherName = cpRows[0]?.displayName ?? `顧客#${thread.customerId}`; otherAvatar = cpRows[0]?.profileImageUrl ?? null; otherRole = "お客様";
+          const cpRows = await db.select({ displayName: customerProfiles.displayName, nickname: customerProfiles.nickname, profileImageUrl: customerProfiles.profileImageUrl }).from(customerProfiles).where(eq(customerProfiles.accountId, thread.customerId)).limit(1);
+          otherName = customerDisplayName(cpRows[0], thread.customerId); otherAvatar = cpRows[0]?.profileImageUrl ?? null; otherRole = "お客様";
         }
       } else if (session.role === "therapist") {
         unreadCount = thread.therapistUnread;
@@ -47,8 +75,8 @@ export const messageRouter = router({
           const sRows = await db.select({ name: stores.name, logoUrl: stores.logoUrl }).from(stores).where(eq(stores.id, thread.storeId)).limit(1);
           otherName = sRows[0]?.name ?? null; otherAvatar = sRows[0]?.logoUrl ?? null; otherRole = "店舗";
         } else if (thread.customerId) {
-          const cpRows = await db.select({ displayName: customerProfiles.displayName, profileImageUrl: customerProfiles.profileImageUrl }).from(customerProfiles).where(eq(customerProfiles.accountId, thread.customerId)).limit(1);
-          otherName = cpRows[0]?.displayName ?? `顧客#${thread.customerId}`; otherAvatar = cpRows[0]?.profileImageUrl ?? null; otherRole = "お客様";
+          const cpRows = await db.select({ displayName: customerProfiles.displayName, nickname: customerProfiles.nickname, profileImageUrl: customerProfiles.profileImageUrl }).from(customerProfiles).where(eq(customerProfiles.accountId, thread.customerId)).limit(1);
+          otherName = customerDisplayName(cpRows[0], thread.customerId); otherAvatar = cpRows[0]?.profileImageUrl ?? null; otherRole = "お客様";
         }
       } else {
         // customer
@@ -78,13 +106,17 @@ export const messageRouter = router({
       if (!session) throw new TRPCError({ code: "UNAUTHORIZED" });
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      const conditions: any[] = [eq(messageThreads.threadType, input.threadType)];
-      if (input.storeId) conditions.push(eq(messageThreads.storeId, input.storeId));
-      if (input.therapistId) conditions.push(eq(messageThreads.therapistId, input.therapistId));
-      if (input.customerId) conditions.push(eq(messageThreads.customerId, input.customerId));
+      const threadData = { ...input };
+      if (session.role === "store") threadData.storeId = session.storeId;
+      if (session.role === "therapist") threadData.therapistId = session.therapistId;
+      if (session.role === "customer") threadData.customerId = session.accountId;
+      const conditions: any[] = [eq(messageThreads.threadType, threadData.threadType)];
+      if (threadData.storeId) conditions.push(eq(messageThreads.storeId, threadData.storeId));
+      if (threadData.therapistId) conditions.push(eq(messageThreads.therapistId, threadData.therapistId));
+      if (threadData.customerId) conditions.push(eq(messageThreads.customerId, threadData.customerId));
       const existing = await db.select().from(messageThreads).where(and(...conditions)).limit(1);
       if (existing[0]) return existing[0];
-      const result = await db.insert(messageThreads).values(input);
+      const result = await db.insert(messageThreads).values(threadData);
       const threadId = (result as any)[0].insertId as number;
       const rows = await db.select().from(messageThreads).where(eq(messageThreads.id, threadId)).limit(1);
       return rows[0];
@@ -97,11 +129,9 @@ export const messageRouter = router({
       if (!session) throw new TRPCError({ code: "UNAUTHORIZED" });
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      const updateSet: any = {};
-      if (session.role === "store") updateSet.storeUnread = 0;
-      else if (session.role === "therapist") updateSet.therapistUnread = 0;
-      else updateSet.customerUnread = 0;
-      await db.update(messageThreads).set(updateSet).where(eq(messageThreads.id, input.threadId));
+      const threadRows = await db.select().from(messageThreads).where(eq(messageThreads.id, input.threadId)).limit(1);
+      if (!threadRows[0] || !canAccessThread(session, threadRows[0])) throw new TRPCError({ code: "NOT_FOUND" });
+      await markThreadRead(db, input.threadId, threadRows[0], session.role);
       return db.select().from(messages).where(and(eq(messages.threadId, input.threadId), eq(messages.isDeleted, false))).orderBy(messages.createdAt).limit(input.limit);
     }),
 
@@ -119,14 +149,17 @@ export const messageRouter = router({
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       const threadRows = await db.select().from(messageThreads).where(eq(messageThreads.id, input.threadId)).limit(1);
       if (!threadRows[0]) throw new TRPCError({ code: "NOT_FOUND" });
-      if (threadRows[0].isBlocked) throw new TRPCError({ code: "FORBIDDEN", message: "このスレッドはブロックされています" });
+      const thread = threadRows[0];
+      if (!canAccessThread(session, thread)) throw new TRPCError({ code: "NOT_FOUND" });
+      if (thread.isBlocked) throw new TRPCError({ code: "FORBIDDEN", message: "このスレッドはブロックされています" });
       if (input.content && containsBannedWord(input.content)) throw new TRPCError({ code: "BAD_REQUEST", message: "禁止ワードが含まれています" });
+      await markThreadRead(db, input.threadId, thread, session.role);
       const senderId = session.role === "store" ? session.storeId! : session.role === "therapist" ? session.therapistId! : session.accountId;
       await db.insert(messages).values({ threadId: input.threadId, senderRole: session.role, senderId, content: input.content, imageUrl: input.imageUrl, isTemplate: input.isTemplate });
       const updateSet: any = { lastMessageAt: new Date() };
-      if (session.role === "store") { updateSet.therapistUnread = sql`therapistUnread + 1`; updateSet.customerUnread = sql`customerUnread + 1`; }
-      else if (session.role === "therapist") { updateSet.storeUnread = sql`storeUnread + 1`; updateSet.customerUnread = sql`customerUnread + 1`; }
-      else { updateSet.storeUnread = sql`storeUnread + 1`; updateSet.therapistUnread = sql`therapistUnread + 1`; }
+      if (thread.storeId && session.role !== "store") updateSet.storeUnread = sql`${messageThreads.storeUnread} + 1`;
+      if (thread.therapistId && session.role !== "therapist") updateSet.therapistUnread = sql`${messageThreads.therapistUnread} + 1`;
+      if (thread.customerId && session.role !== "customer") updateSet.customerUnread = sql`${messageThreads.customerUnread} + 1`;
       await db.update(messageThreads).set(updateSet).where(eq(messageThreads.id, input.threadId));
       return { success: true };
     }),

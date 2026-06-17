@@ -122,7 +122,45 @@ export const reservationRouter = router({
       const conditions: any[] = [eq(reservations.storeId, session.storeId)];
       if (input.date) conditions.push(eq(reservations.date, input.date));
       if (input.status) conditions.push(eq(reservations.status, input.status as any));
-      return db.select().from(reservations).where(and(...conditions)).orderBy(desc(reservations.date), reservations.startTime).limit(input.limit);
+      return db.select({
+        id: reservations.id,
+        storeId: reservations.storeId,
+        therapistId: reservations.therapistId,
+        customerId: reservations.customerId,
+        menuId: reservations.menuId,
+        date: reservations.date,
+        startTime: reservations.startTime,
+        endTime: reservations.endTime,
+        isNomination: reservations.isNomination,
+        status: reservations.status,
+        totalPrice: reservations.totalPrice,
+        totalAmount: reservations.totalPrice,
+        nominationFee: reservations.nominationFee,
+        optionTotal: reservations.optionTotal,
+        discountAmount: reservations.discountAmount,
+        cancelReason: reservations.cancelReason,
+        cancelFee: reservations.cancelFee,
+        note: reservations.note,
+        customerNote: reservations.customerNote,
+        notes: sql<string>`COALESCE(${reservations.note}, ${reservations.customerNote})`,
+        createdAt: reservations.createdAt,
+        updatedAt: reservations.updatedAt,
+        customerName: sql<string>`COALESCE(${customerProfiles.displayName}, ${customerProfiles.nickname}, CONCAT('顧客#', ${reservations.customerId}))`,
+        customerImage: customerProfiles.profileImageUrl,
+        therapistName: therapists.displayName,
+        therapistImage: therapists.profileImageUrl,
+        storeName: stores.name,
+        menuName: menus.name,
+        menuPrice: menus.price,
+        menuDuration: menus.durationMinutes,
+      }).from(reservations)
+        .leftJoin(customerProfiles, eq(reservations.customerId, customerProfiles.accountId))
+        .leftJoin(therapists, eq(reservations.therapistId, therapists.id))
+        .leftJoin(stores, eq(reservations.storeId, stores.id))
+        .leftJoin(menus, eq(reservations.menuId, menus.id))
+        .where(and(...conditions))
+        .orderBy(desc(reservations.date), reservations.startTime)
+        .limit(input.limit);
     }),
 
   updateStatus: publicProcedure

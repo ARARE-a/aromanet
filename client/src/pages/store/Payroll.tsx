@@ -57,6 +57,8 @@ export default function StorePayroll() {
   const sendNotifyMut = trpc.affiliation.sendSalaryNotification.useMutation({
     onSuccess: () => {
       toast.success("女子給を送信しました");
+      utils.sales.getTherapistPayrolls.invalidate({ year, month: monthNum });
+      refetch();
       setShowNotify(false);
       setNotifyForm({ therapistId: 0, message: "", amount: "" });
     },

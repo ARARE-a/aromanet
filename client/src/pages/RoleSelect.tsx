@@ -101,7 +101,7 @@ export default function RoleSelect() {
         transition={{ duration: 0.6, ease: [0.23, 1, 0.32, 1] }}
         className="mb-2 flex flex-col items-center"
       >
-        {/* Instagram-style gradient logo icon */}
+        {/* AromaNet gradient logo icon */}
         <div
           className="w-16 h-16 rounded-2xl mb-4 flex items-center justify-center shadow-luxury"
           style={{

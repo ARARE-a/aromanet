@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link } from "wouter";
 import { Mail, Lock, Building2 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
+import { getAuthErrorMessage } from "@/lib/errors";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,7 +16,7 @@ export default function StoreRegister() {
 
   const regMut = trpc.aroAuth.storeRegister.useMutation({
     onSuccess: () => { window.location.href = "/store/dashboard"; },
-    onError: (e) => setError(e.message),
+    onError: (e) => setError(getAuthErrorMessage(e)),
   });
 
   const handleSubmit = () => {
@@ -32,7 +33,7 @@ export default function StoreRegister() {
       setError("パスワードは8文字以上で入力してください");
       return;
     }
-    regMut.mutate({ storeName, email, password });
+    regMut.mutate({ storeName: storeName.trim(), email: email.trim(), password });
   };
 
   return (
