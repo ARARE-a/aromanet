@@ -40,7 +40,10 @@ export default function StoreReservations() {
 
   const dateStr = format(date, "yyyy-MM-dd");
   const { data: reservations, refetch } = trpc.reservation.getStoreReservations.useQuery(
-    { date: dateStr }, { enabled: !!session }
+    statusFilter === "pending"
+      ? { status: "pending", limit: 100 }
+      : { date: dateStr, status: statusFilter === "all" ? undefined : statusFilter, limit: 100 },
+    { enabled: !!session, refetchOnWindowFocus: true, refetchInterval: 15000 }
   );
 
   const updateStatus = trpc.reservation.updateStatus.useMutation({
@@ -48,22 +51,20 @@ export default function StoreReservations() {
     onError: (e) => toast.error(e.message),
   });
 
-  const list = ((reservations as any[]) ?? []).filter(
-    (r: any) => statusFilter === "all" || r.status === statusFilter
-  );
+  const list = (reservations as any[]) ?? [];
 
   return (
     <AromaLayout title="予約管理" showBack backHref="/store/dashboard" showNav navItems={navItems}>
       {/* Date navigator */}
       <div className="px-4 py-3 flex items-center justify-between bg-white border-b border-border/50">
-        <button onClick={() => setDate(subDays(date, 1))} className="p-2 rounded-full hover:bg-muted transition-colors">
+        <button onClick={() => setDate(subDays(date, 1))} disabled={statusFilter === "pending"} className="p-2 rounded-full hover:bg-muted transition-colors disabled:opacity-30">
           <ChevronLeft className="w-5 h-5" />
         </button>
         <div className="text-center">
-          <div className="font-semibold text-foreground">{format(date, "M月d日（E）", { locale: ja })}</div>
+          <div className="font-semibold text-foreground">{statusFilter === "pending" ? "確認待ち一覧" : format(date, "M月d日（E）", { locale: ja })}</div>
           <div className="text-xs text-muted-foreground">{list.length}件</div>
         </div>
-        <button onClick={() => setDate(addDays(date, 1))} className="p-2 rounded-full hover:bg-muted transition-colors">
+        <button onClick={() => setDate(addDays(date, 1))} disabled={statusFilter === "pending"} className="p-2 rounded-full hover:bg-muted transition-colors disabled:opacity-30">
           <ChevronRight className="w-5 h-5" />
         </button>
       </div>

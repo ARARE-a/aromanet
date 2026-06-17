@@ -31,12 +31,31 @@ export const reservationRouter = router({
       const menuRows = await db.select().from(menus).where(eq(menus.id, input.menuId)).limit(1);
       if (!menuRows[0]) throw new TRPCError({ code: "NOT_FOUND", message: "メニューが見つかりません" });
       const menu = menuRows[0];
+      const resolvedStoreId = menu.storeId;
+
+      if (input.storeId !== resolvedStoreId) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "選択された店舗とメニューが一致しません" });
+      }
+
+      if (input.therapistId) {
+        const therapistRows = await db.select({
+          id: therapists.id,
+          storeId: therapists.storeId,
+          displayName: therapists.displayName,
+        }).from(therapists).where(eq(therapists.id, input.therapistId)).limit(1);
+        if (!therapistRows[0]) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "セラピストが見つかりません" });
+        }
+        if (therapistRows[0].storeId !== resolvedStoreId) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "選択されたセラピストはこの店舗に所属していません" });
+        }
+      }
 
       const [h, m] = input.startTime.split(":").map(Number);
       const endMinutes = h * 60 + m + menu.durationMinutes;
       const endTime = `${String(Math.floor(endMinutes / 60)).padStart(2, "0")}:${String(endMinutes % 60).padStart(2, "0")}`;
 
-      const existing = await db.select().from(reservations).where(and(eq(reservations.storeId, input.storeId), eq(reservations.date, input.date)));
+      const existing = await db.select().from(reservations).where(and(eq(reservations.storeId, resolvedStoreId), eq(reservations.date, input.date)));
       for (const r of existing) {
         if (r.status === "cancelled" || r.status === "no_show") continue;
         if (input.therapistId && r.therapistId !== input.therapistId) continue;
@@ -45,7 +64,8 @@ export const reservationRouter = router({
         }
       }
 
-      const nominationFee = input.isNomination ? menu.nominationFee : 0;
+      const isNomination = Boolean(input.therapistId || input.isNomination);
+      const nominationFee = isNomination ? menu.nominationFee : 0;
       let optionTotal = 0;
       const optionDetails: { optionId: number; price: number }[] = [];
       for (const optId of input.optionIds) {
@@ -59,7 +79,7 @@ export const reservationRouter = router({
       let discountAmount = 0;
       let couponId: number | undefined;
       if (input.couponCode) {
-        const couponRows = await db.select().from(coupons).where(and(eq(coupons.storeId, input.storeId), eq(coupons.code, input.couponCode), eq(coupons.isPublic, true))).limit(1);
+        const couponRows = await db.select().from(coupons).where(and(eq(coupons.storeId, resolvedStoreId), eq(coupons.code, input.couponCode), eq(coupons.isPublic, true))).limit(1);
         if (couponRows[0]) {
           const c = couponRows[0];
           const base = menu.price + nominationFee + optionTotal;
@@ -73,14 +93,14 @@ export const reservationRouter = router({
 
       const totalPrice = menu.price + nominationFee + optionTotal - discountAmount;
       const result = await db.insert(reservations).values({
-        storeId: input.storeId,
+        storeId: resolvedStoreId,
         therapistId: input.therapistId,
         customerId: session.accountId,
         menuId: input.menuId,
         date: input.date,
         startTime: input.startTime,
         endTime,
-        isNomination: input.isNomination,
+        isNomination,
         nominationFee,
         optionTotal,
         discountAmount,
@@ -97,12 +117,23 @@ export const reservationRouter = router({
 
       await db.insert(notifications).values({
         recipientRole: "store",
-        recipientId: input.storeId,
+        recipientId: resolvedStoreId,
         type: "new_reservation",
         title: "新しい予約が入りました",
         body: `${input.date} ${input.startTime}〜`,
         relatedId: reservationId,
       });
+
+      if (input.therapistId) {
+        await db.insert(notifications).values({
+          recipientRole: "therapist",
+          recipientId: input.therapistId,
+          type: "new_reservation",
+          title: "指名予約が入りました",
+          body: `${input.date} ${input.startTime}〜`,
+          relatedId: reservationId,
+        });
+      }
 
       return { success: true, reservationId };
     }),
@@ -177,6 +208,11 @@ export const reservationRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       const { id, ...data } = input;
+      const targetRows = await db.select().from(reservations).where(eq(reservations.id, id)).limit(1);
+      const target = targetRows[0];
+      if (!target) throw new TRPCError({ code: "NOT_FOUND" });
+      if (session.role === "store" && target.storeId !== session.storeId) throw new TRPCError({ code: "UNAUTHORIZED" });
+      if (session.role === "therapist" && target.therapistId !== session.therapistId) throw new TRPCError({ code: "UNAUTHORIZED" });
       await db.update(reservations).set(data).where(eq(reservations.id, id));
 
       if (input.status === "completed") {

@@ -8,7 +8,7 @@ import {
   coupons, reservations, reviews, posts,
   notifications, ngCustomers, sales,
 } from "../../drizzle/schema";
-import { eq, and, desc, like, gte, sql } from "drizzle-orm";
+import { eq, and, desc, like, gte, lt, lte, sql } from "drizzle-orm";
 
 export const storeRouter = router({
   getById: publicProcedure
@@ -288,7 +288,12 @@ export const storeRouter = router({
   }),
 
   getShifts: publicProcedure
-    .input(z.object({ date: z.string().optional() }))
+    .input(z.object({
+      date: z.string().optional(),
+      startDate: z.string().optional(),
+      endDate: z.string().optional(),
+      month: z.string().optional(),
+    }))
     .query(async ({ input, ctx }) => {
       const session = await getSession(ctx.req);
       if (!session || session.role !== "store") throw new TRPCError({ code: "UNAUTHORIZED" });
@@ -298,6 +303,15 @@ export const storeRouter = router({
       const { shifts } = await import("../../drizzle/schema");
       const conditions: any[] = [eq(shifts.storeId, session.storeId)];
       if (input.date) conditions.push(eq(shifts.date, input.date));
+      if (!input.date && input.month) {
+        const [yearValue, monthValue] = input.month.split("-").map(Number);
+        const nextYear = monthValue === 12 ? yearValue + 1 : yearValue;
+        const nextMonth = monthValue === 12 ? 1 : monthValue + 1;
+        conditions.push(gte(shifts.date, `${yearValue}-${String(monthValue).padStart(2, "0")}-01`));
+        conditions.push(lt(shifts.date, `${nextYear}-${String(nextMonth).padStart(2, "0")}-01`));
+      }
+      if (!input.date && input.startDate) conditions.push(gte(shifts.date, input.startDate));
+      if (!input.date && input.endDate) conditions.push(lte(shifts.date, input.endDate));
       const rows = await db.select().from(shifts).where(and(...conditions)).orderBy(shifts.date, shifts.startTime);
       // Attach therapist name and image
       const result = [];

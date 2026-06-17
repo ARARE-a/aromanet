@@ -15,6 +15,7 @@ import { toast } from "sonner";
 
 export default function CustomerReservations() {
   const [, navigate] = useLocation();
+  const search = useSearch();
   const { session, isLoading } = useSession();
   const [showNew, setShowNew] = useState(false);
   const [storeId, setStoreId] = useState<number | null>(null);
@@ -28,10 +29,33 @@ export default function CustomerReservations() {
     if (!isLoading && (!session || session.role !== "customer")) navigate("/customer/login");
   }, [session, isLoading]);
 
+  useEffect(() => {
+    const params = new URLSearchParams(search);
+    const nextStoreId = Number(params.get("storeId"));
+    const nextTherapistId = Number(params.get("therapistId"));
+    const nextMenuId = Number(params.get("menuId"));
+    if (Number.isFinite(nextStoreId) && nextStoreId > 0) setStoreId(nextStoreId);
+    if (Number.isFinite(nextTherapistId) && nextTherapistId > 0) setTherapistId(nextTherapistId);
+    if (Number.isFinite(nextMenuId) && nextMenuId > 0) setMenuId(nextMenuId);
+    if (nextStoreId > 0 || nextTherapistId > 0 || nextMenuId > 0) {
+      setShowNew(true);
+      setDate(prev => prev || new Date().toISOString().slice(0, 10));
+    }
+  }, [search]);
+
   const { data: reservations, refetch } = trpc.customer.getReservations.useQuery(undefined, { enabled: !!session });
   const { data: stores } = trpc.store.search.useQuery({ limit: 50 }, { enabled: showNew });
   const { data: therapists } = trpc.therapist.getByStore.useQuery({ storeId: storeId! }, { enabled: showNew && !!storeId });
   const { data: menus } = trpc.store.getPublicMenus.useQuery({ storeId: storeId! }, { enabled: showNew && !!storeId });
+  const { data: selectedTherapist } = trpc.therapist.getById.useQuery(
+    { therapistId: therapistId! },
+    { enabled: showNew && !!therapistId && !storeId }
+  );
+
+  useEffect(() => {
+    const t = selectedTherapist as any;
+    if (!storeId && t?.storeId) setStoreId(t.storeId);
+  }, [selectedTherapist, storeId]);
 
   const createMut = trpc.reservation.create.useMutation({
     onSuccess: () => { toast.success("予約リクエストを送信しました"); setShowNew(false); refetch(); },
@@ -50,7 +74,7 @@ export default function CustomerReservations() {
 
   const handleCreate = () => {
     if (!storeId || !menuId || !date || !startTime) { toast.error("必須項目を入力してください"); return; }
-    createMut.mutate({ storeId, therapistId: therapistId ?? undefined, menuId, date, startTime, customerNote: notes });
+    createMut.mutate({ storeId, therapistId: therapistId ?? undefined, menuId, date, startTime, isNomination: !!therapistId, customerNote: notes });
   };
 
   return (
@@ -119,7 +143,7 @@ export default function CustomerReservations() {
                   <Label>メニューを選択</Label>
                   <Select value={menuId ? String(menuId) : ""} onValueChange={v => setMenuId(parseInt(v))}>
                     <SelectTrigger className="mt-1 rounded-xl"><SelectValue placeholder="メニューを選択" /></SelectTrigger>
-                    <SelectContent>{menuList.map((m: any) => <SelectItem key={m.id} value={String(m.id)}>{m.name} ({m.duration}分) ¥{(m.price ?? 0).toLocaleString()}</SelectItem>)}</SelectContent>
+                    <SelectContent>{menuList.map((m: any) => <SelectItem key={m.id} value={String(m.id)}>{m.name} ({m.durationMinutes ?? m.duration}分) ¥{(m.price ?? 0).toLocaleString()}</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
               </>

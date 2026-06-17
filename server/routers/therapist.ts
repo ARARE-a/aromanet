@@ -6,7 +6,7 @@ import { getSession } from "../session";
 import {
   therapists, stores, shifts, reservations,
   posts, postImages, customerMemos, follows, favorites,
-  sales, therapistPayrolls, customerProfiles, menus,
+  sales, therapistPayrolls, customerProfiles, menus, notifications,
 } from "../../drizzle/schema";
 import { eq, and, desc, gte, lt, sql, like } from "drizzle-orm";
 
@@ -115,7 +115,8 @@ export const therapistRouter = router({
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       if (!session.therapistId) return [];
       const month = input.month ?? new Date().toISOString().slice(0, 7);
-      return db.select().from(shifts).where(and(eq(shifts.therapistId, session.therapistId), gte(shifts.date, month + "-01"))).orderBy(shifts.date);
+      const { start, end } = getMonthBounds(month);
+      return db.select().from(shifts).where(and(eq(shifts.therapistId, session.therapistId), gte(shifts.date, start), lt(shifts.date, end))).orderBy(shifts.date, shifts.startTime);
     }),
 
   getPublicShifts: publicProcedure
@@ -123,7 +124,8 @@ export const therapistRouter = router({
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      return db.select().from(shifts).where(and(eq(shifts.therapistId, input.therapistId), gte(shifts.date, input.month + "-01"))).orderBy(shifts.date);
+      const { start, end } = getMonthBounds(input.month);
+      return db.select().from(shifts).where(and(eq(shifts.therapistId, input.therapistId), gte(shifts.date, start), lt(shifts.date, end))).orderBy(shifts.date, shifts.startTime);
     }),
 
   createShift: publicProcedure
@@ -141,10 +143,31 @@ export const therapistRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       if (!session.therapistId) throw new TRPCError({ code: "NOT_FOUND" });
+      if (input.endTime <= input.startTime) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "終了時間は開始時間より後にしてください" });
+      }
       const tRows = await db.select().from(therapists).where(eq(therapists.id, session.therapistId)).limit(1);
       if (!tRows[0]?.storeId) throw new TRPCError({ code: "NOT_FOUND" });
-      await db.insert(shifts).values({ ...input, therapistId: session.therapistId, storeId: tRows[0].storeId });
-      return { success: true };
+      const storeId = tRows[0].storeId;
+      const existing = await db.select({ id: shifts.id }).from(shifts)
+        .where(and(eq(shifts.therapistId, session.therapistId), eq(shifts.date, input.date)))
+        .limit(1);
+      let shiftId = existing[0]?.id;
+      if (shiftId) {
+        await db.update(shifts).set({ ...input, storeId, status: "scheduled" }).where(eq(shifts.id, shiftId));
+      } else {
+        const result = await db.insert(shifts).values({ ...input, therapistId: session.therapistId, storeId, status: "scheduled" });
+        shiftId = (result as any)[0].insertId as number;
+      }
+      await db.insert(notifications).values({
+        recipientRole: "store",
+        recipientId: storeId,
+        type: "shift_created",
+        title: "出勤予定が登録されました",
+        body: `${tRows[0].displayName} ${input.date} ${input.startTime}〜${input.endTime}`,
+        relatedId: shiftId,
+      });
+      return { success: true, shiftId, storeId };
     }),
 
   updateShift: publicProcedure
@@ -161,6 +184,10 @@ export const therapistRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       const { id, ...data } = input;
+      const targetRows = await db.select().from(shifts).where(eq(shifts.id, id)).limit(1);
+      const target = targetRows[0];
+      if (!target) throw new TRPCError({ code: "NOT_FOUND" });
+      if (target.therapistId !== session.therapistId) throw new TRPCError({ code: "UNAUTHORIZED" });
       await db.update(shifts).set(data).where(eq(shifts.id, id));
       return { success: true };
     }),
