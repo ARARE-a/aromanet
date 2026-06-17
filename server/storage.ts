@@ -3,6 +3,11 @@
 // Downloads return /manus-storage/{key} paths served via 307 redirect.
 
 import { ENV } from "./_core/env";
+import { getDb } from "./db";
+import { sql } from "drizzle-orm";
+
+const DEFAULT_MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
+const DB_TABLE_READY = { value: false };
 
 function getForgeConfig() {
   const forgeUrl = ENV.forgeApiUrl;
@@ -17,6 +22,10 @@ function getForgeConfig() {
   return { forgeUrl: forgeUrl.replace(/\/+$/, ""), forgeKey };
 }
 
+function hasForgeConfig() {
+  return Boolean(ENV.forgeApiUrl && ENV.forgeApiKey);
+}
+
 function normalizeKey(relKey: string): string {
   return relKey.replace(/^\/+/, "");
 }
@@ -28,11 +37,96 @@ function appendHashSuffix(relKey: string): string {
   return `${relKey.slice(0, lastDot)}_${hash}${relKey.slice(lastDot)}`;
 }
 
+function getMaxUploadBytes() {
+  const configured = Number(process.env.MAX_UPLOAD_BYTES);
+  return Number.isFinite(configured) && configured > 0 ? configured : DEFAULT_MAX_UPLOAD_BYTES;
+}
+
+async function ensureUploadTable() {
+  if (DB_TABLE_READY.value) return;
+  const db = await getDb();
+  if (!db) {
+    throw new Error("Database storage is unavailable: DATABASE_URL is not configured");
+  }
+
+  await (db as any).execute(sql`
+    CREATE TABLE IF NOT EXISTS uploaded_files (
+      \`key\` varchar(255) NOT NULL PRIMARY KEY,
+      contentType varchar(100) NOT NULL,
+      data longtext NOT NULL,
+      byteLength int NOT NULL,
+      createdAt timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+  DB_TABLE_READY.value = true;
+}
+
+async function databaseStoragePut(
+  relKey: string,
+  data: Buffer | Uint8Array | string,
+  contentType: string,
+): Promise<{ key: string; url: string }> {
+  const raw = typeof data === "string" ? Buffer.from(data) : Buffer.from(data);
+  const maxBytes = getMaxUploadBytes();
+  if (raw.byteLength > maxBytes) {
+    throw new Error(`File is too large. Maximum upload size is ${Math.floor(maxBytes / 1024 / 1024)}MB.`);
+  }
+
+  await ensureUploadTable();
+  const db = await getDb();
+  if (!db) {
+    throw new Error("Database storage is unavailable");
+  }
+
+  const key = appendHashSuffix(normalizeKey(relKey));
+  const base64 = raw.toString("base64");
+  await (db as any).execute(sql`
+    INSERT INTO uploaded_files (\`key\`, contentType, data, byteLength)
+    VALUES (${key}, ${contentType}, ${base64}, ${raw.byteLength})
+    ON DUPLICATE KEY UPDATE
+      contentType = VALUES(contentType),
+      data = VALUES(data),
+      byteLength = VALUES(byteLength)
+  `);
+
+  return { key, url: `/uploads/${key}` };
+}
+
+export async function storageRead(
+  relKey: string,
+): Promise<{ key: string; contentType: string; data: Buffer; byteLength: number } | null> {
+  await ensureUploadTable();
+  const db = await getDb();
+  if (!db) return null;
+
+  const key = normalizeKey(relKey);
+  const result = await (db as any).execute(sql`
+    SELECT \`key\`, contentType, data, byteLength
+    FROM uploaded_files
+    WHERE \`key\` = ${key}
+    LIMIT 1
+  `);
+  const rows = Array.isArray(result) ? result[0] : [];
+  const row = Array.isArray(rows) ? rows[0] : null;
+  if (!row) return null;
+
+  return {
+    key: row.key,
+    contentType: row.contentType,
+    data: Buffer.from(row.data, "base64"),
+    byteLength: Number(row.byteLength) || 0,
+  };
+}
+
 export async function storagePut(
   relKey: string,
   data: Buffer | Uint8Array | string,
   contentType = "application/octet-stream",
 ): Promise<{ key: string; url: string }> {
+  if (!hasForgeConfig()) {
+    return databaseStoragePut(relKey, data, contentType);
+  }
+
   const { forgeUrl, forgeKey } = getForgeConfig();
   const key = appendHashSuffix(normalizeKey(relKey));
 

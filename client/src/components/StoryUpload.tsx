@@ -37,7 +37,7 @@ export function StoryUpload({ open, onClose, onSuccess }: StoryUploadProps) {
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > 50 * 1024 * 1024) { toast.error("50MB以下のファイルを選択してください"); return; }
+    if (file.size > 10 * 1024 * 1024) { toast.error("10MB以下のファイルを選択してください"); return; }
     const url = URL.createObjectURL(file);
     setPreviewUrl(url);
     setMediaBlob(file);
@@ -117,7 +117,7 @@ export function StoryUpload({ open, onClose, onSuccess }: StoryUploadProps) {
                 >
                   <Camera className="w-8 h-8" />
                   <p className="text-sm font-medium">写真・動画を選択</p>
-                  <p className="text-xs">最大50MB</p>
+                  <p className="text-xs">最大10MB</p>
                 </button>
               )}
 

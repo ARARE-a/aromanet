@@ -91,16 +91,16 @@ export default function StoreProfile() {
       const formData = new FormData();
       formData.append("file", blob, "logo.jpg");
       const res = await fetch("/api/upload", { method: "POST", body: formData });
-      if (res.ok) {
-        const data = await res.json();
-        setForm(f => ({ ...f, logoUrl: data.url }));
-        toast.success("ロゴ画像をアップロードしました");
-      } else {
-        setForm(f => ({ ...f, logoUrl: croppedUrl }));
-        toast.info("プレビューを表示中（保存ボタンで確定）");
+      if (!res.ok) {
+        const message = await res.json().then(data => data?.error).catch(() => null);
+        throw new Error(message || "Upload failed");
       }
-    } catch {
-      toast.error("アップロードに失敗しました");
+      const data = await res.json();
+      setForm(f => ({ ...f, logoUrl: data.url }));
+      toast.success("ロゴ画像をアップロードしました");
+    } catch (err) {
+      console.error("Upload failed:", err);
+      toast.error("アップロードに失敗しました。通信状況を確認してもう一度お試しください");
     } finally {
       setUploading(false);
     }

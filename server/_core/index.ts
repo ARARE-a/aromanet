@@ -32,6 +32,87 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
   throw new Error(`No available port found starting from ${startPort}`);
 }
 
+type ParsedUpload = {
+  buffer: Buffer;
+  mimeType: string;
+  fileName: string;
+};
+
+const UPLOAD_BODY_LIMIT = "10mb";
+
+function isAllowedUploadType(mimeType: string) {
+  return mimeType.startsWith("image/") || mimeType.startsWith("video/") || mimeType === "application/pdf";
+}
+
+function extensionForUpload(fileName: string, mimeType: string) {
+  const fromName = fileName.split(".").pop()?.toLowerCase().replace(/[^a-z0-9]/g, "");
+  if (fromName && fromName.length <= 8) return fromName;
+  if (mimeType.includes("png")) return "png";
+  if (mimeType.includes("gif")) return "gif";
+  if (mimeType.includes("webp")) return "webp";
+  if (mimeType.includes("heic")) return "heic";
+  if (mimeType.includes("heif")) return "heif";
+  if (mimeType.includes("mp4")) return "mp4";
+  if (mimeType.includes("quicktime")) return "mov";
+  if (mimeType.includes("pdf")) return "pdf";
+  return "jpg";
+}
+
+function multipartBoundary(contentType: string) {
+  const match = /boundary=(?:"([^"]+)"|([^;]+))/i.exec(contentType);
+  return match?.[1] || match?.[2] || "";
+}
+
+function safeDecodeFileName(value: string) {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
+
+function parseMultipartUpload(body: Buffer, contentType: string): ParsedUpload | null {
+  const boundaryValue = multipartBoundary(contentType);
+  if (!boundaryValue) return null;
+
+  const boundary = Buffer.from(`--${boundaryValue}`);
+  const headerSeparator = Buffer.from("\r\n\r\n");
+  let boundaryStart = body.indexOf(boundary);
+
+  while (boundaryStart !== -1) {
+    let partStart = boundaryStart + boundary.length;
+    if (body[partStart] === 45 && body[partStart + 1] === 45) break;
+    if (body[partStart] === 13 && body[partStart + 1] === 10) partStart += 2;
+
+    const headerEnd = body.indexOf(headerSeparator, partStart);
+    if (headerEnd === -1) break;
+
+    const headers = body.subarray(partStart, headerEnd).toString("utf8");
+    const disposition = /content-disposition:\s*([^\r\n]+)/i.exec(headers)?.[1] ?? "";
+    if (!/filename/i.test(disposition)) {
+      boundaryStart = body.indexOf(boundary, headerEnd + headerSeparator.length);
+      continue;
+    }
+
+    const quotedName = /filename="([^"]*)"/i.exec(disposition)?.[1];
+    const encodedName = /filename\*=(?:UTF-8'')?([^;\r\n]+)/i.exec(disposition)?.[1];
+    const fileName = safeDecodeFileName((encodedName || quotedName || "upload").trim().replace(/^"|"$/g, ""));
+    const mimeType = (/content-type:\s*([^\r\n]+)/i.exec(headers)?.[1] ?? "application/octet-stream").trim();
+
+    const dataStart = headerEnd + headerSeparator.length;
+    const nextBoundary = body.indexOf(Buffer.from(`\r\n--${boundaryValue}`), dataStart);
+    if (nextBoundary === -1) break;
+
+    return {
+      buffer: Buffer.from(body.subarray(dataStart, nextBoundary)),
+      mimeType,
+      fileName,
+    };
+  }
+
+  return null;
+}
+
 async function startServer() {
   const app = express();
   const server = createServer(app);
@@ -61,44 +142,28 @@ async function startServer() {
   });
 
   // File upload endpoint
-  app.post("/api/upload", express.raw({ type: "*/*", limit: "10mb" }), async (req, res) => {
+  app.post("/api/upload", express.raw({ type: "*/*", limit: UPLOAD_BODY_LIMIT }), async (req, res) => {
     try {
-      const contentType = req.headers["content-type"] || "application/octet-stream";
-      // Handle multipart form data manually
-      if (contentType.includes("multipart/form-data")) {
-        // Parse multipart manually using boundary
-        const boundary = contentType.split("boundary=")[1];
-        if (!boundary) { res.status(400).json({ error: "No boundary" }); return; }
-        const body = req.body as Buffer;
-        const bodyStr = body.toString("binary");
-        const parts = bodyStr.split(`--${boundary}`);
-        let fileBuffer: Buffer | null = null;
-        let fileMime = "image/jpeg";
-        let fileName = "upload.jpg";
-        for (const part of parts) {
-          if (part.includes("Content-Disposition") && part.includes("filename")) {
-            const nameMatch = part.match(/filename="([^"]+)"/);
-            if (nameMatch) fileName = nameMatch[1];
-            const mimeMatch = part.match(/Content-Type: ([^\r\n]+)/);
-            if (mimeMatch) fileMime = mimeMatch[1].trim();
-            const headerEnd = part.indexOf("\r\n\r\n");
-            if (headerEnd !== -1) {
-              const fileData = part.slice(headerEnd + 4, part.lastIndexOf("\r\n"));
-              fileBuffer = Buffer.from(fileData, "binary");
-            }
-          }
-        }
-        if (!fileBuffer) { res.status(400).json({ error: "No file found" }); return; }
-        const ext = fileName.split(".").pop() || "jpg";
-        const key = `uploads/${Date.now()}.${ext}`;
-        const { url } = await storagePut(key, fileBuffer, fileMime);
-        res.json({ url, key });
-      } else {
-        const ext = contentType.includes("png") ? "png" : contentType.includes("gif") ? "gif" : contentType.includes("webp") ? "webp" : "jpg";
-        const key = `uploads/${Date.now()}.${ext}`;
-        const { url } = await storagePut(key, req.body as Buffer, contentType);
-        res.json({ url, key });
+      const contentType = String(req.headers["content-type"] || "application/octet-stream");
+      const body = Buffer.isBuffer(req.body) ? req.body : Buffer.from(req.body ?? "");
+      const parsed = contentType.includes("multipart/form-data")
+        ? parseMultipartUpload(body, contentType)
+        : { buffer: body, mimeType: contentType.split(";")[0].trim(), fileName: "upload" };
+
+      if (!parsed || parsed.buffer.byteLength === 0) {
+        res.status(400).json({ error: "No file found" });
+        return;
       }
+
+      if (!isAllowedUploadType(parsed.mimeType)) {
+        res.status(415).json({ error: "Unsupported file type" });
+        return;
+      }
+
+      const ext = extensionForUpload(parsed.fileName, parsed.mimeType);
+      const key = `uploads/${Date.now()}.${ext}`;
+      const { url, key: storedKey } = await storagePut(key, parsed.buffer, parsed.mimeType);
+      res.json({ url, key: storedKey });
     } catch (e: any) {
       console.error("Upload error:", e);
       res.status(500).json({ error: e.message });
