@@ -3,6 +3,8 @@ import { useLocation, useParams, Link } from "wouter";
 import { motion } from "framer-motion";
 import { Star, Heart, MessageCircle, Calendar, Image, ChevronRight, UserPlus } from "lucide-react";
 import { AromaLayout, AromaAvatar } from "@/components/AromaLayout";
+import { StoryRing } from "@/components/StoryRing";
+import { StoryViewer, type StoryAuthor } from "@/components/StoryViewer";
 import { trpc } from "@/lib/trpc";
 import { useSession } from "@/contexts/SessionContext";
 import { Button } from "@/components/ui/button";
@@ -16,6 +18,7 @@ export default function TherapistDetail() {
   const [activeTab, setActiveTab] = useState<"info" | "posts" | "reviews">("info");
   const [isFav, setIsFav] = useState(false);
   const [isFollowed, setIsFollowed] = useState(false);
+  const [viewerAuthors, setViewerAuthors] = useState<StoryAuthor[] | null>(null);
 
   // Allow any logged-in user (store, therapist, customer) to view therapist profiles
   useEffect(() => {
@@ -25,6 +28,10 @@ export default function TherapistDetail() {
   const isCustomer = session?.role === "customer";
   const { data: therapist } = trpc.therapist.getById.useQuery({ therapistId: therapistId }, { enabled: !!session && !!therapistId });
   const { data: posts } = trpc.post.getFeed.useQuery({ therapistId, limit: 9 }, { enabled: !!session && !!therapistId });
+  const { data: activeTherapistIds } = trpc.story.getActiveTherapistIds.useQuery(
+    { therapistIds: therapistId ? [therapistId] : [] },
+    { enabled: !!session && !!therapistId }
+  );
   const { data: favs } = trpc.customer.getFavorites.useQuery(undefined, { enabled: !!session && isCustomer });
   const { data: followStatus } = trpc.customer.getFollowStatus.useQuery(
     { targetType: "therapist", targetId: therapistId },
@@ -55,6 +62,17 @@ export default function TherapistDetail() {
 
   const t = therapist as any;
   const postList = (posts as any[]) ?? [];
+  const hasStory = ((activeTherapistIds as number[]) ?? []).includes(therapistId);
+
+  const handleOpenStory = async () => {
+    if (!hasStory || !t) return;
+    const res = await fetch(`/api/trpc/story.getByTherapistId?input=${encodeURIComponent(JSON.stringify({ json: { therapistId } }))}`);
+    const json = await res.json();
+    const stories = json?.result?.data?.json ?? [];
+    if (stories.length > 0) {
+      setViewerAuthors([{ id: therapistId, name: t.displayName, avatarUrl: t.profileImageUrl, role: "therapist", stories }]);
+    }
+  };
 
   // Determine back href based on role
   const backHref = session?.role === "store" ? "/store/therapists" : session?.role === "therapist" ? "/therapist/dashboard" : "/home";
@@ -64,7 +82,9 @@ export default function TherapistDetail() {
       {/* Profile header */}
       <div className="px-4 pt-4 pb-3">
         <div className="flex items-start gap-4">
-          <AromaAvatar name={t?.displayName} src={t?.profileImageUrl} size="xl" />
+          <StoryRing hasStory={hasStory} size="lg" onClick={hasStory ? handleOpenStory : undefined}>
+            <AromaAvatar name={t?.displayName} src={t?.profileImageUrl} size="xl" />
+          </StoryRing>
           <div className="flex-1">
             <h1 className="text-lg font-bold text-foreground">{t?.displayName ?? "セラピスト"}</h1>
             <p className="text-xs text-muted-foreground">{t?.storeName}</p>
@@ -171,6 +191,9 @@ export default function TherapistDetail() {
           </div>
         )}
       </div>
+      {viewerAuthors && (
+        <StoryViewer authors={viewerAuthors} onClose={() => setViewerAuthors(null)} />
+      )}
     </AromaLayout>
   );
 }

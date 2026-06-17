@@ -5,18 +5,17 @@ import { ChevronLeft, ChevronRight, Clock } from "lucide-react";
 import { AromaLayout, AromaAvatar } from "@/components/AromaLayout";
 import { trpc } from "@/lib/trpc";
 import { useSession } from "@/contexts/SessionContext";
-import { addWeeks, endOfWeek, format, startOfWeek, subWeeks } from "date-fns";
+import { addMonths, format, subMonths } from "date-fns";
 import { ja } from "date-fns/locale";
 
 export default function StoreShifts() {
   const [, navigate] = useLocation();
   const { session, isLoading } = useSession();
-  const [weekDate, setWeekDate] = useState(() => new Date());
+  const [monthDate, setMonthDate] = useState(() => new Date());
   useEffect(() => { if (!isLoading && (!session || session.role !== "store")) navigate("/store/login"); }, [session, isLoading]);
-  const weekStart = startOfWeek(weekDate, { weekStartsOn: 1 });
-  const weekEnd = endOfWeek(weekDate, { weekStartsOn: 1 });
+  const month = format(monthDate, "yyyy-MM");
   const { data: shifts } = trpc.store.getShifts.useQuery(
-    { startDate: format(weekStart, "yyyy-MM-dd"), endDate: format(weekEnd, "yyyy-MM-dd") },
+    { month },
     { enabled: !!session, refetchOnWindowFocus: true, refetchInterval: 15000 }
   );
   const list = (shifts as any[]) ?? [];
@@ -32,22 +31,22 @@ export default function StoreShifts() {
   return (
     <AromaLayout title="シフト管理" showBack backHref="/store/dashboard">
       <div className="px-4 py-3 flex items-center justify-between bg-white border-b border-border/50">
-        <button onClick={() => setWeekDate(d => subWeeks(d, 1))} className="p-2 rounded-full active:bg-muted">
+        <button onClick={() => setMonthDate(d => subMonths(d, 1))} className="p-2 rounded-full active:bg-muted">
           <ChevronLeft className="w-5 h-5" />
         </button>
         <div className="text-center">
           <div className="font-semibold text-foreground">
-            {format(weekStart, "M月d日", { locale: ja })} - {format(weekEnd, "M月d日", { locale: ja })}
+            {format(monthDate, "yyyy年M月", { locale: ja })}
           </div>
           <div className="text-xs text-muted-foreground">{list.length}件</div>
         </div>
-        <button onClick={() => setWeekDate(d => addWeeks(d, 1))} className="p-2 rounded-full active:bg-muted">
+        <button onClick={() => setMonthDate(d => addMonths(d, 1))} className="p-2 rounded-full active:bg-muted">
           <ChevronRight className="w-5 h-5" />
         </button>
       </div>
       <div className="px-4 py-3 space-y-3">
         {list.length === 0 ? (
-          <div className="text-center py-12 text-muted-foreground"><Clock className="w-10 h-10 mx-auto mb-2 opacity-30" /><p className="text-sm">今週のシフトはありません</p></div>
+          <div className="text-center py-12 text-muted-foreground"><Clock className="w-10 h-10 mx-auto mb-2 opacity-30" /><p className="text-sm">この月のシフトはありません</p></div>
         ) : list.map((s: any, i: number) => (
           <motion.div key={s.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}
             className="bg-white rounded-2xl p-4 shadow-luxury flex items-center gap-3">

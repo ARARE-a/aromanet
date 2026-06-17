@@ -38,7 +38,7 @@ type ParsedUpload = {
   fileName: string;
 };
 
-const UPLOAD_BODY_LIMIT = "10mb";
+const UPLOAD_BODY_LIMIT = process.env.UPLOAD_BODY_LIMIT || "50mb";
 
 function isAllowedUploadType(mimeType: string) {
   return mimeType.startsWith("image/") || mimeType.startsWith("video/") || mimeType === "application/pdf";

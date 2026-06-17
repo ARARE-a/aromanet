@@ -110,7 +110,7 @@ export default function StorePayroll() {
               <motion.div key={p.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}
                 className="bg-white rounded-2xl shadow-luxury overflow-hidden">
                 <button className="w-full p-4 flex items-center gap-3 text-left" onClick={() => setExpandedId(isExpanded ? null : p.id)}>
-                  <AromaAvatar name={p.therapistName} size="md" />
+                  <AromaAvatar name={p.therapistName} src={p.therapistImage} size="md" />
                   <div className="flex-1">
                     <div className="text-sm font-semibold text-foreground">{p.therapistName}</div>
                     <div className="text-xs text-muted-foreground">指名{p.nominationCount ?? 0}本 · バック率{p.backRate ?? 0}%</div>

@@ -32,7 +32,7 @@ export default function StoreReservations() {
   const [, navigate] = useLocation();
   const { session, isLoading } = useSession();
   const [date, setDate] = useState(new Date());
-  const [statusFilter, setStatusFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("pending");
 
   useEffect(() => {
     if (!isLoading && (!session || session.role !== "store")) navigate("/store/login");
@@ -42,7 +42,9 @@ export default function StoreReservations() {
   const { data: reservations, refetch } = trpc.reservation.getStoreReservations.useQuery(
     statusFilter === "pending"
       ? { status: "pending", limit: 100 }
-      : { date: dateStr, status: statusFilter === "all" ? undefined : statusFilter, limit: 100 },
+      : statusFilter === "all"
+        ? { limit: 100 }
+        : { date: dateStr, status: statusFilter, limit: 100 },
     { enabled: !!session, refetchOnWindowFocus: true, refetchInterval: 15000 }
   );
 
@@ -57,14 +59,16 @@ export default function StoreReservations() {
     <AromaLayout title="予約管理" showBack backHref="/store/dashboard" showNav navItems={navItems}>
       {/* Date navigator */}
       <div className="px-4 py-3 flex items-center justify-between bg-white border-b border-border/50">
-        <button onClick={() => setDate(subDays(date, 1))} disabled={statusFilter === "pending"} className="p-2 rounded-full hover:bg-muted transition-colors disabled:opacity-30">
+        <button onClick={() => setDate(subDays(date, 1))} disabled={statusFilter === "pending" || statusFilter === "all"} className="p-2 rounded-full hover:bg-muted transition-colors disabled:opacity-30">
           <ChevronLeft className="w-5 h-5" />
         </button>
         <div className="text-center">
-          <div className="font-semibold text-foreground">{statusFilter === "pending" ? "確認待ち一覧" : format(date, "M月d日（E）", { locale: ja })}</div>
+          <div className="font-semibold text-foreground">
+            {statusFilter === "pending" ? "確認待ち一覧" : statusFilter === "all" ? "予約一覧" : format(date, "M月d日（E）", { locale: ja })}
+          </div>
           <div className="text-xs text-muted-foreground">{list.length}件</div>
         </div>
-        <button onClick={() => setDate(addDays(date, 1))} disabled={statusFilter === "pending"} className="p-2 rounded-full hover:bg-muted transition-colors disabled:opacity-30">
+        <button onClick={() => setDate(addDays(date, 1))} disabled={statusFilter === "pending" || statusFilter === "all"} className="p-2 rounded-full hover:bg-muted transition-colors disabled:opacity-30">
           <ChevronRight className="w-5 h-5" />
         </button>
       </div>
@@ -91,7 +95,7 @@ export default function StoreReservations() {
         {list.length === 0 ? (
           <div className="text-center py-12 text-muted-foreground">
             <Calendar className="w-10 h-10 mx-auto mb-2 opacity-30" />
-            <p className="text-sm">この日の予約はありません</p>
+            <p className="text-sm">{statusFilter === "pending" ? "確認待ちの予約はありません" : statusFilter === "all" ? "予約はありません" : "この日の予約はありません"}</p>
           </div>
         ) : (
           list.map((r: any, i: number) => (

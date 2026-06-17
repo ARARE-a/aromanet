@@ -1,7 +1,7 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useLocation } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
-import { Grid3X3, BookOpen, Plus, Trash2, Heart, Camera, Image } from "lucide-react";
+import { Grid3X3, BookOpen, Plus, Trash2, Heart, Camera, Image, Video, X } from "lucide-react";
 import { AromaLayout, AromaAvatar } from "@/components/AromaLayout";
 import { trpc } from "@/lib/trpc";
 import { useSession } from "@/contexts/SessionContext";
@@ -20,6 +20,10 @@ export default function TherapistPosts() {
   const [showAdd, setShowAdd] = useState(false);
   const [form, setForm] = useState({ content: "", postType: "diary" });
   const [selectedPost, setSelectedPost] = useState<any>(null);
+  const [mediaFiles, setMediaFiles] = useState<File[]>([]);
+  const [mediaPreviews, setMediaPreviews] = useState<string[]>([]);
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const utils = trpc.useUtils();
 
   useEffect(() => {
@@ -31,12 +35,24 @@ export default function TherapistPosts() {
   const p = profile as any;
   const list = (posts as any[]) ?? [];
 
+  useEffect(() => {
+    return () => {
+      mediaPreviews.forEach(url => URL.revokeObjectURL(url));
+    };
+  }, [mediaPreviews]);
+
   const createMut = trpc.post.create.useMutation({
     onSuccess: () => {
       utils.post.getMyPosts.invalidate();
       toast.success("投稿しました");
       setShowAdd(false);
       setForm({ content: "", postType: "diary" });
+      setMediaFiles([]);
+      setMediaPreviews(prev => {
+        prev.forEach(url => URL.revokeObjectURL(url));
+        return [];
+      });
+      if (fileInputRef.current) fileInputRef.current.value = "";
     },
     onError: e => toast.error(e.message),
   });
@@ -48,6 +64,61 @@ export default function TherapistPosts() {
 
   const attendancePosts = list.filter(post => post.postType === "attendance");
   const diaryPosts = list.filter(post => post.postType === "diary");
+
+  const handleMediaSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files ?? []).slice(0, 6);
+    setMediaPreviews(prev => {
+      prev.forEach(url => URL.revokeObjectURL(url));
+      return files.map(file => URL.createObjectURL(file));
+    });
+    setMediaFiles(files);
+  };
+
+  const removeMedia = (index: number) => {
+    setMediaFiles(prev => prev.filter((_, i) => i !== index));
+    setMediaPreviews(prev => {
+      URL.revokeObjectURL(prev[index]);
+      return prev.filter((_, i) => i !== index);
+    });
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  const uploadSelectedMedia = async () => {
+    const urls: string[] = [];
+    for (const file of mediaFiles) {
+      const formData = new FormData();
+      formData.append("file", file, file.name || "post-media");
+      const res = await fetch("/api/upload", { method: "POST", body: formData });
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        throw new Error(data?.error ?? "アップロードに失敗しました");
+      }
+      const data = await res.json();
+      urls.push(data.url);
+    }
+    return urls;
+  };
+
+  const handleCreatePost = async () => {
+    const content = form.content.trim();
+    if (!content && mediaFiles.length === 0) {
+      toast.error("本文または写真・動画を追加してください");
+      return;
+    }
+    setIsUploading(true);
+    try {
+      const imageUrls = await uploadSelectedMedia();
+      await createMut.mutateAsync({
+        content: content || "写真・動画を投稿しました",
+        postType: form.postType as any,
+        imageUrls,
+      });
+    } catch (error: any) {
+      toast.error(error?.message ?? "投稿に失敗しました");
+    } finally {
+      setIsUploading(false);
+    }
+  };
 
   return (
     <AromaLayout showBack backHref="/therapist/dashboard">
@@ -120,7 +191,9 @@ export default function TherapistPosts() {
                   onClick={() => setSelectedPost(post)}
                   className="aspect-square bg-white overflow-hidden relative">
                   {post.imageUrl ? (
-                    <img src={post.imageUrl} alt="" className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                    isVideoUrl(post.imageUrl)
+                      ? <video src={post.imageUrl} className="w-full h-full object-cover" muted playsInline preload="metadata" />
+                      : <img src={post.imageUrl} alt="" className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
                   ) : (
                     <div className={`w-full h-full flex items-center justify-center text-3xl ${post.postType === "attendance" ? "bg-teal-50" : "bg-purple-50"}`}>
                       {post.postType === "attendance" ? "📅" : "📝"}
@@ -151,6 +224,13 @@ export default function TherapistPosts() {
                     </button>
                   </div>
                   <p className="text-sm text-foreground leading-relaxed">{post.content}</p>
+                  {post.imageUrl && (
+                    <div className="mt-3 rounded-xl overflow-hidden bg-muted">
+                      {isVideoUrl(post.imageUrl)
+                        ? <video src={post.imageUrl} className="w-full max-h-80 object-cover" controls playsInline />
+                        : <img src={post.imageUrl} alt="" className="w-full max-h-80 object-cover" />}
+                    </div>
+                  )}
                   <div className="flex items-center gap-1 mt-2 text-xs text-muted-foreground">
                     <Heart className="w-3 h-3" />{post.likeCount ?? 0}
                   </div>
@@ -179,6 +259,13 @@ export default function TherapistPosts() {
                     {new Date(selectedPost.createdAt).toLocaleDateString("ja-JP")}
                   </span>
                 </div>
+                {selectedPost.imageUrl && (
+                  <div className="mb-3 rounded-xl overflow-hidden bg-muted">
+                    {isVideoUrl(selectedPost.imageUrl)
+                      ? <video src={selectedPost.imageUrl} className="w-full max-h-96 object-cover" controls playsInline />
+                      : <img src={selectedPost.imageUrl} alt="" className="w-full max-h-96 object-cover" />}
+                  </div>
+                )}
                 <p className="text-sm text-foreground leading-relaxed">{selectedPost.content}</p>
                 <div className="flex items-center justify-between mt-3">
                   <div className="flex items-center gap-1 text-xs text-muted-foreground">
@@ -218,17 +305,62 @@ export default function TherapistPosts() {
               placeholder={form.postType === "attendance" ? "本日の出勤情報を入力..." : "今日の出来事を書いてみましょう..."}
               maxLength={500}
             />
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*,video/*"
+              multiple
+              className="hidden"
+              onChange={handleMediaSelect}
+            />
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full h-10 rounded-xl"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isUploading || createMut.isPending}
+            >
+              <Camera className="w-4 h-4 mr-2" />写真・動画を追加
+            </Button>
+            {mediaPreviews.length > 0 && (
+              <div className="grid grid-cols-3 gap-2">
+                {mediaPreviews.map((url, i) => (
+                  <div key={url} className="relative aspect-square rounded-xl overflow-hidden bg-muted">
+                    {mediaFiles[i]?.type.startsWith("video/")
+                      ? <video src={url} className="w-full h-full object-cover" muted playsInline />
+                      : <img src={url} alt="" className="w-full h-full object-cover" />}
+                    <button
+                      type="button"
+                      onClick={() => removeMedia(i)}
+                      className="absolute right-1 top-1 w-6 h-6 rounded-full bg-black/60 text-white flex items-center justify-center"
+                      aria-label="メディアを削除"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                    {mediaFiles[i]?.type.startsWith("video/") && (
+                      <div className="absolute left-1 bottom-1 rounded-full bg-black/60 text-white px-1.5 py-0.5">
+                        <Video className="w-3.5 h-3.5" />
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
             <p className="text-xs text-muted-foreground text-right">{form.content.length}/500</p>
             <Button
               className="w-full h-11 rounded-xl gradient-luxury text-white font-semibold"
-              onClick={() => createMut.mutate({ content: form.content, postType: form.postType as any })}
-              disabled={createMut.isPending || !form.content.trim()}
+              onClick={handleCreatePost}
+              disabled={isUploading || createMut.isPending || (!form.content.trim() && mediaFiles.length === 0)}
             >
-              {createMut.isPending ? "投稿中..." : "投稿する"}
+              {isUploading || createMut.isPending ? "投稿中..." : "投稿する"}
             </Button>
           </div>
         </DialogContent>
       </Dialog>
     </AromaLayout>
   );
+}
+
+function isVideoUrl(url: string) {
+  return /\.(mp4|webm|mov|m4v)(\?|$)/i.test(url);
 }

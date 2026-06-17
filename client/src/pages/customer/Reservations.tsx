@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useLocation, useSearch } from "wouter";
+import { Link, useLocation, useSearch } from "wouter";
 import { motion } from "framer-motion";
 import { Calendar, Plus, ChevronRight } from "lucide-react";
 import { AromaLayout, StatusBadge } from "@/components/AromaLayout";
@@ -24,6 +24,7 @@ export default function CustomerReservations() {
   const [date, setDate] = useState("");
   const [startTime, setStartTime] = useState("12:00");
   const [notes, setNotes] = useState("");
+  const [expandedId, setExpandedId] = useState<number | null>(null);
 
   useEffect(() => {
     if (!isLoading && (!session || session.role !== "customer")) navigate("/customer/login");
@@ -102,14 +103,42 @@ export default function CustomerReservations() {
               </div>
               <StatusBadge status={r.status} />
             </div>
+            {expandedId === r.id && (
+              <div className="mb-3 rounded-xl bg-muted/40 p-3 text-xs text-muted-foreground space-y-2">
+                <div className="flex justify-between gap-3">
+                  <span>店舗</span>
+                  {r.storeId ? <Link href={`/store/${r.storeId}`} className="text-primary font-medium">{r.storeName}</Link> : <span>{r.storeName ?? "-"}</span>}
+                </div>
+                <div className="flex justify-between gap-3">
+                  <span>担当</span>
+                  {r.therapistId ? <Link href={`/therapist/${r.therapistId}`} className="text-primary font-medium">{r.therapistName ?? "未定"}</Link> : <span>{r.therapistName ?? "未定"}</span>}
+                </div>
+                <div className="flex justify-between gap-3">
+                  <span>コース</span>
+                  <span className="text-foreground">{r.menuName ?? "-"} {r.menuDuration ? `(${r.menuDuration}分)` : ""}</span>
+                </div>
+                {r.customerNote && (
+                  <div>
+                    <span>備考</span>
+                    <p className="mt-1 text-foreground whitespace-pre-wrap">{r.customerNote}</p>
+                  </div>
+                )}
+              </div>
+            )}
             <div className="flex items-center justify-between">
               <span className="text-sm font-bold text-foreground">¥{(r.totalAmount ?? 0).toLocaleString()}</span>
-              {["pending", "confirmed"].includes(r.status) && (
-                <Button variant="outline" size="sm" className="h-7 text-xs rounded-lg text-red-500 border-red-200 hover:bg-red-50"
-                  onClick={() => cancelMut.mutate({ id: r.id, reason: "顧客キャンセル" })}>
-                  キャンセル
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" className="h-7 text-xs rounded-lg"
+                  onClick={() => setExpandedId(expandedId === r.id ? null : r.id)}>
+                  {expandedId === r.id ? "閉じる" : "詳細"}
                 </Button>
-              )}
+                {["pending", "confirmed"].includes(r.status) && (
+                  <Button variant="outline" size="sm" className="h-7 text-xs rounded-lg text-red-500 border-red-200 hover:bg-red-50"
+                    onClick={() => cancelMut.mutate({ id: r.id, reason: "顧客キャンセル" })}>
+                    キャンセル
+                  </Button>
+                )}
+              </div>
             </div>
           </motion.div>
         ))}

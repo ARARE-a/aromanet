@@ -6,7 +6,7 @@ import { ENV } from "./_core/env";
 import { getDb } from "./db";
 import { sql } from "drizzle-orm";
 
-const DEFAULT_MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
+const DEFAULT_MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
 const DB_TABLE_READY = { value: false };
 
 function getForgeConfig() {

@@ -235,7 +235,59 @@ export const therapistRouter = router({
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     if (!session.therapistId) return [];
-    return db.select().from(customerMemos).where(eq(customerMemos.therapistId, session.therapistId)).orderBy(desc(customerMemos.updatedAt));
+    const reservationCustomers = await db.select({
+      customerId: reservations.customerId,
+      customerName: sql<string>`COALESCE(${customerProfiles.displayName}, ${customerProfiles.nickname}, CONCAT('顧客#', ${reservations.customerId}))`,
+      customerImage: customerProfiles.profileImageUrl,
+      lastVisit: sql<string>`MAX(${reservations.date})`,
+      reservationCount: sql<number>`COUNT(*)`,
+    }).from(reservations)
+      .leftJoin(customerProfiles, eq(reservations.customerId, customerProfiles.accountId))
+      .where(eq(reservations.therapistId, session.therapistId))
+      .groupBy(reservations.customerId, customerProfiles.displayName, customerProfiles.nickname, customerProfiles.profileImageUrl)
+      .orderBy(desc(sql`MAX(${reservations.date})`))
+      .limit(100);
+    const memoRows = await db.select().from(customerMemos).where(eq(customerMemos.therapistId, session.therapistId));
+    const memoByCustomer = new Map(memoRows.map((memo: any) => [memo.customerId, memo]));
+    const result = reservationCustomers.map((customer: any) => {
+      const memo = memoByCustomer.get(customer.customerId) as any;
+      return {
+        ...customer,
+        memoId: memo?.id ?? null,
+        preferences: memo?.preferences ?? "",
+        caution: memo?.caution ?? "",
+        lastVisitNote: memo?.lastVisitNote ?? "",
+        repeatStatus: memo?.repeatStatus ?? "",
+        shareWithStore: memo?.shareWithStore ?? false,
+        memo: memo?.preferences ?? memo?.lastVisitNote ?? "",
+        updatedAt: memo?.updatedAt ?? null,
+      };
+    });
+    for (const memo of memoRows as any[]) {
+      if (!result.some((row: any) => row.customerId === memo.customerId)) {
+        const cpRows = await db.select({
+          displayName: customerProfiles.displayName,
+          nickname: customerProfiles.nickname,
+          profileImageUrl: customerProfiles.profileImageUrl,
+        }).from(customerProfiles).where(eq(customerProfiles.accountId, memo.customerId)).limit(1);
+        result.push({
+          customerId: memo.customerId,
+          customerName: cpRows[0]?.displayName ?? cpRows[0]?.nickname ?? `顧客#${memo.customerId}`,
+          customerImage: cpRows[0]?.profileImageUrl ?? null,
+          lastVisit: null,
+          reservationCount: 0,
+          memoId: memo.id,
+          preferences: memo.preferences ?? "",
+          caution: memo.caution ?? "",
+          lastVisitNote: memo.lastVisitNote ?? "",
+          repeatStatus: memo.repeatStatus ?? "",
+          shareWithStore: memo.shareWithStore ?? false,
+          memo: memo.preferences ?? memo.lastVisitNote ?? "",
+          updatedAt: memo.updatedAt,
+        });
+      }
+    }
+    return result;
   }),
 
   upsertCustomerMemo: publicProcedure
@@ -253,7 +305,14 @@ export const therapistRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       if (!session.therapistId) throw new TRPCError({ code: "NOT_FOUND" });
-      await db.insert(customerMemos).values({ ...input, therapistId: session.therapistId }).onDuplicateKeyUpdate({ set: input });
+      const existing = await db.select({ id: customerMemos.id }).from(customerMemos)
+        .where(and(eq(customerMemos.therapistId, session.therapistId), eq(customerMemos.customerId, input.customerId)))
+        .limit(1);
+      if (existing[0]) {
+        await db.update(customerMemos).set(input).where(eq(customerMemos.id, existing[0].id));
+      } else {
+        await db.insert(customerMemos).values({ ...input, therapistId: session.therapistId });
+      }
       return { success: true };
     }),
 

@@ -32,12 +32,17 @@ export default function TherapistMemos() {
           <motion.div key={m.customerId} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}
             className="bg-white rounded-2xl p-4 shadow-luxury">
             <div className="flex items-center gap-2 mb-2">
-              <AromaAvatar name={m.customerName} size="sm" />
-              <span className="text-sm font-semibold text-foreground">{m.customerName}</span>
+              <AromaAvatar name={m.customerName} src={m.customerImage} size="sm" />
+              <div className="min-w-0">
+                <span className="text-sm font-semibold text-foreground">{m.customerName}</span>
+                <div className="text-xs text-muted-foreground">
+                  {m.lastVisit ? `最終予約 ${m.lastVisit}` : "予約履歴なし"} / {m.reservationCount ?? 0}件
+                </div>
+              </div>
             </div>
             {editing === m.customerId ? (
               <div className="space-y-2">
-                <Textarea value={memoText} onChange={e => setMemoText(e.target.value)} className="rounded-xl text-sm" rows={3} />
+                <Textarea value={memoText} onChange={e => setMemoText(e.target.value)} className="rounded-xl text-sm" rows={3} placeholder="好み・注意点・前回内容など" />
                 <div className="flex gap-2">
                   <Button size="sm" className="flex-1 h-7 text-xs rounded-lg gradient-luxury text-white" onClick={() => upsertMut.mutate({ customerId: m.customerId, preferences: memoText })}>保存</Button>
                   <Button size="sm" variant="outline" className="flex-1 h-7 text-xs rounded-lg" onClick={() => setEditing(null)}>キャンセル</Button>
@@ -45,8 +50,8 @@ export default function TherapistMemos() {
               </div>
             ) : (
               <div>
-                <p className="text-sm text-muted-foreground">{m.memo || "メモなし"}</p>
-                <button onClick={() => { setEditing(m.customerId); setMemoText(m.memo ?? ""); }} className="mt-2 text-xs text-primary hover:underline">編集</button>
+                <p className="text-sm text-muted-foreground whitespace-pre-wrap">{m.preferences || m.lastVisitNote || "メモなし"}</p>
+                <button onClick={() => { setEditing(m.customerId); setMemoText(m.preferences ?? m.memo ?? ""); }} className="mt-2 text-xs text-primary hover:underline">編集</button>
               </div>
             )}
           </motion.div>

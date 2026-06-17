@@ -18,10 +18,14 @@ export default function TherapistReservations() {
   const [, navigate] = useLocation();
   const { session, isLoading } = useSession();
   useEffect(() => { if (!isLoading && (!session || session.role !== "therapist")) navigate("/therapist/login"); }, [session, isLoading]);
-  const { data: reservations } = trpc.therapist.getReservations.useQuery({ date: new Date().toISOString().slice(0,10) }, { enabled: !!session });
+  const { data: reservations } = trpc.therapist.getReservations.useQuery({}, { enabled: !!session, refetchOnWindowFocus: true, refetchInterval: 15000 });
   const list = (reservations as any[]) ?? [];
   return (
     <AromaLayout title="予約確認" showBack backHref="/therapist/dashboard" showNav navItems={navItems}>
+      <div className="px-4 py-3 bg-white border-b border-border/50">
+        <div className="text-sm font-semibold text-foreground">すべての予約</div>
+        <div className="text-xs text-muted-foreground">{list.length}件</div>
+      </div>
       <div className="px-4 py-3 space-y-3">
         {list.length === 0 ? (
           <div className="text-center py-12 text-muted-foreground"><Calendar className="w-10 h-10 mx-auto mb-2 opacity-30" /><p className="text-sm">予約はありません</p></div>

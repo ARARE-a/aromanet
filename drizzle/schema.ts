@@ -319,11 +319,23 @@ export const follows = mysqlTable("follows", {
 export const favorites = mysqlTable("favorites", {
   id: int("id").autoincrement().primaryKey(),
   customerId: int("customerId").notNull().references(() => customerAccounts.id),
-  targetType: mysqlEnum("targetType", ["store", "therapist"]).notNull(),
+  targetType: mysqlEnum("targetType", ["store", "therapist", "post"]).notNull(),
   targetId: int("targetId").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 }, (t) => [
   uniqueIndex("idx_favorites_unique").on(t.customerId, t.targetType, t.targetId),
+]);
+
+export const postComments = mysqlTable("post_comments", {
+  id: int("id").autoincrement().primaryKey(),
+  postId: int("postId").notNull().references(() => posts.id),
+  customerId: int("customerId").notNull().references(() => customerAccounts.id),
+  comment: text("comment").notNull(),
+  isHidden: boolean("isHidden").default(false).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, (t) => [
+  index("idx_post_comments_post").on(t.postId),
 ]);
 
 // ─── Reviews ──────────────────────────────────────────────────────────────────
@@ -521,6 +533,7 @@ export type Reservation = typeof reservations.$inferSelect;
 export type MessageThread = typeof messageThreads.$inferSelect;
 export type Message = typeof messages.$inferSelect;
 export type Post = typeof posts.$inferSelect;
+export type PostComment = typeof postComments.$inferSelect;
 export type Review = typeof reviews.$inferSelect;
 export type Notification = typeof notifications.$inferSelect;
 export type Sale = typeof sales.$inferSelect;

@@ -67,18 +67,24 @@ export default function CustomerMyPage() {
           </Link>
           {/* Stats */}
           <div className="flex-1 flex items-center justify-around pt-2">
-            <div className="text-center">
-              <div className="text-[17px] font-bold text-foreground">{p?.reservationCount ?? 0}</div>
-              <div className="text-[12px] text-gray-500">予約</div>
-            </div>
-            <div className="text-center">
-              <div className="text-[17px] font-bold text-foreground">{p?.favoriteCount ?? 0}</div>
-              <div className="text-[12px] text-gray-500">お気に入り</div>
-            </div>
-            <div className="text-center">
-              <div className="text-[17px] font-bold text-foreground">Lv.{currentLevel}</div>
-              <div className="text-[12px] text-gray-500">レベル</div>
-            </div>
+            <Link href="/my/reservations">
+              <div className="text-center rounded-xl px-2 py-1 active:bg-gray-50 cursor-pointer">
+                <div className="text-[17px] font-bold text-foreground">{p?.reservationCount ?? 0}</div>
+                <div className="text-[12px] text-gray-500">予約</div>
+              </div>
+            </Link>
+            <Link href="/my/favorites">
+              <div className="text-center rounded-xl px-2 py-1 active:bg-gray-50 cursor-pointer">
+                <div className="text-[17px] font-bold text-foreground">{p?.favoriteCount ?? 0}</div>
+                <div className="text-[12px] text-gray-500">お気に入り</div>
+              </div>
+            </Link>
+            <Link href="/my/level">
+              <div className="text-center rounded-xl px-2 py-1 active:bg-gray-50 cursor-pointer">
+                <div className="text-[17px] font-bold text-foreground">Lv.{currentLevel}</div>
+                <div className="text-[12px] text-gray-500">レベル</div>
+              </div>
+            </Link>
           </div>
         </div>
 

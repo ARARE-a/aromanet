@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { useLocation, Link } from "wouter";
 import { motion } from "framer-motion";
-import { Heart, MapPin, Star, User } from "lucide-react";
+import { Heart, MapPin, Star, User, Image } from "lucide-react";
 import { AromaLayout, AromaAvatar } from "@/components/AromaLayout";
 import { trpc } from "@/lib/trpc";
 import { useSession } from "@/contexts/SessionContext";
@@ -29,6 +29,7 @@ export default function CustomerFavorites() {
 
   const storeFavs = favList.filter(f => f.targetType === "store");
   const therapistFavs = favList.filter(f => f.targetType === "therapist");
+  const postFavs = favList.filter(f => f.targetType === "post");
 
   return (
     <AromaLayout title="お気に入り" showBack>
@@ -71,6 +72,20 @@ export default function CustomerFavorites() {
                   {therapistFavs.map((fav: any, i: number) => (
                     <motion.div key={fav.id} initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.05 }}>
                       <FavoriteTherapistCard fav={fav} onRemove={() => toggleFavMut.mutate({ targetType: "therapist", targetId: fav.targetId })} />
+                    </motion.div>
+                  ))}
+                </div>
+              </div>
+            )}
+            {postFavs.length > 0 && (
+              <div>
+                <h2 className="text-sm font-semibold text-foreground mb-2 flex items-center gap-1.5">
+                  <Image className="w-4 h-4 text-primary" />保存した投稿
+                </h2>
+                <div className="space-y-2">
+                  {postFavs.map((fav: any, i: number) => (
+                    <motion.div key={fav.id} initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.05 }}>
+                      <FavoritePostCard fav={fav} onRemove={() => toggleFavMut.mutate({ targetType: "post", targetId: fav.targetId })} />
                     </motion.div>
                   ))}
                 </div>
@@ -132,4 +147,40 @@ function FavoriteTherapistCard({ fav, onRemove }: { fav: any; onRemove: () => vo
       </div>
     </div>
   );
+}
+
+function FavoritePostCard({ fav, onRemove }: { fav: any; onRemove: () => void }) {
+  const { data: post } = trpc.post.getById.useQuery({ id: fav.targetId }, { enabled: !!fav.targetId });
+  const p = post as any;
+  return (
+    <div className="bg-white rounded-2xl shadow-luxury overflow-hidden">
+      <Link href={p?.therapistId ? `/therapist/${p.therapistId}` : "/home"}>
+        <div className="flex gap-3 p-3">
+          <div className="w-16 h-16 rounded-xl bg-gradient-to-br from-teal-50 to-teal-100 overflow-hidden flex-shrink-0">
+            {p?.imageUrl ? (
+              isVideoUrl(p.imageUrl)
+                ? <video src={p.imageUrl} className="w-full h-full object-cover" muted playsInline />
+                : <img src={p.imageUrl} alt="" className="w-full h-full object-cover" />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center text-lg">📝</div>
+            )}
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="font-semibold text-sm text-foreground truncate">{p?.therapistName ?? "投稿"}</p>
+            <p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">{p?.content ?? "読み込み中..."}</p>
+            {p?.storeName && <p className="text-[11px] text-muted-foreground truncate mt-1">{p.storeName}</p>}
+          </div>
+        </div>
+      </Link>
+      <div className="px-3 pb-3">
+        <button onClick={onRemove} className="w-full py-1.5 text-xs text-red-400 border border-red-100 rounded-lg hover:bg-red-50 transition-colors">
+          保存を解除
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function isVideoUrl(url: string) {
+  return /\.(mp4|webm|mov|m4v)(\?|$)/i.test(url);
 }

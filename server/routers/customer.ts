@@ -30,6 +30,21 @@ function calcLevel(totalSpent: number) {
   return level;
 }
 
+let favoriteSchemaReady: Promise<void> | null = null;
+
+function ensureFavoritePostTarget(db: any) {
+  if (!favoriteSchemaReady) {
+    favoriteSchemaReady = db.execute(sql.raw("ALTER TABLE favorites MODIFY COLUMN targetType enum('store','therapist','post') NOT NULL"))
+      .catch((error: any) => {
+        const message = String(error?.message ?? "");
+        if (!message.includes("already") && !message.includes("Duplicate")) {
+          console.warn("[Customer] favorites enum migration skipped:", message);
+        }
+      });
+  }
+  return favoriteSchemaReady;
+}
+
 export const customerRouter = router({
   getMyProfile: publicProcedure.query(async ({ ctx }) => {
     const session = await getSession(ctx.req);
@@ -37,7 +52,17 @@ export const customerRouter = router({
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const rows = await db.select().from(customerProfiles).where(eq(customerProfiles.accountId, session.accountId)).limit(1);
-    return rows[0] ?? null;
+    const profile = rows[0];
+    if (!profile) return null;
+    const [reservationCountRows, favoriteCountRows] = await Promise.all([
+      db.select({ count: sql<number>`COUNT(*)` }).from(reservations).where(eq(reservations.customerId, session.accountId)),
+      db.select({ count: sql<number>`COUNT(*)` }).from(favorites).where(eq(favorites.customerId, session.accountId)),
+    ]);
+    return {
+      ...profile,
+      reservationCount: Number(reservationCountRows[0]?.count ?? 0),
+      favoriteCount: Number(favoriteCountRows[0]?.count ?? 0),
+    };
   }),
 
   updateProfile: publicProcedure
@@ -64,6 +89,9 @@ export const customerRouter = router({
     const rows = await db
       .select({
         id: reservations.id,
+        storeId: reservations.storeId,
+        therapistId: reservations.therapistId,
+        menuId: reservations.menuId,
         date: reservations.date,
         startTime: reservations.startTime,
         endTime: reservations.endTime,
@@ -96,12 +124,13 @@ export const customerRouter = router({
   }),
 
   toggleFavorite: publicProcedure
-    .input(z.object({ targetType: z.enum(["store", "therapist"]), targetId: z.number() }))
+    .input(z.object({ targetType: z.enum(["store", "therapist", "post"]), targetId: z.number() }))
     .mutation(async ({ input, ctx }) => {
       const session = await getSession(ctx.req);
       if (!session || session.role !== "customer") throw new TRPCError({ code: "UNAUTHORIZED" });
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      if (input.targetType === "post") await ensureFavoritePostTarget(db);
       const existing = await db.select().from(favorites).where(and(eq(favorites.customerId, session.accountId), eq(favorites.targetType, input.targetType), eq(favorites.targetId, input.targetId))).limit(1);
       if (existing.length > 0) {
         await db.delete(favorites).where(eq(favorites.id, existing[0].id));
