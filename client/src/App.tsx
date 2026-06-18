@@ -7,6 +7,7 @@ import { ThemeProvider } from "./contexts/ThemeContext";
 import { SessionProvider } from "./contexts/SessionContext";
 
 // Auth pages
+import LandingPage from "./pages/LandingPage";
 import RoleSelect from "./pages/RoleSelect";
 import StoreLogin from "./pages/auth/StoreLogin";
 import TherapistLogin from "./pages/auth/TherapistLogin";
@@ -62,7 +63,9 @@ function Router() {
   return (
     <Switch>
       {/* Root */}
-      <Route path="/" component={RoleSelect} />
+      <Route path="/" component={LandingPage} />
+      <Route path="/lp" component={LandingPage} />
+      <Route path="/roles" component={RoleSelect} />
 
       {/* Auth */}
       <Route path="/store/login" component={StoreLogin} />
