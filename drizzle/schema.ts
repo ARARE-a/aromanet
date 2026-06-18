@@ -568,6 +568,25 @@ export const affiliationRequests = mysqlTable("affiliation_requests", {
   index("idx_affiliation_store").on(t.storeId),
 ]);
 
+// ─── Therapist Invite Links ─────────────────────────────────────────────────
+
+export const therapistInviteLinks = mysqlTable("therapist_invite_links", {
+  id: int("id").autoincrement().primaryKey(),
+  storeId: int("storeId").notNull().references(() => stores.id),
+  token: varchar("token", { length: 80 }).notNull(),
+  label: varchar("label", { length: 100 }),
+  isActive: boolean("isActive").default(true).notNull(),
+  maxUses: int("maxUses"),
+  usedCount: int("usedCount").default(0).notNull(),
+  expiresAt: timestamp("expiresAt"),
+  lastUsedAt: timestamp("lastUsedAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, (t) => [
+  uniqueIndex("idx_therapist_invite_token").on(t.token),
+  index("idx_therapist_invite_store").on(t.storeId),
+]);
+
 // ─── Therapist Salary Settings ────────────────────────────────────────────────
 
 export const therapistSalarySettings = mysqlTable("therapist_salary_settings", {
@@ -599,6 +618,7 @@ export const storyPosts = mysqlTable("story_posts", {
 
 export type Room = typeof rooms.$inferSelect;
 export type AffiliationRequest = typeof affiliationRequests.$inferSelect;
+export type TherapistInviteLink = typeof therapistInviteLinks.$inferSelect;
 export type TherapistSalarySetting = typeof therapistSalarySettings.$inferSelect;
 export type StoryPost = typeof storyPosts.$inferSelect;
 

@@ -22,7 +22,7 @@ export default function TherapistLogin() {
       submitLabel="ログイン"
       onSubmit={async (d) => { setError(null); await loginMut.mutateAsync({ email: d.email.trim(), password: d.password }); }}
       isLoading={loginMut.isPending} error={error} showCrashPassword
-      footer={<><Link href="/therapist/register" className="text-primary font-medium hover:underline">新規登録</Link>{" "}|{" "}<Link href="/" className="text-muted-foreground hover:underline">ロール選択に戻る</Link></>}
+      footer={<><span className="text-muted-foreground">新規登録は店舗の招待URLから行ってください</span>{" "}|{" "}<Link href="/" className="text-muted-foreground hover:underline">ロール選択に戻る</Link></>}
     />
   );
 }

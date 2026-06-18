@@ -158,7 +158,7 @@ export default function TherapistDashboard() {
             { href: "/therapist/posts", icon: <Image className="w-6 h-6" />, label: "投稿", color: "bg-purple-50 text-purple-600" },
             { href: "/therapist/memos", icon: <BookOpen className="w-6 h-6" />, label: "顧客メモ", color: "bg-pink-50 text-pink-600" },
             { href: "/therapist/sales", icon: <TrendingUp className="w-6 h-6" />, label: "売上", color: "bg-green-50 text-green-600" },
-            { href: "/therapist/affiliations", icon: <Heart className="w-6 h-6" />, label: "所属申請", color: "bg-red-50 text-red-500" },
+            { href: "/therapist/affiliations", icon: <Heart className="w-6 h-6" />, label: "所属店舗", color: "bg-red-50 text-red-500" },
           ].map((item) => (
             <Link key={item.href} href={item.href}>
               <motion.div

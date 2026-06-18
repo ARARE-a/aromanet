@@ -1,9 +1,10 @@
 import { TRPCError } from "@trpc/server";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
-import { affiliationRequests, therapists, stores, therapistSalarySettings, notifications, messageThreads, messages, therapistPayrolls } from "../../drizzle/schema";
+import { affiliationRequests, therapists, stores, therapistSalarySettings, notifications, messageThreads, messages, therapistPayrolls, therapistInviteLinks } from "../../drizzle/schema";
 import { getDb } from "../db";
 import { getSession } from "../session";
+import { ensureTherapistInviteLinksTable, generateInviteToken, getInviteInvalidReason } from "../therapistInvites";
 import { publicProcedure, router } from "../_core/trpc";
 
 function getTokyoYearMonth() {
@@ -19,42 +20,106 @@ function getTokyoYearMonth() {
 }
 
 export const affiliationRouter = router({
+  getInviteByToken: publicProcedure
+    .input(z.object({ token: z.string().min(10) }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await ensureTherapistInviteLinksTable(db);
+      const rows = await db.select({
+        id: therapistInviteLinks.id,
+        storeId: therapistInviteLinks.storeId,
+        token: therapistInviteLinks.token,
+        label: therapistInviteLinks.label,
+        isActive: therapistInviteLinks.isActive,
+        maxUses: therapistInviteLinks.maxUses,
+        usedCount: therapistInviteLinks.usedCount,
+        expiresAt: therapistInviteLinks.expiresAt,
+        storeName: stores.name,
+        storeArea: stores.prefecture,
+        logoUrl: stores.logoUrl,
+      }).from(therapistInviteLinks)
+        .leftJoin(stores, eq(therapistInviteLinks.storeId, stores.id))
+        .where(eq(therapistInviteLinks.token, input.token))
+        .limit(1);
+      const invite = rows[0];
+      const reason = getInviteInvalidReason(invite);
+      if (reason) return { valid: false, reason };
+      return {
+        valid: true,
+        token: invite.token,
+        storeId: invite.storeId,
+        storeName: invite.storeName,
+        storeArea: invite.storeArea,
+        logoUrl: invite.logoUrl,
+      };
+    }),
+
+  createInviteLink: publicProcedure
+    .input(z.object({
+      label: z.string().max(100).optional(),
+      maxUses: z.number().int().min(1).optional(),
+      expiresInDays: z.number().int().min(1).max(365).optional(),
+    }).optional())
+    .mutation(async ({ input, ctx }) => {
+      const session = await getSession(ctx.req);
+      if (!session || session.role !== "store" || !session.storeId) throw new TRPCError({ code: "UNAUTHORIZED" });
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await ensureTherapistInviteLinksTable(db);
+      const token = generateInviteToken();
+      const expiresAt = input?.expiresInDays
+        ? new Date(Date.now() + input.expiresInDays * 24 * 60 * 60 * 1000)
+        : undefined;
+      await db.insert(therapistInviteLinks).values({
+        storeId: session.storeId,
+        token,
+        label: input?.label?.trim() || "セラピスト招待",
+        maxUses: input?.maxUses,
+        expiresAt,
+      });
+      return { token };
+    }),
+
+  getInviteLinks: publicProcedure.query(async ({ ctx }) => {
+    const session = await getSession(ctx.req);
+    if (!session || session.role !== "store" || !session.storeId) throw new TRPCError({ code: "UNAUTHORIZED" });
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    await ensureTherapistInviteLinksTable(db);
+    return db.select().from(therapistInviteLinks)
+      .where(eq(therapistInviteLinks.storeId, session.storeId))
+      .orderBy(desc(therapistInviteLinks.createdAt))
+      .limit(20);
+  }),
+
+  deactivateInviteLink: publicProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ input, ctx }) => {
+      const session = await getSession(ctx.req);
+      if (!session || session.role !== "store" || !session.storeId) throw new TRPCError({ code: "UNAUTHORIZED" });
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await ensureTherapistInviteLinksTable(db);
+      await db.update(therapistInviteLinks)
+        .set({ isActive: false })
+        .where(and(eq(therapistInviteLinks.id, input.id), eq(therapistInviteLinks.storeId, session.storeId)));
+      return { success: true };
+    }),
+
   // Therapist sends affiliation request to a store
   sendRequest: publicProcedure
     .input(z.object({
       storeId: z.number(),
       message: z.string().optional(),
     }))
-    .mutation(async ({ input, ctx }) => {
+    .mutation(async ({ ctx }) => {
       const session = await getSession(ctx.req);
       if (!session || session.role !== "therapist") throw new TRPCError({ code: "UNAUTHORIZED" });
-      const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      // Get therapist record
-      const therapistRows = await db.select().from(therapists).where(eq(therapists.accountId, session.accountId)).limit(1);
-      if (!therapistRows[0]) throw new TRPCError({ code: "NOT_FOUND", message: "セラピスト情報が見つかりません" });
-      const therapist = therapistRows[0];
-      // Check for existing pending request
-      const existing = await db.select().from(affiliationRequests)
-        .where(and(eq(affiliationRequests.therapistId, therapist.id), eq(affiliationRequests.storeId, input.storeId), eq(affiliationRequests.status, "pending")))
-        .limit(1);
-      if (existing.length > 0) throw new TRPCError({ code: "CONFLICT", message: "既に申請中です" });
-      await db.insert(affiliationRequests).values({
-        therapistId: therapist.id,
-        storeId: input.storeId,
-        message: input.message,
-        status: "pending",
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "所属登録は店舗が発行した招待URLから行ってください。",
       });
-      // Notify store
-      await db.insert(notifications).values({
-        recipientRole: "store",
-        recipientId: input.storeId,
-        type: "system",
-        title: "所属申請が届きました",
-        body: `${therapist.displayName}さんから所属申請が届きました`,
-        isRead: false,
-      });
-      return { success: true };
     }),
 
   // Get therapist's own requests
@@ -72,7 +137,7 @@ export const affiliationRouter = router({
     const result = [];
     for (const req of reqs) {
       const storeRows = await db.select({ id: stores.id, name: stores.name, prefecture: stores.prefecture }).from(stores).where(eq(stores.id, req.storeId)).limit(1);
-      result.push({ ...req, store: storeRows[0] ?? null });
+      result.push({ ...req, store: storeRows[0] ?? null, storeName: storeRows[0]?.name ?? null });
     }
     return result;
   }),

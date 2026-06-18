@@ -24,7 +24,12 @@ export default function StoreTherapists() {
 
   const { data: therapists, refetch } = trpc.store.getTherapists.useQuery(undefined, { enabled: !!session });
   const addMut = trpc.aroAuth.therapistRegister.useMutation({
-    onSuccess: () => { toast.success("セラピストを追加しました"); setShowAdd(false); refetch(); },
+    onSuccess: () => {
+      toast.success("セラピストを追加しました");
+      setShowAdd(false);
+      setForm({ email: "", password: "", displayName: "" });
+      refetch();
+    },
     onError: (e) => toast.error(e.message),
   });
 
@@ -79,7 +84,7 @@ export default function StoreTherapists() {
             <div><Label>源氏名</Label><Input value={form.displayName} onChange={e => setForm(f => ({...f, displayName: e.target.value}))} className="mt-1 rounded-xl" /></div>
             <div><Label>メールアドレス</Label><Input type="email" value={form.email} onChange={e => setForm(f => ({...f, email: e.target.value}))} className="mt-1 rounded-xl" /></div>
             <div><Label>初期パスワード（8文字以上）</Label><Input type="password" value={form.password} onChange={e => setForm(f => ({...f, password: e.target.value}))} className="mt-1 rounded-xl" /></div>
-            <Button className="w-full rounded-xl gradient-luxury text-white" onClick={() => addMut.mutate({ ...form, skipEmailVerify: true })} disabled={addMut.isPending}>追加する</Button>
+            <Button className="w-full rounded-xl gradient-luxury text-white" onClick={() => addMut.mutate({ ...form, skipEmailVerify: true })} disabled={addMut.isPending || !form.email || !form.password || !form.displayName}>追加する</Button>
           </div>
         </DialogContent>
       </Dialog>

@@ -1,11 +1,12 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { motion } from "framer-motion";
-import { UserPlus, CheckCircle, XCircle, Clock, Users } from "lucide-react";
+import { Ban, CheckCircle, Clock, Copy, Link2, Plus, UserPlus, Users, XCircle } from "lucide-react";
 import { AromaLayout, AromaAvatar } from "@/components/AromaLayout";
 import { trpc } from "@/lib/trpc";
 import { useSession } from "@/contexts/SessionContext";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
@@ -24,9 +25,38 @@ export default function StoreAffiliations() {
   }, [session, isLoading]);
 
   const { data: requests } = trpc.affiliation.getStoreRequests.useQuery({ status: undefined }, { enabled: !!session });
+  const { data: inviteLinks } = trpc.affiliation.getInviteLinks.useQuery(undefined, { enabled: !!session });
   const allReqs = (requests as any[]) ?? [];
+  const links = (inviteLinks as any[]) ?? [];
   const pendingReqs = allReqs.filter(r => r.status === "pending");
   const processedReqs = allReqs.filter(r => r.status !== "pending");
+
+  const inviteUrl = (token: string) => `${window.location.origin}/therapist/register?invite=${encodeURIComponent(token)}`;
+
+  const copyInviteUrl = async (token: string) => {
+    try {
+      await navigator.clipboard.writeText(inviteUrl(token));
+      toast.success("招待URLをコピーしました");
+    } catch {
+      toast.error("コピーに失敗しました。URL欄を長押ししてコピーしてください");
+    }
+  };
+
+  const createInviteMut = trpc.affiliation.createInviteLink.useMutation({
+    onSuccess: async (data) => {
+      await utils.affiliation.getInviteLinks.invalidate();
+      await copyInviteUrl(data.token);
+    },
+    onError: e => toast.error(e.message),
+  });
+
+  const deactivateInviteMut = trpc.affiliation.deactivateInviteLink.useMutation({
+    onSuccess: () => {
+      utils.affiliation.getInviteLinks.invalidate();
+      toast.success("招待URLを無効化しました");
+    },
+    onError: e => toast.error(e.message),
+  });
 
   const respondMut = trpc.affiliation.respond.useMutation({
     onSuccess: (_, vars) => {
@@ -58,6 +88,66 @@ export default function StoreAffiliations() {
             <div className="text-sm font-semibold text-foreground">申請中: {pendingReqs.length}件</div>
             <div className="text-xs text-muted-foreground">セラピストからの所属申請を承認・却下できます</div>
           </div>
+        </div>
+      </div>
+
+      <div className="px-4 pb-3">
+        <div className="bg-white rounded-2xl p-4 shadow-luxury space-y-3">
+          <div className="flex items-start gap-3">
+            <div className="w-10 h-10 rounded-xl bg-teal-50 flex items-center justify-center shrink-0">
+              <Link2 className="w-5 h-5 text-primary" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="text-sm font-semibold text-foreground">セラピスト招待URL</div>
+              <div className="text-xs text-muted-foreground leading-relaxed">
+                このURLから登録したセラピストは、自動でこの店舗の所属になります。
+              </div>
+            </div>
+            <Button
+              size="sm"
+              className="h-9 rounded-xl text-white bg-primary hover:bg-primary/90 shrink-0"
+              onClick={() => createInviteMut.mutate({ label: "セラピスト招待" })}
+              disabled={createInviteMut.isPending}
+            >
+              <Plus className="w-4 h-4 mr-1" />発行
+            </Button>
+          </div>
+
+          {links.length === 0 ? (
+            <div className="rounded-xl bg-muted/40 p-3 text-xs text-muted-foreground">
+              まだ招待URLはありません。「発行」を押すとURLを作成してコピーします。
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {links.map((link: any) => (
+                <div key={link.id} className="rounded-xl border border-border p-3 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Badge className={link.isActive ? "bg-teal-100 text-teal-700 border-0" : "bg-muted text-muted-foreground border-0"}>
+                      {link.isActive ? "有効" : "無効"}
+                    </Badge>
+                    <span className="text-xs text-muted-foreground">利用 {link.usedCount ?? 0}回</span>
+                  </div>
+                  <div className="flex gap-2">
+                    <Input readOnly value={inviteUrl(link.token)} className="h-9 rounded-xl text-xs" />
+                    <Button variant="outline" size="icon" className="h-9 w-9 rounded-xl shrink-0" onClick={() => copyInviteUrl(link.token)}>
+                      <Copy className="w-4 h-4" />
+                    </Button>
+                    {link.isActive && (
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        className="h-9 w-9 rounded-xl shrink-0 text-red-500 border-red-200"
+                        onClick={() => deactivateInviteMut.mutate({ id: link.id })}
+                        disabled={deactivateInviteMut.isPending}
+                      >
+                        <Ban className="w-4 h-4" />
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 

@@ -10,11 +10,12 @@ import {
   shifts, sales, therapistPayrolls, follows, favorites, customerMemos,
   ngCustomers, notifications, blocks, reports, identityVerifications,
   ageVerifications, rooms, affiliationRequests, therapistSalarySettings,
-  storyPosts,
+  storyPosts, therapistInviteLinks,
 } from "../../drizzle/schema";
-import { eq, and, inArray, or } from "drizzle-orm";
+import { eq, and, inArray, or, sql } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import { SignJWT, jwtVerify, type JWTPayload } from "jose";
+import { ensureTherapistInviteLinksTable, getInviteInvalidReason } from "../therapistInvites";
 
 const JWT_SECRET_KEY = new TextEncoder().encode(process.env.JWT_SECRET || "aromanet-secret-key");
 const SESSION_COOKIE = "aromanet_session";
@@ -50,6 +51,16 @@ function clearSessionCookie(res: any) {
     sameSite: "none",
     path: "/",
   });
+}
+
+async function readSession(req: any) {
+  const token = req.cookies?.[SESSION_COOKIE];
+  if (!token) return null;
+  try {
+    return await verifyToken(token);
+  } catch {
+    return null;
+  }
 }
 
 async function logAudit(db: any, role: string, accountId: number, action: string, detail?: string, req?: any) {
@@ -138,20 +149,85 @@ export const authRouter = router({
       password: z.string().min(8),
       displayName: z.string().min(1),
       skipEmailVerify: z.boolean().optional(), // kept for backward compat (store-added therapists)
+      inviteToken: z.string().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const currentSession = await readSession(ctx.req);
+      let linkedStoreId: number | null = null;
+      let inviteId: number | null = null;
+
+      if (input.inviteToken) {
+        await ensureTherapistInviteLinksTable(db);
+        const inviteRows = await db.select().from(therapistInviteLinks)
+          .where(eq(therapistInviteLinks.token, input.inviteToken))
+          .limit(1);
+        const invite = inviteRows[0];
+        const invalidReason = getInviteInvalidReason(invite);
+        if (invalidReason) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "この招待URLは無効です。店舗に新しいURLの発行を依頼してください。",
+          });
+        }
+        linkedStoreId = invite.storeId;
+        inviteId = invite.id;
+      } else if (currentSession?.role === "store" && currentSession.storeId) {
+        linkedStoreId = Number(currentSession.storeId);
+      } else {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "セラピスト登録には店舗から発行された招待URLが必要です。",
+        });
+      }
+
       const existing = await db.select().from(therapistAccounts).where(eq(therapistAccounts.email, input.email)).limit(1);
       if (existing.length > 0) throw new TRPCError({ code: "CONFLICT", message: "このメールアドレスは既に登録されています" });
       const passwordHash = await bcrypt.hash(input.password, 12);
       const result = await db.insert(therapistAccounts).values({ email: input.email, passwordHash });
       const accountId = (result as any)[0].insertId as number;
-      const tResult = await db.insert(therapists).values({ accountId, displayName: input.displayName });
+      const tResult = await db.insert(therapists).values({
+        accountId,
+        displayName: input.displayName,
+        storeId: linkedStoreId,
+        affiliationStatus: "approved",
+      });
       const therapistId = (tResult as any)[0].insertId as number;
-      setSessionCookie(ctx.res, { role: "therapist", accountId, therapistId, email: input.email });
+
+      await db.insert(therapistSalarySettings).values({
+        therapistId,
+        storeId: linkedStoreId,
+        backRate: "50.00",
+        nominationFee: 0,
+      });
+      await db.insert(affiliationRequests).values({
+        therapistId,
+        storeId: linkedStoreId,
+        status: "approved",
+        message: inviteId ? "招待URL経由で登録" : "店舗管理画面から追加",
+        responseNote: "自動承認",
+      });
+      if (inviteId) {
+        await db.update(therapistInviteLinks).set({
+          usedCount: sql`${therapistInviteLinks.usedCount} + 1`,
+          lastUsedAt: new Date(),
+        }).where(eq(therapistInviteLinks.id, inviteId));
+        await db.insert(notifications).values({
+          recipientRole: "store",
+          recipientId: linkedStoreId,
+          type: "system",
+          title: "招待URLから登録されました",
+          body: `${input.displayName}さんが招待URLから登録しました`,
+          isRead: false,
+        });
+      }
+
+      if (!(currentSession?.role === "store" && currentSession.storeId && !inviteId)) {
+        setSessionCookie(ctx.res, { role: "therapist", accountId, therapistId, email: input.email });
+      }
       await logAudit(db, "therapist", accountId, "register", input.email, ctx.req);
-      return { success: true, role: "therapist", accountId, therapistId };
+      return { success: true, role: "therapist", accountId, therapistId, storeId: linkedStoreId, addedByStore: !inviteId && currentSession?.role === "store" };
     }),
 
   // Therapist: login
