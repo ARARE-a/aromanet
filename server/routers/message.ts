@@ -5,6 +5,7 @@ import { getDb } from "../db";
 import { getSession } from "../session";
 import { messageThreads, messages, reports, therapists, stores, customerProfiles } from "../../drizzle/schema";
 import { eq, and, desc, sql } from "drizzle-orm";
+import { ensureRuntimeSchema } from "../runtimeMigrations";
 
 const BANNED_WORDS = ["LINE", "ライン", "連絡先", "個人連絡", "個人情報", "電話番号"];
 function containsBannedWord(text: string) {
@@ -21,6 +22,24 @@ function canAccessThread(session: any, thread: any) {
   return thread.customerId === session.accountId;
 }
 
+function actorIdForSession(session: any) {
+  if (session.role === "store") return session.storeId!;
+  if (session.role === "therapist") return session.therapistId!;
+  return session.accountId;
+}
+
+function visibleMessageCondition(role: "store" | "therapist" | "customer") {
+  if (role === "store") return and(eq(messages.isDeleted, false), eq(messages.deletedForStore, false));
+  if (role === "therapist") return and(eq(messages.isDeleted, false), eq(messages.deletedForTherapist, false));
+  return and(eq(messages.isDeleted, false), eq(messages.deletedForCustomer, false));
+}
+
+function deleteFlagForRole(role: "store" | "therapist" | "customer") {
+  if (role === "store") return "deletedForStore";
+  if (role === "therapist") return "deletedForTherapist";
+  return "deletedForCustomer";
+}
+
 async function markThreadRead(db: any, threadId: number, thread: any, role: "store" | "therapist" | "customer") {
   const updateSet: any = {};
   if (role === "store") updateSet.storeUnread = 0;
@@ -34,7 +53,7 @@ async function markThreadRead(db: any, threadId: number, thread: any, role: "sto
   await db.update(messages).set({ isRead: true })
     .where(and(
       eq(messages.threadId, threadId),
-      eq(messages.isDeleted, false),
+      visibleMessageCondition(role),
       sql`${messages.senderRole} <> ${role}`,
     ));
 }
@@ -45,6 +64,7 @@ export const messageRouter = router({
     if (!session) throw new TRPCError({ code: "UNAUTHORIZED" });
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    await ensureRuntimeSchema();
     const conditions: any[] = [];
     if (session.role === "store") conditions.push(eq(messageThreads.storeId, session.storeId!));
     else if (session.role === "therapist") conditions.push(eq(messageThreads.therapistId, session.therapistId!));
@@ -54,7 +74,7 @@ export const messageRouter = router({
     const result = [];
     for (const thread of threadRows) {
       const lastMsgRows = await db.select({ content: messages.content, createdAt: messages.createdAt })
-        .from(messages).where(and(eq(messages.threadId, thread.id), eq(messages.isDeleted, false)))
+        .from(messages).where(and(eq(messages.threadId, thread.id), visibleMessageCondition(session.role)))
         .orderBy(desc(messages.createdAt)).limit(1);
       let otherName: string | null = null;
       let otherAvatar: string | null = null;
@@ -106,6 +126,7 @@ export const messageRouter = router({
       if (!session) throw new TRPCError({ code: "UNAUTHORIZED" });
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await ensureRuntimeSchema();
       const threadData = { ...input };
       if (session.role === "store") threadData.storeId = session.storeId;
       if (session.role === "therapist") threadData.therapistId = session.therapistId;
@@ -129,10 +150,11 @@ export const messageRouter = router({
       if (!session) throw new TRPCError({ code: "UNAUTHORIZED" });
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await ensureRuntimeSchema();
       const threadRows = await db.select().from(messageThreads).where(eq(messageThreads.id, input.threadId)).limit(1);
       if (!threadRows[0] || !canAccessThread(session, threadRows[0])) throw new TRPCError({ code: "NOT_FOUND" });
       await markThreadRead(db, input.threadId, threadRows[0], session.role);
-      return db.select().from(messages).where(and(eq(messages.threadId, input.threadId), eq(messages.isDeleted, false))).orderBy(messages.createdAt).limit(input.limit);
+      return db.select().from(messages).where(and(eq(messages.threadId, input.threadId), visibleMessageCondition(session.role))).orderBy(messages.createdAt).limit(input.limit);
     }),
 
   send: publicProcedure
@@ -147,6 +169,7 @@ export const messageRouter = router({
       if (!session) throw new TRPCError({ code: "UNAUTHORIZED" });
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await ensureRuntimeSchema();
       const threadRows = await db.select().from(messageThreads).where(eq(messageThreads.id, input.threadId)).limit(1);
       if (!threadRows[0]) throw new TRPCError({ code: "NOT_FOUND" });
       const thread = threadRows[0];
@@ -161,6 +184,49 @@ export const messageRouter = router({
       if (thread.therapistId && session.role !== "therapist") updateSet.therapistUnread = sql`${messageThreads.therapistUnread} + 1`;
       if (thread.customerId && session.role !== "customer") updateSet.customerUnread = sql`${messageThreads.customerUnread} + 1`;
       await db.update(messageThreads).set(updateSet).where(eq(messageThreads.id, input.threadId));
+      return { success: true };
+    }),
+
+  deleteMessage: publicProcedure
+    .input(z.object({
+      messageId: z.number(),
+      mode: z.enum(["me", "everyone"]),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const session = await getSession(ctx.req);
+      if (!session) throw new TRPCError({ code: "UNAUTHORIZED" });
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await ensureRuntimeSchema();
+
+      const messageRows = await db.select().from(messages).where(eq(messages.id, input.messageId)).limit(1);
+      const message = messageRows[0];
+      if (!message) throw new TRPCError({ code: "NOT_FOUND" });
+      const threadRows = await db.select().from(messageThreads).where(eq(messageThreads.id, message.threadId)).limit(1);
+      const thread = threadRows[0];
+      if (!thread || !canAccessThread(session, thread)) throw new TRPCError({ code: "NOT_FOUND" });
+
+      const actorId = actorIdForSession(session);
+      if (input.mode === "everyone") {
+        if (message.senderRole !== session.role || message.senderId !== actorId) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "全員から削除できるのは自分が送信したメッセージだけです" });
+        }
+        await db.update(messages).set({
+          isDeleted: true,
+          deletedAt: new Date(),
+          deletedByRole: session.role,
+          deletedById: actorId,
+        }).where(eq(messages.id, input.messageId));
+      } else {
+        const updateSet: any = {
+          deletedAt: new Date(),
+          deletedByRole: session.role,
+          deletedById: actorId,
+        };
+        updateSet[deleteFlagForRole(session.role)] = true;
+        await db.update(messages).set(updateSet).where(eq(messages.id, input.messageId));
+      }
+
       return { success: true };
     }),
 

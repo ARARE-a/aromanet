@@ -38,14 +38,16 @@ export default function TherapistShifts() {
     onError: e => toast.error(e.message),
   });
   const list = (shifts as any[]) ?? [];
-  const shiftStatus = (status: string) => {
+  const shiftStatus = (shift: any) => {
+    if (shift.approvalStatus === "approved") return { label: "承認済み", className: "bg-green-100 text-green-700" };
+    if (shift.approvalStatus === "rejected") return { label: "却下済み", className: "bg-red-100 text-red-700" };
     const labels: Record<string, { label: string; className: string }> = {
       scheduled: { label: "申請済み", className: "bg-yellow-100 text-yellow-700" },
       working: { label: "出勤中", className: "bg-green-100 text-green-700" },
       off: { label: "休み", className: "bg-gray-100 text-gray-600" },
       holiday: { label: "休み", className: "bg-gray-100 text-gray-600" },
     };
-    return labels[status] ?? { label: status, className: "bg-gray-100 text-gray-600" };
+    return labels[shift.status] ?? { label: shift.status, className: "bg-gray-100 text-gray-600" };
   };
   return (
     <AromaLayout title="出勤管理" showBack backHref="/therapist/dashboard" showNav navItems={navItems}>
@@ -76,7 +78,7 @@ export default function TherapistShifts() {
               <div className="text-sm font-semibold text-foreground">{s.date}</div>
               <div className="text-xs text-muted-foreground">{s.startTime}〜{s.endTime}</div>
             </div>
-            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${shiftStatus(s.status).className}`}>{shiftStatus(s.status).label}</span>
+            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${shiftStatus(s).className}`}>{shiftStatus(s).label}</span>
           </motion.div>
         ))}
       </div>

@@ -9,6 +9,7 @@ import {
   sales, therapistPayrolls, customerProfiles, menus, notifications,
 } from "../../drizzle/schema";
 import { eq, and, desc, gte, lt, sql, like } from "drizzle-orm";
+import { ensureRuntimeSchema } from "../runtimeMigrations";
 
 function getMonthBounds(month: string) {
   const [yearValue, monthValue] = month.split("-").map(Number);
@@ -113,6 +114,7 @@ export const therapistRouter = router({
       if (!session || session.role !== "therapist") throw new TRPCError({ code: "UNAUTHORIZED" });
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await ensureRuntimeSchema();
       if (!session.therapistId) return [];
       const month = input.month ?? new Date().toISOString().slice(0, 7);
       const { start, end } = getMonthBounds(month);
@@ -124,8 +126,14 @@ export const therapistRouter = router({
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await ensureRuntimeSchema();
       const { start, end } = getMonthBounds(input.month);
-      return db.select().from(shifts).where(and(eq(shifts.therapistId, input.therapistId), gte(shifts.date, start), lt(shifts.date, end))).orderBy(shifts.date, shifts.startTime);
+      return db.select().from(shifts).where(and(
+        eq(shifts.therapistId, input.therapistId),
+        eq(shifts.approvalStatus, "approved"),
+        gte(shifts.date, start),
+        lt(shifts.date, end),
+      )).orderBy(shifts.date, shifts.startTime);
     }),
 
   createShift: publicProcedure
@@ -142,6 +150,7 @@ export const therapistRouter = router({
       if (!session || session.role !== "therapist") throw new TRPCError({ code: "UNAUTHORIZED" });
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await ensureRuntimeSchema();
       if (!session.therapistId) throw new TRPCError({ code: "NOT_FOUND" });
       if (input.endTime <= input.startTime) {
         throw new TRPCError({ code: "BAD_REQUEST", message: "終了時間は開始時間より後にしてください" });
@@ -154,9 +163,23 @@ export const therapistRouter = router({
         .limit(1);
       let shiftId = existing[0]?.id;
       if (shiftId) {
-        await db.update(shifts).set({ ...input, storeId, status: "scheduled" }).where(eq(shifts.id, shiftId));
+        await db.update(shifts).set({
+          ...input,
+          storeId,
+          status: "scheduled",
+          approvalStatus: "pending",
+          reviewedAt: null,
+          reviewedByStoreId: null,
+          reviewNote: null,
+        }).where(eq(shifts.id, shiftId));
       } else {
-        const result = await db.insert(shifts).values({ ...input, therapistId: session.therapistId, storeId, status: "scheduled" });
+        const result = await db.insert(shifts).values({
+          ...input,
+          therapistId: session.therapistId,
+          storeId,
+          status: "scheduled",
+          approvalStatus: "pending",
+        });
         shiftId = (result as any)[0].insertId as number;
       }
       await db.insert(notifications).values({
@@ -183,12 +206,19 @@ export const therapistRouter = router({
       if (!session || session.role !== "therapist") throw new TRPCError({ code: "UNAUTHORIZED" });
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await ensureRuntimeSchema();
       const { id, ...data } = input;
       const targetRows = await db.select().from(shifts).where(eq(shifts.id, id)).limit(1);
       const target = targetRows[0];
       if (!target) throw new TRPCError({ code: "NOT_FOUND" });
       if (target.therapistId !== session.therapistId) throw new TRPCError({ code: "UNAUTHORIZED" });
-      await db.update(shifts).set(data).where(eq(shifts.id, id));
+      await db.update(shifts).set({
+        ...data,
+        approvalStatus: "pending",
+        reviewedAt: null,
+        reviewedByStoreId: null,
+        reviewNote: null,
+      }).where(eq(shifts.id, id));
       return { success: true };
     }),
 

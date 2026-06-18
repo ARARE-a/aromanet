@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useLocation, useParams, Link } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
-import { MapPin, Star, Clock, Phone, Heart, Calendar, ChevronRight } from "lucide-react";
+import { MapPin, Star, Clock, Phone, Heart, Calendar, ChevronRight, MessageCircle } from "lucide-react";
 import { AromaLayout, AromaAvatar } from "@/components/AromaLayout";
 import { trpc } from "@/lib/trpc";
 import { useSession } from "@/contexts/SessionContext";
@@ -73,26 +73,32 @@ export default function StoreDetail() {
               <MapPin className="w-3 h-3" />{s?.area}
             </div>
           </div>
-          {/* Heart button - visual feedback only, no toast */}
-          <motion.button
-            whileTap={{ scale: 0.8 }}
-            onClick={() => toggleFavMut.mutate({ targetType: "store", targetId: storeId })}
-            className="w-11 h-11 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center active:bg-white/30 transition-colors"
-          >
-            <AnimatePresence mode="wait">
-              <motion.div
-                key={isFavorited ? "filled" : "empty"}
-                initial={{ scale: 0.5, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                exit={{ scale: 0.5, opacity: 0 }}
-                transition={{ duration: 0.15 }}
-              >
-                <Heart
-                  className={`w-5 h-5 transition-colors ${isFavorited ? "fill-red-500 text-red-500" : "text-white"}`}
-                />
-              </motion.div>
-            </AnimatePresence>
-          </motion.button>
+          <div className="flex items-center gap-2">
+            <Link href={`/messages?storeId=${storeId}`}>
+              <button className="w-11 h-11 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center active:bg-white/30 transition-colors">
+                <MessageCircle className="w-5 h-5 text-white" />
+              </button>
+            </Link>
+            <motion.button
+              whileTap={{ scale: 0.8 }}
+              onClick={() => toggleFavMut.mutate({ targetType: "store", targetId: storeId })}
+              className="w-11 h-11 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center active:bg-white/30 transition-colors"
+            >
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key={isFavorited ? "filled" : "empty"}
+                  initial={{ scale: 0.5, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  exit={{ scale: 0.5, opacity: 0 }}
+                  transition={{ duration: 0.15 }}
+                >
+                  <Heart
+                    className={`w-5 h-5 transition-colors ${isFavorited ? "fill-red-500 text-red-500" : "text-white"}`}
+                  />
+                </motion.div>
+              </AnimatePresence>
+            </motion.button>
+          </div>
         </div>
       </div>
 

@@ -12,6 +12,7 @@ import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { storagePut } from "../storage";
 import { getDb } from "../db";
+import { ensureRuntimeSchema } from "../runtimeMigrations";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -116,6 +117,9 @@ function parseMultipartUpload(body: Buffer, contentType: string): ParsedUpload |
 async function startServer() {
   const app = express();
   const server = createServer(app);
+  ensureRuntimeSchema().catch(error => {
+    console.warn("[RuntimeSchema] skipped:", error?.message ?? error);
+  });
   // Configure body parser with larger size limit for file uploads
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ limit: "50mb", extended: true }));

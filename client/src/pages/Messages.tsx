@@ -1,12 +1,13 @@
 import { useState, useEffect, useRef } from "react";
 import { useLocation, useSearch } from "wouter";
 import { motion } from "framer-motion";
-import { Send, Image, AlertTriangle, ChevronLeft, MessageCircle } from "lucide-react";
+import { Send, Image, AlertTriangle, ChevronLeft, MessageCircle, MoreVertical, Trash2 } from "lucide-react";
 import { AromaLayout, AromaAvatar } from "@/components/AromaLayout";
 import { trpc } from "@/lib/trpc";
 import { useSession } from "@/contexts/SessionContext";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import { format } from "date-fns";
 
@@ -114,6 +115,14 @@ export default function Messages() {
     onSuccess: () => toast.success("通報しました"),
     onError: (e: any) => toast.error(e.message),
   });
+  const deleteMut = trpc.message.deleteMessage.useMutation({
+    onSuccess: () => {
+      toast.success("メッセージを削除しました");
+      refetchMessages();
+      refetchThreads();
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -166,10 +175,34 @@ export default function Messages() {
                     {msg.imageUrl && <img src={msg.imageUrl} alt="" className="w-full rounded-lg mb-1 max-w-[200px]" />}
                     {msg.content}
                   </div>
-                  <span className="text-[10px] text-muted-foreground px-1">
-                    {msg.createdAt ? format(new Date(msg.createdAt), "HH:mm") : ""}
-                    {isMe && (msg.isRead ? " 既読" : " 未読")}
-                  </span>
+                  <div className={`flex items-center gap-1 ${isMe ? "justify-end" : "justify-start"}`}>
+                    <span className="text-[10px] text-muted-foreground px-1">
+                      {msg.createdAt ? format(new Date(msg.createdAt), "HH:mm") : ""}
+                      {isMe && (msg.isRead ? " 既読" : " 未読")}
+                    </span>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button className="w-6 h-6 rounded-full flex items-center justify-center text-muted-foreground hover:bg-muted">
+                          <MoreVertical className="w-3.5 h-3.5" />
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align={isMe ? "end" : "start"} className="min-w-44">
+                        <DropdownMenuItem onClick={() => deleteMut.mutate({ messageId: msg.id, mode: "me" })}>
+                          <Trash2 className="w-4 h-4 mr-2" />
+                          自分の画面から削除
+                        </DropdownMenuItem>
+                        {isMe && (
+                          <DropdownMenuItem
+                            className="text-red-600 focus:text-red-600"
+                            onClick={() => deleteMut.mutate({ messageId: msg.id, mode: "everyone" })}
+                          >
+                            <Trash2 className="w-4 h-4 mr-2" />
+                            全員から削除
+                          </DropdownMenuItem>
+                        )}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
                 </div>
               </motion.div>
             );

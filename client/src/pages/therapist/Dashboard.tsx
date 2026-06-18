@@ -101,6 +101,14 @@ export default function TherapistDashboard() {
         <div className="text-[14px] font-semibold">{p?.displayName}</div>
         {p?.storeName && <div className="text-[12px] text-gray-500">{p.storeName}</div>}
         {p?.catchphrase && <div className="text-[13px] text-gray-600 mt-1">{p.catchphrase}</div>}
+        {p?.storeId && (
+          <Link href={`/messages?storeId=${p.storeId}&type=store_therapist`}>
+            <button className="w-full mt-2 py-1.5 border border-primary/30 rounded-lg text-[13px] font-semibold text-primary active:bg-teal-50 flex items-center justify-center gap-1.5">
+              <MessageCircle className="w-4 h-4" />
+              店舗へDM
+            </button>
+          </Link>
+        )}
         <Link href="/therapist/profile">
           <button className="w-full mt-2 py-1.5 border border-gray-300 rounded-lg text-[13px] font-semibold text-foreground active:bg-gray-50">
             プロフィールを編集（写真・クロップ変更可）

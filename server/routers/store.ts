@@ -6,9 +6,10 @@ import { getSession } from "../session";
 import {
   stores, therapists, menus, menuOptions,
   coupons, reservations, reviews, posts,
-  notifications, ngCustomers, sales,
+  notifications, ngCustomers, sales, shifts,
 } from "../../drizzle/schema";
 import { eq, and, desc, like, gte, lt, lte, sql } from "drizzle-orm";
+import { ensureRuntimeSchema } from "../runtimeMigrations";
 
 export const storeRouter = router({
   getById: publicProcedure
@@ -299,8 +300,8 @@ export const storeRouter = router({
       if (!session || session.role !== "store") throw new TRPCError({ code: "UNAUTHORIZED" });
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await ensureRuntimeSchema();
       if (!session.storeId) return [];
-      const { shifts } = await import("../../drizzle/schema");
       const conditions: any[] = [eq(shifts.storeId, session.storeId)];
       if (input.date) conditions.push(eq(shifts.date, input.date));
       if (!input.date && input.month) {
@@ -321,5 +322,43 @@ export const storeRouter = router({
         result.push({ ...shift, therapistName: tRows[0]?.displayName ?? null, therapistImage: tRows[0]?.profileImageUrl ?? null });
       }
       return result;
+    }),
+
+  reviewShift: publicProcedure
+    .input(z.object({
+      shiftId: z.number(),
+      action: z.enum(["approved", "rejected"]),
+      reviewNote: z.string().optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const session = await getSession(ctx.req);
+      if (!session || session.role !== "store" || !session.storeId) throw new TRPCError({ code: "UNAUTHORIZED" });
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await ensureRuntimeSchema();
+
+      const shiftRows = await db.select().from(shifts)
+        .where(and(eq(shifts.id, input.shiftId), eq(shifts.storeId, session.storeId)))
+        .limit(1);
+      const shift = shiftRows[0];
+      if (!shift) throw new TRPCError({ code: "NOT_FOUND" });
+
+      await db.update(shifts).set({
+        approvalStatus: input.action,
+        reviewedAt: new Date(),
+        reviewedByStoreId: session.storeId,
+        reviewNote: input.reviewNote?.trim() || null,
+      }).where(eq(shifts.id, input.shiftId));
+
+      await db.insert(notifications).values({
+        recipientRole: "therapist",
+        recipientId: shift.therapistId,
+        type: "shift_reviewed",
+        title: input.action === "approved" ? "出勤申請が承認されました" : "出勤申請が却下されました",
+        body: `${shift.date} ${shift.startTime}〜${shift.endTime}${input.reviewNote ? `\n${input.reviewNote}` : ""}`,
+        relatedId: shift.id,
+      });
+
+      return { success: true };
     }),
 });
