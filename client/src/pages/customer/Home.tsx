@@ -2,10 +2,21 @@ import { useState, useEffect, useMemo } from "react";
 import { useLocation, Link } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  Search, Bell, Heart, MapPin, Star, MessageCircle, User, Home, Bookmark,
-  Compass, Grid3x3, Plus, MoreHorizontal, Send, X
+  Search,
+  Bell,
+  Heart,
+  MapPin,
+  Star,
+  MessageCircle,
+  User,
+  Home,
+  Bookmark,
+  Plus,
+  MoreHorizontal,
+  Send,
+  X,
 } from "lucide-react";
-import { AromaLayout, AromaLogo, AromaAvatar, StoryAvatar, LevelBadge } from "@/components/AromaLayout";
+import { AromaLayout, AromaAvatar, StoryAvatar } from "@/components/AromaLayout";
 import { StoryRing } from "@/components/StoryRing";
 import { StoryViewer, type StoryAuthor } from "@/components/StoryViewer";
 import { trpc } from "@/lib/trpc";
@@ -17,31 +28,31 @@ const navItems = [
     href: "/home",
     icon: <Home className="w-[26px] h-[26px]" strokeWidth={1.5} />,
     activeIcon: <Home className="w-[26px] h-[26px]" strokeWidth={2.5} fill="currentColor" />,
-    label: "ホーム"
+    label: "ホーム",
   },
   {
     href: "/search",
     icon: <Search className="w-[26px] h-[26px]" strokeWidth={1.5} />,
     activeIcon: <Search className="w-[26px] h-[26px]" strokeWidth={2.5} />,
-    label: "検索"
+    label: "検索",
   },
   {
     href: "/my/reservations",
     icon: <Bookmark className="w-[26px] h-[26px]" strokeWidth={1.5} />,
     activeIcon: <Bookmark className="w-[26px] h-[26px]" strokeWidth={2.5} fill="currentColor" />,
-    label: "予約"
+    label: "予約",
   },
   {
     href: "/messages",
     icon: <MessageCircle className="w-[26px] h-[26px]" strokeWidth={1.5} />,
     activeIcon: <MessageCircle className="w-[26px] h-[26px]" strokeWidth={2.5} fill="currentColor" />,
-    label: "DM"
+    label: "DM",
   },
   {
     href: "/my/page",
     icon: <User className="w-[26px] h-[26px]" strokeWidth={1.5} />,
     activeIcon: <User className="w-[26px] h-[26px]" strokeWidth={2.5} fill="currentColor" />,
-    label: "マイページ"
+    label: "マイページ",
   },
 ];
 
@@ -51,27 +62,28 @@ export default function CustomerHome() {
 
   useEffect(() => {
     if (!isLoading && (!session || session.role !== "customer")) navigate("/customer/login");
-  }, [session, isLoading]);
+  }, [session, isLoading, navigate]);
 
   const { data: profile } = trpc.customer.getMyProfile.useQuery(undefined, { enabled: !!session });
   const { data: stores } = trpc.store.search.useQuery({ limit: 8 }, { enabled: !!session });
   const { data: therapists } = trpc.therapist.search.useQuery({ limit: 10 }, { enabled: !!session });
   const { data: posts } = trpc.post.getFeed.useQuery({ limit: 12 }, { enabled: !!session });
   const [viewerAuthors, setViewerAuthors] = useState<StoryAuthor[] | null>(null);
-  const therapistIds = useMemo(() => (therapists as any[] ?? []).map((t: any) => t.id), [therapists]);
+
+  const therapistList = (therapists as any[]) ?? [];
+  const therapistIds = useMemo(() => therapistList.map((t: any) => t.id), [therapistList]);
   const { data: activeTherapistIds } = trpc.story.getActiveTherapistIds.useQuery(
     { therapistIds },
-    { enabled: therapistIds.length > 0 }
+    { enabled: therapistIds.length > 0 },
   );
   const activeSet = useMemo(() => new Set(activeTherapistIds ?? []), [activeTherapistIds]);
 
   const p = profile as any;
   const storeList = (stores as any[]) ?? [];
-  const therapistList = (therapists as any[]) ?? [];
+  const postList = (posts as any[]) ?? [];
 
   const handleOpenStory = async (t: any) => {
     if (!activeSet.has(t.id)) return;
-    // Fetch stories for this therapist
     const res = await fetch(`/api/trpc/story.getByTherapistId?input=${encodeURIComponent(JSON.stringify({ json: { therapistId: t.id } }))}`);
     const json = await res.json();
     const stories = json?.result?.data?.json ?? [];
@@ -79,7 +91,6 @@ export default function CustomerHome() {
       setViewerAuthors([{ id: t.id, name: t.displayName, avatarUrl: t.profileImageUrl, role: "therapist", stories }]);
     }
   };
-  const postList = (posts as any[]) ?? [];
 
   if (isLoading || !session) {
     return (
@@ -97,22 +108,20 @@ export default function CustomerHome() {
       headerRight={
         <div className="flex items-center gap-3">
           <Link href="/my/notifications">
-            <button className="relative p-1">
+            <button className="relative p-1" aria-label="通知">
               <Bell className="w-[26px] h-[26px]" strokeWidth={1.5} />
             </button>
           </Link>
           <Link href="/messages">
-            <button className="p-1">
+            <button className="p-1" aria-label="メッセージ">
               <MessageCircle className="w-[26px] h-[26px]" strokeWidth={1.5} />
             </button>
           </Link>
         </div>
       }
     >
-      {/* Stories row (therapist avatars) */}
       <div className="border-b border-gray-100">
         <div className="flex gap-4 px-4 py-3 overflow-x-auto scrollbar-none">
-          {/* "あなた" story slot */}
           <div className="flex flex-col items-center gap-1 flex-shrink-0">
             <div className="relative">
               <AromaAvatar name={p?.displayName} src={p?.profileImageUrl} size="lg" />
@@ -123,24 +132,25 @@ export default function CustomerHome() {
             <span className="text-[11px] text-gray-500 truncate w-16 text-center">あなた</span>
           </div>
 
-          {/* Therapist stories */}
           {therapistList.map((t: any) => {
             const hasStory = activeSet.has(t.id);
             return (
               <div key={t.id} className="flex flex-col items-center gap-1 flex-shrink-0">
-                <StoryRing hasStory={hasStory} size="md"
+                <StoryRing
+                  hasStory={hasStory}
+                  size="md"
                   onClick={() => hasStory ? handleOpenStory(t) : navigate(`/therapist/${t.id}`)}
-                  className="cursor-pointer">
+                  className="cursor-pointer"
+                >
                   <AromaAvatar name={t.displayName} src={t.profileImageUrl} size="md" />
                 </StoryRing>
-                <span className="text-[11px] text-gray-700 truncate w-16 text-center">{t.displayName?.split(" ")[0] ?? t.displayName}</span>
+                <span className="text-[11px] text-gray-700 truncate w-16 text-center">{t.displayName}</span>
               </div>
             );
           })}
         </div>
       </div>
 
-      {/* Feed posts */}
       <div>
         {postList.length > 0 ? (
           postList.map((post: any, i: number) => (
@@ -160,13 +170,11 @@ export default function CustomerHome() {
             />
           ))
         ) : (
-          /* Fallback: show store cards in feed style */
           storeList.map((store: any, i: number) => (
             <StoreFeedCard key={store.id} store={store} index={i} />
           ))
         )}
 
-        {/* Therapist grid section */}
         {therapistList.length > 0 && (
           <div>
             <div className="flex items-center justify-between px-4 py-2 border-t border-gray-100">
@@ -179,15 +187,14 @@ export default function CustomerHome() {
               {therapistList.slice(0, 9).map((t: any) => (
                 <Link key={t.id} href={`/therapist/${t.id}`}>
                   <div className="aspect-square bg-gradient-to-br from-teal-50 to-teal-100 relative overflow-hidden cursor-pointer">
-                    {t.profileImageUrl
-                      ? <img src={t.profileImageUrl} alt={t.displayName} className="w-full h-full object-cover" />
-                      : (
-                        <div className="w-full h-full flex flex-col items-center justify-center gap-1">
-                          <AromaAvatar name={t.displayName} size="lg" />
-                          <span className="text-[10px] text-gray-600 font-medium px-1 text-center leading-tight">{t.displayName}</span>
-                        </div>
-                      )
-                    }
+                    {t.profileImageUrl ? (
+                      <img src={t.profileImageUrl} alt={t.displayName} className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full flex flex-col items-center justify-center gap-1">
+                        <AromaAvatar name={t.displayName} size="lg" />
+                        <span className="text-[10px] text-gray-600 font-medium px-1 text-center leading-tight">{t.displayName}</span>
+                      </div>
+                    )}
                     <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent p-1.5">
                       <div className="text-[10px] text-white font-medium truncate">{t.displayName}</div>
                     </div>
@@ -197,15 +204,10 @@ export default function CustomerHome() {
             </div>
           </div>
         )}
-
       </div>
 
-      {/* Story Viewer */}
       {viewerAuthors && (
-        <StoryViewer
-          authors={viewerAuthors}
-          onClose={() => setViewerAuthors(null)}
-        />
+        <StoryViewer authors={viewerAuthors} onClose={() => setViewerAuthors(null)} />
       )}
     </AromaLayout>
   );
@@ -226,7 +228,7 @@ function PostCard({ post, index, hasStory, onOpenStory }: { post: any; index: nu
 
   const { data: comments } = trpc.post.getComments.useQuery(
     { postId: post.id },
-    { enabled: commentsOpen }
+    { enabled: commentsOpen },
   );
 
   const toggleSaveMut = trpc.customer.toggleFavorite.useMutation({
@@ -256,11 +258,8 @@ function PostCard({ post, index, hasStory, onOpenStory }: { post: any; index: nu
   };
 
   const handleStoryOrProfile = () => {
-    if (hasStory) {
-      onOpenStory();
-    } else {
-      navigate(`/therapist/${post.therapistId}`);
-    }
+    if (hasStory) onOpenStory();
+    else navigate(`/therapist/${post.therapistId}`);
   };
 
   const handleCommentSubmit = () => {
@@ -270,6 +269,7 @@ function PostCard({ post, index, hasStory, onOpenStory }: { post: any; index: nu
   };
 
   const commentList = (comments as any[]) ?? [];
+
   return (
     <motion.article
       initial={{ opacity: 0 }}
@@ -277,14 +277,13 @@ function PostCard({ post, index, hasStory, onOpenStory }: { post: any; index: nu
       transition={{ delay: index * 0.03 }}
       className="border-b border-gray-100"
     >
-      {/* Post header */}
       <div className="flex items-center gap-2.5 px-4 py-2.5">
         <button onClick={handleStoryOrProfile} className="active:scale-95 transition-transform">
           <StoryAvatar name={post.therapistName} src={post.therapistImage} size="sm" hasStory={hasStory} />
         </button>
-        <div className="flex-1">
-          <div className="text-[13px] font-semibold text-foreground">{post.therapistName}</div>
-          {post.storeName && <div className="text-[11px] text-gray-500">{post.storeName}</div>}
+        <div className="flex-1 min-w-0">
+          <div className="text-[13px] font-semibold text-foreground truncate">{post.therapistName}</div>
+          {post.storeName && <div className="text-[11px] text-gray-500 truncate">{post.storeName}</div>}
         </div>
         <div className="relative">
           <button className="p-1 text-gray-500 active:scale-95" onClick={() => setMenuOpen(prev => !prev)} aria-label="投稿メニュー">
@@ -306,33 +305,30 @@ function PostCard({ post, index, hasStory, onOpenStory }: { post: any; index: nu
         </div>
       </div>
 
-      {/* Post image */}
       <div className="aspect-square bg-gradient-to-br from-gray-50 to-gray-100 w-full overflow-hidden">
-        {post.imageUrl
-          ? isVideoUrl(post.imageUrl)
+        {post.imageUrl ? (
+          isVideoUrl(post.imageUrl)
             ? <video src={post.imageUrl} className="w-full h-full object-cover" controls playsInline />
             : <img src={post.imageUrl} alt="" className="w-full h-full object-cover" />
-          : (
-            <div className="w-full h-full flex items-center justify-center">
-              <div className="text-center px-6">
-                <div className="text-4xl mb-3">✨</div>
-                <p className="text-sm text-gray-600 leading-relaxed">{post.content}</p>
-              </div>
+        ) : (
+          <div className="w-full h-full flex items-center justify-center">
+            <div className="text-center px-6">
+              <div className="text-sm font-bold text-primary mb-3">AromaNet</div>
+              <p className="text-sm text-gray-600 leading-relaxed">{post.content}</p>
             </div>
-          )
-        }
+          </div>
+        )}
       </div>
 
-      {/* Actions */}
-      <div className="px-4 pt-2.5 pb-1">
+      <div className="px-4 pt-2.5 pb-3">
         <div className="flex items-center gap-4 mb-2">
-          <button onClick={() => setLiked(!liked)} className="active:scale-90 transition-transform">
+          <button onClick={() => setLiked(!liked)} className="active:scale-90 transition-transform" aria-label="いいね">
             <Heart
               className={`w-[26px] h-[26px] transition-colors duration-150 ${liked ? "fill-red-500 text-red-500" : "text-foreground"}`}
               strokeWidth={liked ? 0 : 1.5}
             />
           </button>
-          <button onClick={() => setCommentsOpen(true)} className="active:scale-90 transition-transform">
+          <button onClick={() => setCommentsOpen(true)} className="active:scale-90 transition-transform" aria-label="コメント">
             <MessageCircle className="w-[26px] h-[26px] text-foreground" strokeWidth={1.5} />
           </button>
           <div className="ml-auto">
@@ -372,7 +368,7 @@ function PostCard({ post, index, hasStory, onOpenStory }: { post: any; index: nu
             >
               <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
                 <div className="font-semibold text-sm">コメント</div>
-                <button onClick={() => setCommentsOpen(false)} className="p-1">
+                <button onClick={() => setCommentsOpen(false)} className="p-1" aria-label="閉じる">
                   <X className="w-5 h-5" />
                 </button>
               </div>
@@ -414,10 +410,6 @@ function PostCard({ post, index, hasStory, onOpenStory }: { post: any; index: nu
   );
 }
 
-function isVideoUrl(url: string) {
-  return /\.(mp4|webm|mov|m4v)(\?|$)/i.test(url);
-}
-
 function StoreFeedCard({ store: s, index }: { store: any; index: number }) {
   return (
     <motion.article
@@ -432,34 +424,37 @@ function StoreFeedCard({ store: s, index }: { store: any; index: number }) {
             {s.logoUrl ? <img src={s.logoUrl} alt={s.name} className="w-full h-full object-cover" /> : s.name?.[0]}
           </div>
         </Link>
-        <div className="flex-1">
-          <div className="text-[13px] font-semibold text-foreground">{s.name}</div>
+        <div className="flex-1 min-w-0">
+          <div className="text-[13px] font-semibold text-foreground truncate">{s.name}</div>
           <div className="flex items-center gap-1 text-[11px] text-gray-500">
-            <MapPin className="w-3 h-3" />{s.area}
+            <MapPin className="w-3 h-3" />{s.area ?? s.city ?? s.prefecture ?? "エリア未設定"}
           </div>
         </div>
       </div>
       <Link href={`/store/${s.id}`}>
         <div className="aspect-[4/3] bg-gradient-to-br from-teal-50 to-teal-100 overflow-hidden cursor-pointer">
-          {s.coverImageUrl
-            ? <img src={s.coverImageUrl} alt={s.name} className="w-full h-full object-cover" />
-            : (
-              <div className="w-full h-full flex flex-col items-center justify-center gap-2">
-                <div className="text-5xl font-bold text-teal-200" style={{ fontFamily: "'Cormorant Garamond', serif" }}>{s.name?.[0]}</div>
-                <div className="text-sm text-teal-600 font-medium">{s.name}</div>
-              </div>
-            )
-          }
+          {s.coverImageUrl ? (
+            <img src={s.coverImageUrl} alt={s.name} className="w-full h-full object-cover" />
+          ) : (
+            <div className="w-full h-full flex flex-col items-center justify-center gap-2">
+              <div className="text-5xl font-bold text-teal-200" style={{ fontFamily: "'Cormorant Garamond', serif" }}>{s.name?.[0]}</div>
+              <div className="text-sm text-teal-600 font-medium">{s.name}</div>
+            </div>
+          )}
         </div>
       </Link>
       <div className="px-4 pt-2.5 pb-3">
         <div className="flex items-center gap-1 mb-1">
           <Star className="w-3.5 h-3.5 text-yellow-500 fill-yellow-500" />
-          <span className="text-[13px] font-semibold">{s.rating?.toFixed(1) ?? "4.5"}</span>
+          <span className="text-[13px] font-semibold">{Number(s.reviewAvg ?? s.rating ?? 4.5).toFixed(1)}</span>
           <span className="text-[12px] text-gray-500">({s.reviewCount ?? 0}件)</span>
         </div>
         {s.catchphrase && <p className="text-[13px] text-gray-600 leading-relaxed">{s.catchphrase}</p>}
       </div>
     </motion.article>
   );
+}
+
+function isVideoUrl(url: string) {
+  return /\.(mp4|webm|mov|m4v)(\?|$)/i.test(url);
 }

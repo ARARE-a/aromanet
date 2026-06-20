@@ -14,7 +14,7 @@ export default function CustomerFavorites() {
 
   useEffect(() => {
     if (!isLoading && (!session || session.role !== "customer")) navigate("/customer/login");
-  }, [session, isLoading]);
+  }, [session, isLoading, navigate]);
 
   const { data: favs, isLoading: favsLoading } = trpc.customer.getFavorites.useQuery(undefined, { enabled: !!session });
   const favList = (favs as any[]) ?? [];
@@ -44,7 +44,7 @@ export default function CustomerFavorites() {
             <div className="w-16 h-16 rounded-full bg-pink-50 flex items-center justify-center">
               <Heart className="w-8 h-8 text-pink-300" />
             </div>
-            <p className="text-sm text-muted-foreground">お気に入りがまだありません</p>
+            <p className="text-sm text-muted-foreground">お気に入りはまだありません</p>
             <Link href="/search" className="text-sm text-primary font-medium">店舗・セラピストを探す</Link>
           </motion.div>
         ) : (
@@ -111,7 +111,11 @@ function FavoriteStoreCard({ fav, onRemove }: { fav: any; onRemove: () => void }
           <div className="flex-1 min-w-0">
             <p className="font-semibold text-sm text-foreground truncate">{s?.name ?? "読み込み中..."}</p>
             <div className="flex items-center gap-2 mt-0.5">
-              {s?.area && <span className="text-xs text-muted-foreground flex items-center gap-0.5"><MapPin className="w-3 h-3" />{s.area}</span>}
+              {(s?.area || s?.city || s?.prefecture) && (
+                <span className="text-xs text-muted-foreground flex items-center gap-0.5">
+                  <MapPin className="w-3 h-3" />{s.area ?? s.city ?? s.prefecture}
+                </span>
+              )}
               {s?.reviewAvg && <span className="text-xs text-muted-foreground flex items-center gap-0.5"><Star className="w-3 h-3 fill-yellow-400 text-yellow-400" />{Number(s.reviewAvg).toFixed(1)}</span>}
             </div>
           </div>
@@ -162,7 +166,7 @@ function FavoritePostCard({ fav, onRemove }: { fav: any; onRemove: () => void })
                 ? <video src={p.imageUrl} className="w-full h-full object-cover" muted playsInline />
                 : <img src={p.imageUrl} alt="" className="w-full h-full object-cover" />
             ) : (
-              <div className="w-full h-full flex items-center justify-center text-lg">📝</div>
+              <div className="w-full h-full flex items-center justify-center text-xs font-bold text-primary">POST</div>
             )}
           </div>
           <div className="flex-1 min-w-0">

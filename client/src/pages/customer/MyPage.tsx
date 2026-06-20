@@ -19,7 +19,7 @@ export default function CustomerMyPage() {
 
   useEffect(() => {
     if (!isLoading && (!session || session.role !== "customer")) navigate("/customer/login");
-  }, [session, isLoading]);
+  }, [session, isLoading, navigate]);
 
   const { data: profile } = trpc.customer.getMyProfile.useQuery(undefined, { enabled: !!session });
   const p = profile as any;
@@ -35,7 +35,6 @@ export default function CustomerMyPage() {
 
   const totalSpent = p?.totalSpent ?? 0;
   const levelThresholds = [0, 0, 30000, 80000, 150000, 300000, 500000, 800000, 1200000, 2000000, 5000000];
-  // Calculate level from totalSpent
   let currentLevel = 1;
   for (let lv = 10; lv >= 1; lv--) {
     if (totalSpent >= (levelThresholds[lv] ?? 0)) { currentLevel = lv; break; }
@@ -53,11 +52,10 @@ export default function CustomerMyPage() {
       title={p?.displayName ?? p?.nickname ?? "マイページ"}
       headerRight={
         <Link href="/my/edit-profile">
-          <button className="p-1"><Settings className="w-[26px] h-[26px]" strokeWidth={1.5} /></button>
+          <button className="p-1" aria-label="設定"><Settings className="w-[26px] h-[26px]" strokeWidth={1.5} /></button>
         </Link>
       }
     >
-      {/* Profile header */}
       <div className="px-4 pt-4 pb-3">
         <div className="flex items-start gap-5">
           <Link href="/my/edit-profile">
@@ -65,7 +63,6 @@ export default function CustomerMyPage() {
               <AromaAvatar name={p?.displayName ?? p?.nickname} src={p?.profileImageUrl ?? p?.avatarUrl} size="xl" />
             </div>
           </Link>
-          {/* Stats */}
           <div className="flex-1 flex items-center justify-around pt-2">
             <Link href="/my/reservations">
               <div className="text-center rounded-xl px-2 py-1 active:bg-gray-50 cursor-pointer">
@@ -93,7 +90,6 @@ export default function CustomerMyPage() {
           {p?.bio && <div className="text-[13px] text-gray-600 mt-0.5 leading-relaxed">{p.bio}</div>}
         </div>
 
-        {/* Level progress */}
         <div className="mt-3 bg-gray-50 rounded-xl p-3">
           <div className="flex items-center justify-between mb-2">
             <LevelBadge level={currentLevel} />
@@ -108,20 +104,19 @@ export default function CustomerMyPage() {
             />
           </div>
           <div className="text-[11px] text-gray-400 mt-1">
-            {nextThreshold ? `次のレベルまで ¥${Math.max(0, nextThreshold - totalSpent).toLocaleString()}` : "最高レベル達成！"}
+            {nextThreshold ? `次のレベルまで ¥${Math.max(0, nextThreshold - totalSpent).toLocaleString()}` : "最高レベルです"}
           </div>
         </div>
 
         <Link href="/my/edit-profile">
           <button className="w-full mt-3 py-1.5 border border-gray-300 rounded-lg text-[13px] font-semibold text-foreground active:bg-gray-50 transition-colors">
-            プロフィールを編集（アイコン・クロップ変更可）
+            プロフィールを編集
           </button>
         </Link>
       </div>
 
       <div className="h-px bg-gray-100" />
 
-      {/* Menu */}
       <div className="divide-y divide-gray-50">
         <MenuItem href="/my/reservations" icon={<Bookmark className="w-5 h-5 text-primary" />} label="予約履歴" />
         <MenuItem href="/my/favorites" icon={<Heart className="w-5 h-5 text-red-500" />} label="お気に入り" />
