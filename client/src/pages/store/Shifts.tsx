@@ -44,16 +44,14 @@ export default function StoreShifts() {
   return (
     <AromaLayout title="シフト管理" showBack backHref="/store/dashboard">
       <div className="px-4 py-3 flex items-center justify-between bg-white border-b border-border/50">
-        <button onClick={() => setMonthDate(d => subMonths(d, 1))} className="p-2 rounded-full active:bg-muted">
+        <button onClick={() => setMonthDate(d => subMonths(d, 1))} className="p-2 rounded-full active:bg-muted" aria-label="前月">
           <ChevronLeft className="w-5 h-5" />
         </button>
         <div className="text-center">
-          <div className="font-semibold text-foreground">
-            {format(monthDate, "yyyy年M月", { locale: ja })}
-          </div>
+          <div className="font-semibold text-foreground">{format(monthDate, "yyyy年M月", { locale: ja })}</div>
           <div className="text-xs text-muted-foreground">{list.length}件</div>
         </div>
-        <button onClick={() => setMonthDate(d => addMonths(d, 1))} className="p-2 rounded-full active:bg-muted">
+        <button onClick={() => setMonthDate(d => addMonths(d, 1))} className="p-2 rounded-full active:bg-muted" aria-label="翌月">
           <ChevronRight className="w-5 h-5" />
         </button>
       </div>
@@ -62,7 +60,7 @@ export default function StoreShifts() {
         {list.length === 0 ? (
           <div className="text-center py-12 text-muted-foreground">
             <Clock className="w-10 h-10 mx-auto mb-2 opacity-30" />
-            <p className="text-sm">この月のシフトはありません</p>
+            <p className="text-sm">この月のシフト申請はありません</p>
           </div>
         ) : list.map((shift: any, index: number) => {
           const status = shiftStatus(shift);
@@ -79,8 +77,10 @@ export default function StoreShifts() {
               <div className="flex items-center gap-3">
                 <AromaAvatar name={shift.therapistName} src={shift.therapistImage} size="sm" />
                 <div className="flex-1 min-w-0">
-                  <div className="text-sm font-semibold text-foreground truncate">{shift.therapistName}</div>
-                  <div className="text-xs text-muted-foreground">{shift.date} {shift.startTime}〜{shift.endTime}</div>
+                  <div className="text-sm font-semibold text-foreground truncate">{shift.therapistName ?? "セラピスト"}</div>
+                  <div className="text-xs text-muted-foreground">
+                    {shift.date} {shift.startTime}〜{shift.endTime}
+                  </div>
                 </div>
                 <span className={`text-xs px-2 py-0.5 rounded-full font-medium shrink-0 ${status.className}`}>
                   {status.label}
@@ -95,7 +95,8 @@ export default function StoreShifts() {
                     onClick={() => reviewMut.mutate({ shiftId: shift.id, action: "approved" })}
                     disabled={reviewMut.isPending}
                   >
-                    <CheckCircle className="w-4 h-4 mr-1" />承認
+                    <CheckCircle className="w-4 h-4 mr-1" />
+                    承認
                   </Button>
                   <Button
                     size="sm"
@@ -104,7 +105,8 @@ export default function StoreShifts() {
                     onClick={() => reviewMut.mutate({ shiftId: shift.id, action: "rejected" })}
                     disabled={reviewMut.isPending}
                   >
-                    <XCircle className="w-4 h-4 mr-1" />却下
+                    <XCircle className="w-4 h-4 mr-1" />
+                    却下
                   </Button>
                 </div>
               )}
