@@ -40,17 +40,17 @@ const therapistFeatures: Feature[] = [
   {
     icon: Sparkles,
     title: "SNS型プロフィール",
-    text: "写真、投稿、ストーリー、空き枠をひとつのプロフィールに集約。",
+    text: "写真、投稿、ストーリー、空き枠をひとつのプロフィールに集約。指名につながる見せ方を作れます。",
   },
   {
     icon: Calendar,
     title: "出勤と予約を確認",
-    text: "今日の予約、今週の出勤、顧客メモまでスマホで確認できます。",
+    text: "出勤申請、承認状況、今日の予約、顧客メモをスマホで確認。店舗との連携もスムーズです。",
   },
   {
     icon: ChartColumn,
-    title: "売上・給与の見える化",
-    text: "指名本数、売上、バック金額、調整金を月別でチェック。",
+    title: "売上と給与を見える化",
+    text: "売上、指名本数、バック金額、調整金を月別で確認。自分の成果を把握できます。",
   },
 ];
 
@@ -58,17 +58,17 @@ const storeFeatures: Feature[] = [
   {
     icon: Store,
     title: "店舗運営を一元管理",
-    text: "予約、シフト、給与、顧客、メニュー、口コミを同じ管理画面で扱えます。",
+    text: "予約、シフト、給与、セラピスト、顧客、口コミを同じ管理画面で扱えます。",
   },
   {
     icon: UserPlus,
     title: "招待URLで所属登録",
-    text: "店舗が発行したURLから登録したセラピストを自動で所属化。",
+    text: "店舗が発行したURLから登録したセラピストを、自動でその店舗所属にできます。",
   },
   {
     icon: ShieldCheck,
-    title: "安全管理も標準装備",
-    text: "本人確認、年齢確認、通報、ブロック、NG顧客管理に対応。",
+    title: "安全管理にも対応",
+    text: "本人確認、年齢確認、通報、ブロック、NG顧客管理など、運営に必要な導線を用意しています。",
   },
 ];
 
@@ -80,19 +80,19 @@ const customerFeatures: Feature[] = [
   },
   {
     icon: Heart,
-    title: "お気に入りと再予約",
-    text: "気になる店舗、セラピスト、投稿を保存し、履歴から再予約できます。",
+    title: "お気に入りから再予約",
+    text: "店舗、セラピスト、投稿を保存し、予約履歴から次回予約につなげられます。",
   },
   {
     icon: MessageCircle,
-    title: "予約前の相談",
-    text: "店舗、セラピスト、顧客のメッセージ導線をアプリ内に集約。",
+    title: "予約前に相談",
+    text: "店舗、セラピスト、顧客のメッセージ導線をアプリ内にまとめます。",
   },
 ];
 
 const stats = [
   { value: "3ロール", label: "店舗・セラピスト・顧客" },
-  { value: "1画面", label: "予約とシフトの確認" },
+  { value: "1画面", label: "予約とシフトを確認" },
   { value: "SNS型", label: "投稿・ストーリー・フォロー" },
 ];
 
@@ -139,7 +139,7 @@ function SectionHeader({
 }) {
   return (
     <div className="mx-auto max-w-2xl text-center">
-      <p className="text-xs font-bold tracking-[0.18em] text-[#C8A45D] uppercase">
+      <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#C8A45D]">
         {eyebrow}
       </p>
       <h2 className="mt-3 text-3xl font-bold leading-tight text-[#1F2933] md:text-5xl">
@@ -183,12 +183,9 @@ export default function LandingPage() {
             <span className="flex size-9 items-center justify-center rounded-md bg-[#005B55] text-sm font-black text-white">
               A
             </span>
-            <span className="font-serif text-xl font-semibold text-[#1F2933]">
-              AromaNet
-            </span>
+            <span className="text-lg font-black tracking-wide">AromaNet</span>
           </a>
-
-          <nav className="hidden items-center gap-7 text-sm font-semibold text-slate-600 md:flex">
+          <nav className="hidden items-center gap-6 text-sm font-bold text-slate-600 md:flex">
             <a href="#therapist" className="hover:text-[#005B55]">
               セラピスト
             </a>
@@ -196,20 +193,19 @@ export default function LandingPage() {
               店舗
             </a>
             <a href="#customer" className="hover:text-[#005B55]">
-              顧客体験
+              顧客
             </a>
           </nav>
-
           <div className="flex items-center gap-2">
             <a
               href="/roles"
-              className="hidden rounded-md px-3 py-2 text-sm font-bold text-slate-600 hover:bg-slate-50 sm:inline-flex"
+              className="hidden rounded-md px-3 py-2 text-sm font-bold text-slate-600 hover:text-[#005B55] sm:inline-flex"
             >
               ログイン
             </a>
             <a
               href="/store/register"
-              className="inline-flex min-h-10 items-center rounded-md bg-[#005B55] px-4 text-sm font-bold text-white shadow-[0_12px_28px_rgba(0,91,85,0.18)] hover:bg-[#004844]"
+              className="rounded-md bg-[#005B55] px-4 py-2 text-sm font-bold text-white shadow-sm hover:bg-[#004844]"
             >
               店舗登録
             </a>
@@ -218,61 +214,54 @@ export default function LandingPage() {
       </header>
 
       <main>
-        <section className="relative overflow-hidden border-b border-slate-100 bg-[#F8FCFB]">
-          <div className="lp-container relative z-10 grid gap-8 pb-10 pt-10 md:pb-14 md:pt-14">
-            <div className="mx-auto max-w-4xl text-center">
-              <div className="mx-auto inline-flex items-center gap-2 rounded-md border border-[#C8A45D]/30 bg-white px-3 py-2 text-xs font-bold text-[#7B6436] shadow-sm">
-                <BadgeCheck className="size-4 text-[#C8A45D]" />
-                メンズエステ店舗向け 予約SNS / 管理SaaS
-              </div>
-              <h1 className="mt-5 text-4xl font-black leading-tight text-[#1F2933] md:text-6xl">
-                メンズエステ専用の
-                <br />
-                プロフィール・投稿・予約SNS
-              </h1>
-              <p className="mx-auto mt-5 max-w-2xl text-sm leading-8 text-slate-600 md:text-lg">
-                出勤告知、ストーリー、予約、メッセージ、給与管理まで。
-                セラピストの集客導線と店舗の運営業務を、ひとつのアプリにまとめます。
+        <section className="overflow-hidden bg-[#F6F7F8]">
+          <div className="lp-container grid min-h-[calc(100vh-4rem)] items-center gap-10 py-12 md:grid-cols-[0.95fr_1.05fr] md:py-16">
+            <div className="max-w-2xl">
+              <p className="inline-flex rounded-md border border-[#C8A45D]/40 bg-white px-3 py-1 text-xs font-bold tracking-[0.14em] text-[#9B7A33]">
+                SALON SNS & RESERVATION
               </p>
-              <div className="mt-6 flex flex-col justify-center gap-3 sm:flex-row">
+              <h1 className="mt-5 text-4xl font-black leading-tight text-[#1F2933] md:text-6xl">
+                メンズエステ運営を、SNSと予約管理でひとつに。
+              </h1>
+              <p className="mt-5 max-w-xl text-base leading-8 text-slate-600 md:text-lg">
+                AromaNetは、店舗・セラピスト・顧客をつなぐ予約管理プラットフォームです。集客、予約、出勤、メッセージ、給与確認までスマホで扱えます。
+              </p>
+              <div className="mt-7 flex flex-col gap-3 sm:flex-row">
                 <CtaLink href="/store/register">店舗として始める</CtaLink>
                 <CtaLink href="/roles" variant="secondary">
-                  デモ画面を見る
+                  アプリ入口を見る
                 </CtaLink>
               </div>
+              <div className="mt-8 grid gap-3 sm:grid-cols-3">
+                {stats.map((item) => (
+                  <div
+                    key={item.label}
+                    className="rounded-md border border-slate-200 bg-white p-4 text-center shadow-[0_12px_32px_rgba(15,23,42,0.04)]"
+                  >
+                    <p className="text-2xl font-black text-[#005B55]">{item.value}</p>
+                    <p className="mt-1 text-xs font-bold text-slate-500">{item.label}</p>
+                  </div>
+                ))}
+              </div>
             </div>
-
-            <div className="lp-hero-stage" aria-label="AromaNet app screenshots">
-              <PhoneMockup
-                src={screenshots.therapistProfile}
-                alt="セラピスト公開プロフィール画面"
-                label="Profile"
-                className="lp-hero-phone lp-hero-phone-left"
-              />
+            <div className="lp-phone-row">
               <PhoneMockup
                 src={screenshots.customerHome}
-                alt="顧客ホームと検索フィード画面"
-                label="Discovery"
-                className="lp-hero-phone lp-hero-phone-center"
+                alt="顧客ホーム画面"
+                label="Customer home"
               />
               <PhoneMockup
                 src={screenshots.storeDashboard}
-                alt="店舗管理ダッシュボード画面"
-                label="Store Ops"
-                className="lp-hero-phone lp-hero-phone-right"
+                alt="店舗ダッシュボード画面"
+                label="Store dashboard"
+                className="hidden sm:block"
               />
-            </div>
-
-            <div className="grid gap-3 sm:grid-cols-3">
-              {stats.map((item) => (
-                <div
-                  key={item.label}
-                  className="rounded-md border border-slate-200 bg-white p-4 text-center shadow-[0_12px_32px_rgba(15,23,42,0.04)]"
-                >
-                  <p className="text-2xl font-black text-[#005B55]">{item.value}</p>
-                  <p className="mt-1 text-xs font-bold text-slate-500">{item.label}</p>
-                </div>
-              ))}
+              <PhoneMockup
+                src={screenshots.therapistProfile}
+                alt="セラピスト公開プロフィール画面"
+                label="Therapist profile"
+                className="hidden md:block"
+              />
             </div>
           </div>
         </section>
@@ -281,8 +270,8 @@ export default function LandingPage() {
           <div className="lp-container">
             <SectionHeader
               eyebrow="For Therapists"
-              title="Xに貼れる、自分専用プロフィール"
-              text="見た目はSNSのように軽く、裏側は予約・出勤・売上までつながる。セラピストが自分の集客導線を持てる画面です。"
+              title="集客、出勤、売上を自分で見られる"
+              text="SNSのように見せやすく、業務ツールとして管理しやすいセラピスト画面。出勤申請、予約確認、メッセージ、売上確認までつながります。"
             />
 
             <div className="mt-12 grid items-center gap-10 lg:grid-cols-[0.95fr_1.05fr]">
@@ -318,7 +307,7 @@ export default function LandingPage() {
           <div className="lp-container">
             <SectionHeader
               eyebrow="For Stores"
-              title="予約・シフト・給与をまとめて管理"
+              title="予約、シフト、給与をまとめて管理"
               text="受付、店長、オーナーが見たい情報をスマホで確認。セラピスト登録は店舗発行URLから行い、所属管理もシンプルにします。"
             />
 
@@ -337,7 +326,7 @@ export default function LandingPage() {
                 />
                 <PhoneMockup
                   src={screenshots.storePayroll}
-                  alt="店舗給与管理画面"
+                  alt="給与管理画面"
                   label="Payroll"
                   className="hidden md:block"
                 />
@@ -356,7 +345,7 @@ export default function LandingPage() {
             <SectionHeader
               eyebrow="For Customers"
               title="探す、比較する、予約する"
-              text="顧客は店舗やセラピストを検索し、空き枠、口コミ、料金を見ながら予約。お気に入りや会員レベルでリピート導線も作れます。"
+              text="顧客は店舗やセラピストを検索し、空き枠、口コミ、料金を見ながら予約できます。お気に入りや会員レベルでリピート導線も作れます。"
             />
 
             <div className="mt-12 grid items-center gap-10 lg:grid-cols-[0.95fr_1.05fr]">
@@ -367,20 +356,20 @@ export default function LandingPage() {
               </div>
               <div className="lp-phone-row">
                 <PhoneMockup
-                  src={screenshots.customerHome}
-                  alt="顧客ホーム画面"
-                  label="Home"
-                />
-                <PhoneMockup
                   src={screenshots.customerTherapist}
                   alt="セラピスト詳細画面"
                   label="Therapist detail"
-                  className="hidden sm:block"
                 />
                 <PhoneMockup
                   src={screenshots.customerReservations}
-                  alt="顧客予約管理画面"
+                  alt="顧客予約画面"
                   label="Reservations"
+                  className="hidden sm:block"
+                />
+                <PhoneMockup
+                  src={screenshots.customerHome}
+                  alt="顧客ホーム画面"
+                  label="Home"
                   className="hidden md:block"
                 />
               </div>
@@ -388,70 +377,41 @@ export default function LandingPage() {
           </div>
         </section>
 
-        <section className="bg-[#E8F7F4] py-16 md:py-20">
+        <section className="bg-[#F6F7F8] py-16 md:py-24">
           <div className="lp-container">
-            <div className="grid items-center gap-10 md:grid-cols-[1fr_0.85fr]">
-              <div>
-                <p className="text-xs font-bold tracking-[0.18em] text-[#C8A45D] uppercase">
-                  Early Access
-                </p>
-                <h2 className="mt-3 text-3xl font-black leading-tight text-[#1F2933] md:text-5xl">
-                  まずは店舗の運営導線から、すぐ使える形へ。
-                </h2>
-                <p className="mt-5 text-sm leading-8 text-slate-600 md:text-base">
-                  公開プロフィールだけで終わらせず、予約確認、シフト申請、顧客メモ、
-                  給与確認までつながる導線を用意しています。営業前の検証やデモにも使いやすい構成です。
-                </p>
-                <div className="mt-7 flex flex-col gap-3 sm:flex-row">
-                  <CtaLink href="/store/register">店舗アカウントを作る</CtaLink>
-                  <CtaLink href="/store/login" variant="secondary">
-                    店舗ログイン
-                  </CtaLink>
-                </div>
-              </div>
-
-              <div className="rounded-md border border-white/70 bg-white/75 p-5 shadow-[0_20px_60px_rgba(0,91,85,0.08)]">
-                <div className="flex items-center gap-3 border-b border-slate-200 pb-4">
-                  <div className="flex size-10 items-center justify-center rounded-md bg-[#005B55] text-white">
-                    <LinkIcon className="size-5" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-black text-[#1F2933]">招待URL登録</p>
-                    <p className="text-xs text-slate-500">店舗が発行したURLで所属を自動連携</p>
-                  </div>
-                </div>
-                <div className="mt-4 space-y-3 text-sm text-slate-600">
-                  <div className="flex items-start gap-3">
-                    <span className="mt-1 size-2 rounded-full bg-[#005B55]" />
-                    店舗ごとにセラピスト登録URLを発行
-                  </div>
-                  <div className="flex items-start gap-3">
-                    <span className="mt-1 size-2 rounded-full bg-[#005B55]" />
-                    URL経由の登録は自動でその店舗の所属に設定
-                  </div>
-                  <div className="flex items-start gap-3">
-                    <span className="mt-1 size-2 rounded-full bg-[#005B55]" />
-                    複数店舗所属を公開プロフィールに出さない運用に対応
-                  </div>
-                </div>
-              </div>
+            <div className="grid gap-4 md:grid-cols-3">
+              <FeatureCard
+                icon={BadgeCheck}
+                title="予約から給与まで連動"
+                text="顧客予約、店舗確認、セラピスト反映、売上、給与計算まで同じデータでつながります。"
+              />
+              <FeatureCard
+                icon={LinkIcon}
+                title="店舗発行URLで登録"
+                text="セラピストは店舗が発行したURLから登録。登録後は自動でその店舗所属になります。"
+              />
+              <FeatureCard
+                icon={Users}
+                title="3者のメッセージ"
+                text="店舗、セラピスト、顧客のメッセージをアプリ内にまとめ、未読や既読も確認できます。"
+              />
             </div>
           </div>
         </section>
 
-        <section className="bg-[#1F2933] py-16 text-white md:py-24">
-          <div className="lp-container text-center">
-            <p className="text-xs font-bold tracking-[0.18em] text-[#C8A45D] uppercase">
-              AromaNet
-            </p>
-            <h2 className="mx-auto mt-3 max-w-3xl text-3xl font-black leading-tight md:text-5xl">
-              集客から予約、リピート管理までをひとつに。
-            </h2>
-            <p className="mx-auto mt-5 max-w-2xl text-sm leading-8 text-slate-300 md:text-base">
-              SNSの見やすさと、店舗運営に必要な管理性を両立したメンズエステ向けプラットフォームです。
-            </p>
-            <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
-              <CtaLink href="/store/register">店舗として始める</CtaLink>
+        <section className="bg-[#005B55] py-14 text-white">
+          <div className="lp-container flex flex-col items-start justify-between gap-6 md:flex-row md:items-center">
+            <div>
+              <p className="text-sm font-bold text-[#F3D28B]">AromaNet</p>
+              <h2 className="mt-2 text-3xl font-black md:text-4xl">
+                まずは店舗アカウントから始められます。
+              </h2>
+              <p className="mt-3 max-w-2xl text-sm leading-7 text-white/80">
+                営業・検証用の初期版です。導入相談やテスト利用は、店舗アカウント作成後に画面を確認してください。
+              </p>
+            </div>
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <CtaLink href="/store/register">店舗アカウントを作る</CtaLink>
               <CtaLink href="/roles" variant="secondary">
                 ログイン画面へ
               </CtaLink>
@@ -460,17 +420,10 @@ export default function LandingPage() {
         </section>
       </main>
 
-      <footer className="bg-white py-8">
-        <div className="lp-container flex flex-col gap-4 text-sm text-slate-500 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-3">
-            <span className="flex size-8 items-center justify-center rounded-md bg-[#005B55] text-xs font-black text-white">
-              A
-            </span>
-            <span className="font-serif text-lg font-semibold text-[#1F2933]">
-              AromaNet
-            </span>
-          </div>
-          <div className="flex gap-4">
+      <footer className="border-t border-slate-100 bg-white py-8">
+        <div className="lp-container flex flex-col gap-4 text-sm text-slate-500 md:flex-row md:items-center md:justify-between">
+          <p className="font-bold text-[#1F2933]">AromaNet</p>
+          <div className="flex flex-wrap gap-4">
             <a href="/roles" className="hover:text-[#005B55]">
               ログイン
             </a>
