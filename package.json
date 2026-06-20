@@ -13,6 +13,7 @@
     "db:push": "drizzle-kit generate && drizzle-kit migrate",
     "prod:setup-accounts": "node scripts/setup-production-accounts.mjs",
     "prod:disable-demo-accounts": "node scripts/disable-demo-accounts.mjs",
+    "prod:disable-qa-accounts": "node scripts/disable-qa-accounts.mjs",
     "prod:cleanup-smoke": "node scripts/cleanup-smoke-data.mjs"
   },
   "dependencies": {
