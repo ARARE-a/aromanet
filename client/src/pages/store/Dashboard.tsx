@@ -1,51 +1,95 @@
-import { useState, useEffect } from "react";
-import { useLocation, Link } from "wouter";
+import { useEffect, useState } from "react";
+import { Link, useLocation } from "wouter";
 import { motion } from "framer-motion";
 import {
-  Home, Calendar, Users, TrendingUp, MessageCircle,
-  Clock, LogOut, BarChart3, UserCheck, FileText, Gift, Settings,
-  Star, Bell, DoorOpen, ChevronRight
+  Bell,
+  Calendar,
+  Clock,
+  DoorOpen,
+  FileText,
+  Gift,
+  Home,
+  LogOut,
+  MessageCircle,
+  Settings,
+  Star,
+  TrendingUp,
+  UserCheck,
+  Users,
 } from "lucide-react";
-import { AromaLayout, AromaLogo, AromaAvatar, StatusBadge } from "@/components/AromaLayout";
+import { AromaLayout, StatusBadge } from "@/components/AromaLayout";
 import { StoryRing } from "@/components/StoryRing";
 import { StoryUpload } from "@/components/StoryUpload";
 import { StoryViewer, type StoryAuthor } from "@/components/StoryViewer";
-import { trpc } from "@/lib/trpc";
 import { useSession } from "@/contexts/SessionContext";
+import { trpc } from "@/lib/trpc";
 
 const navItems = [
-  { href: "/store/dashboard", icon: <Home className="w-[26px] h-[26px]" strokeWidth={1.5} />, activeIcon: <Home className="w-[26px] h-[26px]" strokeWidth={2.5} fill="currentColor" />, label: "ホーム" },
-  { href: "/store/reservations", icon: <Calendar className="w-[26px] h-[26px]" strokeWidth={1.5} />, activeIcon: <Calendar className="w-[26px] h-[26px]" strokeWidth={2.5} fill="currentColor" />, label: "予約" },
-  { href: "/store/therapists", icon: <Users className="w-[26px] h-[26px]" strokeWidth={1.5} />, activeIcon: <Users className="w-[26px] h-[26px]" strokeWidth={2.5} />, label: "スタッフ" },
-  { href: "/store/sales", icon: <TrendingUp className="w-[26px] h-[26px]" strokeWidth={1.5} />, activeIcon: <TrendingUp className="w-[26px] h-[26px]" strokeWidth={2.5} />, label: "売上" },
-  { href: "/messages", icon: <MessageCircle className="w-[26px] h-[26px]" strokeWidth={1.5} />, activeIcon: <MessageCircle className="w-[26px] h-[26px]" strokeWidth={2.5} fill="currentColor" />, label: "DM" },
+  {
+    href: "/store/dashboard",
+    icon: <Home className="w-[26px] h-[26px]" strokeWidth={1.5} />,
+    activeIcon: <Home className="w-[26px] h-[26px]" strokeWidth={2.5} fill="currentColor" />,
+    label: "ホーム",
+  },
+  {
+    href: "/store/reservations",
+    icon: <Calendar className="w-[26px] h-[26px]" strokeWidth={1.5} />,
+    activeIcon: <Calendar className="w-[26px] h-[26px]" strokeWidth={2.5} fill="currentColor" />,
+    label: "予約",
+  },
+  {
+    href: "/store/therapists",
+    icon: <Users className="w-[26px] h-[26px]" strokeWidth={1.5} />,
+    activeIcon: <Users className="w-[26px] h-[26px]" strokeWidth={2.5} />,
+    label: "スタッフ",
+  },
+  {
+    href: "/store/sales",
+    icon: <TrendingUp className="w-[26px] h-[26px]" strokeWidth={1.5} />,
+    activeIcon: <TrendingUp className="w-[26px] h-[26px]" strokeWidth={2.5} />,
+    label: "売上",
+  },
+  {
+    href: "/messages",
+    icon: <MessageCircle className="w-[26px] h-[26px]" strokeWidth={1.5} />,
+    activeIcon: <MessageCircle className="w-[26px] h-[26px]" strokeWidth={2.5} fill="currentColor" />,
+    label: "DM",
+  },
 ];
 
 export default function StoreDashboard() {
   const [, navigate] = useLocation();
   const { session, isLoading, logout } = useSession();
-  const handleLogout = async () => { try { await logout(); } catch {} navigate("/"); };
-
-  const { data: storeData } = trpc.store.getMyStore.useQuery(undefined, { enabled: !!session });
-  const { data: todayReservations } = trpc.reservation.getStoreReservations.useQuery(
-    { date: new Date().toISOString().slice(0, 10) }, { enabled: !!session }
-  );
-  const { data: salesSummary } = trpc.sales.getStoreSummary.useQuery(
-    { month: new Date().toISOString().slice(0, 7) }, { enabled: !!session }
-  );
-  const { data: myStories } = trpc.story.getMyStories.useQuery(undefined, { enabled: !!session });
   const [storyUploadOpen, setStoryUploadOpen] = useState(false);
   const [viewerAuthors, setViewerAuthors] = useState<StoryAuthor[] | null>(null);
 
   useEffect(() => {
     if (!isLoading && (!session || session.role !== "store")) navigate("/store/login");
-  }, [session, isLoading]);
+  }, [session, isLoading, navigate]);
 
-  if (isLoading || !session) return (
-    <div className="min-h-[100dvh] flex items-center justify-center">
-      <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-    </div>
+  const { data: storeData } = trpc.store.getMyStore.useQuery(undefined, { enabled: !!session });
+  const { data: todayReservations } = trpc.reservation.getStoreReservations.useQuery(
+    { date: new Date().toISOString().slice(0, 10) },
+    { enabled: !!session },
   );
+  const { data: salesSummary } = trpc.sales.getStoreSummary.useQuery(
+    { month: new Date().toISOString().slice(0, 7) },
+    { enabled: !!session },
+  );
+  const { data: myStories } = trpc.story.getMyStories.useQuery(undefined, { enabled: !!session });
+
+  const handleLogout = async () => {
+    try { await logout(); } catch {}
+    navigate("/");
+  };
+
+  if (isLoading || !session) {
+    return (
+      <div className="min-h-[100dvh] flex items-center justify-center">
+        <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
 
   const store = storeData as any;
   const today = (todayReservations as any[]) ?? [];
@@ -73,54 +117,49 @@ export default function StoreDashboard() {
       headerRight={
         <div className="flex items-center gap-2">
           <Link href="/messages">
-            <button className="p-1"><Bell className="w-[26px] h-[26px]" strokeWidth={1.5} /></button>
+            <button className="p-1" aria-label="メッセージ">
+              <Bell className="w-[26px] h-[26px]" strokeWidth={1.5} />
+            </button>
           </Link>
-          <button onClick={handleLogout} className="p-1">
+          <button onClick={handleLogout} className="p-1" aria-label="ログアウト">
             <LogOut className="w-[22px] h-[22px] text-gray-400" strokeWidth={1.5} />
           </button>
         </div>
       }
     >
-      {/* Store header */}
       <div className="px-4 pt-4 pb-3 flex items-center gap-4">
         <div className="relative">
-          <StoryRing hasStory={!!(myStories && myStories.length > 0)} size="lg"
+          <StoryRing
+            hasStory={!!(myStories && myStories.length > 0)}
+            size="lg"
             onClick={() => {
               if (myStories && myStories.length > 0) {
                 setViewerAuthors([{ id: store?.id ?? 0, name: store?.name ?? "", avatarUrl: store?.logoUrl, role: "store", stories: myStories as any }]);
               } else {
                 setStoryUploadOpen(true);
               }
-            }}>
+            }}
+          >
             <div className="w-14 h-14 rounded-full overflow-hidden bg-teal-muted flex items-center justify-center">
-              {store?.logoUrl
-                ? <img src={store.logoUrl} alt={store.name} className="w-full h-full object-cover" />
-                : <span className="text-2xl font-bold text-primary">{store?.name?.[0] ?? "S"}</span>
-              }
+              {store?.logoUrl ? (
+                <img src={store.logoUrl} alt={store.name} className="w-full h-full object-cover" />
+              ) : (
+                <span className="text-2xl font-bold text-primary">{store?.name?.[0] ?? "S"}</span>
+              )}
             </div>
           </StoryRing>
           <button
             onClick={() => setStoryUploadOpen(true)}
             className="absolute -bottom-0.5 -right-0.5 w-6 h-6 bg-primary rounded-full flex items-center justify-center border-2 border-white text-white"
+            aria-label="ストーリー追加"
           >
             <span className="text-[14px] leading-none font-bold">+</span>
           </button>
         </div>
         <div className="flex-1 flex items-center justify-around">
-          <div className="text-center">
-            <div className="text-[17px] font-bold">{today.length}</div>
-            <div className="text-[11px] text-gray-500">本日予約</div>
-          </div>
-          <div className="text-center">
-            <div className="text-[17px] font-bold">{summary?.count ?? 0}</div>
-            <div className="text-[11px] text-gray-500">今月件数</div>
-          </div>
-          <div className="text-center">
-            <div className="text-[17px] font-bold">
-              {summary?.totalAmount ? `¥${Math.round(summary.totalAmount / 10000)}万` : "¥0"}
-            </div>
-            <div className="text-[11px] text-gray-500">今月売上</div>
-          </div>
+          <Stat label="本日予約" value={today.length} />
+          <Stat label="今月件数" value={summary?.count ?? 0} />
+          <Stat label="今月売上" value={summary?.totalAmount ? `¥${Math.round(summary.totalAmount / 10000)}万` : "¥0"} />
         </div>
       </div>
 
@@ -129,14 +168,13 @@ export default function StoreDashboard() {
         {store?.area && <div className="text-[12px] text-gray-500">{store.area}</div>}
         <Link href="/store/profile">
           <button className="w-full mt-2 py-1.5 border border-gray-300 rounded-lg text-[13px] font-semibold active:bg-gray-50">
-            店舗プロフィールを編集（ロゴ・クロップ変更可）
+            店舗プロフィールを編集
           </button>
         </Link>
       </div>
 
       <div className="h-px bg-gray-100" />
 
-      {/* Today's reservations */}
       {today.length > 0 && (
         <div className="px-4 pt-4 pb-2">
           <div className="flex items-center justify-between mb-3">
@@ -149,9 +187,9 @@ export default function StoreDashboard() {
             {today.slice(0, 3).map((r: any) => (
               <div key={r.id} className="flex items-center gap-3 py-2 border-b border-gray-50">
                 <div className="text-[13px] font-medium text-primary w-12">{r.startTime}</div>
-                <div className="flex-1">
-                  <div className="text-[13px] font-medium">{r.customerName ?? "顧客"}</div>
-                  <div className="text-[11px] text-gray-500">{r.therapistName} · {r.menuName}</div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-[13px] font-medium truncate">{r.customerName ?? "顧客"}</div>
+                  <div className="text-[11px] text-gray-500 truncate">{r.therapistName} / {r.menuName}</div>
                 </div>
                 <StatusBadge status={r.status} />
               </div>
@@ -160,16 +198,12 @@ export default function StoreDashboard() {
         </div>
       )}
 
-      {/* Quick menu grid */}
-      <div className="px-4 pt-4 pb-2">
+      <div className="px-4 pt-4 pb-24">
         <h2 className="text-[14px] font-semibold mb-3">管理メニュー</h2>
         <div className="grid grid-cols-3 gap-3">
-          {menuItems.map((item) => (
+          {menuItems.map(item => (
             <Link key={item.href} href={item.href}>
-              <motion.div
-                whileTap={{ scale: 0.94 }}
-                className={`rounded-2xl p-3 flex flex-col items-center gap-1.5 cursor-pointer ${item.color}`}
-              >
+              <motion.div whileTap={{ scale: 0.94 }} className={`rounded-2xl p-3 flex flex-col items-center gap-1.5 cursor-pointer ${item.color}`}>
                 {item.icon}
                 <span className="text-[11px] font-medium text-center leading-tight">{item.label}</span>
               </motion.div>
@@ -178,16 +212,17 @@ export default function StoreDashboard() {
         </div>
       </div>
 
-      {/* Story Upload Dialog */}
       <StoryUpload open={storyUploadOpen} onClose={() => setStoryUploadOpen(false)} />
-
-      {/* Story Viewer */}
-      {viewerAuthors && (
-        <StoryViewer
-          authors={viewerAuthors}
-          onClose={() => setViewerAuthors(null)}
-        />
-      )}
+      {viewerAuthors && <StoryViewer authors={viewerAuthors} onClose={() => setViewerAuthors(null)} />}
     </AromaLayout>
+  );
+}
+
+function Stat({ label, value }: { label: string; value: string | number }) {
+  return (
+    <div className="text-center">
+      <div className="text-[17px] font-bold">{value}</div>
+      <div className="text-[11px] text-gray-500">{label}</div>
+    </div>
   );
 }

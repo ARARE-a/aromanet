@@ -1,21 +1,21 @@
-import { useState, useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useLocation, useSearch } from "wouter";
 import { motion } from "framer-motion";
-import { Send, Image, AlertTriangle, ChevronLeft, MessageCircle, MoreVertical, Trash2 } from "lucide-react";
-import { AromaLayout, AromaAvatar } from "@/components/AromaLayout";
-import { trpc } from "@/lib/trpc";
-import { useSession } from "@/contexts/SessionContext";
-import { Input } from "@/components/ui/input";
+import { AlertTriangle, ChevronLeft, MessageCircle, MoreVertical, Send, Trash2 } from "lucide-react";
+import { format } from "date-fns";
+import { toast } from "sonner";
+import { AromaAvatar, AromaLayout } from "@/components/AromaLayout";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { toast } from "sonner";
-import { format } from "date-fns";
+import { Input } from "@/components/ui/input";
+import { useSession } from "@/contexts/SessionContext";
+import { trpc } from "@/lib/trpc";
 
 const QUICK_REPLIES = [
-  "ご予約ありがとうございます",
-  "本日のご来店お待ちしております",
-  "ご不明な点はお気軽にご連絡ください",
-  "またのご来店をお待ちしております",
+  "ご予約ありがとうございます。",
+  "本日のご来店をお待ちしております。",
+  "ご不明な点はお気軽にご連絡ください。",
+  "またのご来店をお待ちしております。",
 ];
 
 export default function Messages() {
@@ -24,12 +24,12 @@ export default function Messages() {
   const { session, isLoading } = useSession();
   const [selectedThread, setSelectedThread] = useState<number | null>(null);
   const [message, setMessage] = useState("");
-  const messagesEndRef = useRef<HTMLDivElement>(null);
   const [autoOpenDone, setAutoOpenDone] = useState(false);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!isLoading && !session) navigate("/");
-  }, [session, isLoading]);
+  }, [session, isLoading, navigate]);
 
   const { data: threads, refetch: refetchThreads } = trpc.message.getThreads.useQuery(undefined, {
     enabled: !!session,
@@ -37,6 +37,7 @@ export default function Messages() {
     refetchIntervalInBackground: true,
     refetchOnWindowFocus: true,
   });
+
   const { data: messages, refetch: refetchMessages } = trpc.message.getMessages.useQuery(
     { threadId: selectedThread! },
     {
@@ -44,7 +45,7 @@ export default function Messages() {
       refetchInterval: 3000,
       refetchIntervalInBackground: true,
       refetchOnWindowFocus: true,
-    }
+    },
   );
 
   const getOrCreateThreadMut = trpc.message.getOrCreateThread.useMutation({
@@ -55,7 +56,6 @@ export default function Messages() {
     onError: (e: any) => toast.error(e.message),
   });
 
-  // Auto-open thread from URL params
   useEffect(() => {
     if (!session || autoOpenDone || !searchStr) return;
     const params = new URLSearchParams(searchStr);
@@ -64,57 +64,38 @@ export default function Messages() {
     const customerId = params.get("customerId");
     const type = params.get("type");
 
-    // 店舗 → セラピスト DM
     if (type === "store_therapist" && therapistId && storeId && session.role === "store") {
       setAutoOpenDone(true);
-      getOrCreateThreadMut.mutate({
-        threadType: "store_therapist",
-        storeId: parseInt(storeId),
-        therapistId: parseInt(therapistId),
-      });
-    // 店舗 → 顧客 DM
+      getOrCreateThreadMut.mutate({ threadType: "store_therapist", storeId: parseInt(storeId, 10), therapistId: parseInt(therapistId, 10) });
     } else if (type === "store_customer" && customerId && storeId && session.role === "store") {
       setAutoOpenDone(true);
-      getOrCreateThreadMut.mutate({
-        threadType: "store_customer",
-        storeId: parseInt(storeId),
-        customerId: parseInt(customerId),
-      });
-    // セラピスト → 店舗 DM
+      getOrCreateThreadMut.mutate({ threadType: "store_customer", storeId: parseInt(storeId, 10), customerId: parseInt(customerId, 10) });
     } else if (type === "store_therapist" && storeId && session.role === "therapist") {
       setAutoOpenDone(true);
-      getOrCreateThreadMut.mutate({
-        threadType: "store_therapist",
-        storeId: parseInt(storeId),
-        therapistId: session.therapistId ?? undefined,
-      });
-    // お客様 → セラピスト DM
+      getOrCreateThreadMut.mutate({ threadType: "store_therapist", storeId: parseInt(storeId, 10), therapistId: session.therapistId ?? undefined });
     } else if (therapistId && session.role === "customer") {
       setAutoOpenDone(true);
-      getOrCreateThreadMut.mutate({
-        threadType: "therapist_customer",
-        therapistId: parseInt(therapistId),
-        customerId: session.accountId ?? undefined,
-      });
-    // お客様 → 店舗 DM
+      getOrCreateThreadMut.mutate({ threadType: "therapist_customer", therapistId: parseInt(therapistId, 10), customerId: session.accountId ?? undefined });
     } else if (storeId && session.role === "customer") {
       setAutoOpenDone(true);
-      getOrCreateThreadMut.mutate({
-        threadType: "store_customer",
-        storeId: parseInt(storeId),
-        customerId: session.accountId ?? undefined,
-      });
+      getOrCreateThreadMut.mutate({ threadType: "store_customer", storeId: parseInt(storeId, 10), customerId: session.accountId ?? undefined });
     }
-  }, [session, searchStr, autoOpenDone]);
+  }, [session, searchStr, autoOpenDone, getOrCreateThreadMut]);
 
   const sendMut = trpc.message.send.useMutation({
-    onSuccess: () => { setMessage(""); refetchMessages(); refetchThreads(); },
+    onSuccess: () => {
+      setMessage("");
+      refetchMessages();
+      refetchThreads();
+    },
     onError: (e: any) => toast.error(e.message),
   });
+
   const reportMut = trpc.message.reportMessage.useMutation({
     onSuccess: () => toast.success("通報しました"),
     onError: (e: any) => toast.error(e.message),
   });
+
   const deleteMut = trpc.message.deleteMessage.useMutation({
     onSuccess: () => {
       toast.success("メッセージを削除しました");
@@ -129,9 +110,7 @@ export default function Messages() {
   }, [messages]);
 
   useEffect(() => {
-    if (selectedThread && messages) {
-      refetchThreads();
-    }
+    if (selectedThread && messages) refetchThreads();
   }, [selectedThread, messages, refetchThreads]);
 
   const threadList = (threads as any[]) ?? [];
@@ -143,35 +122,45 @@ export default function Messages() {
     sendMut.mutate({ threadId: selectedThread, content: message.trim() });
   };
 
+  const reportLatestMessage = () => {
+    const latest = [...messageList].reverse().find((m: any) => m.senderRole !== session?.role) ?? messageList[messageList.length - 1];
+    if (!latest?.id) {
+      toast.error("通報できるメッセージがありません");
+      return;
+    }
+    reportMut.mutate({ messageId: latest.id, reason: "不適切なメッセージ" });
+  };
+
   if (selectedThread) {
     return (
       <div className="min-h-[100dvh] max-h-[100dvh] bg-background flex flex-col overflow-hidden">
-        {/* Header */}
         <header className="sticky top-0 z-40 glass border-b border-border/50 px-4 py-3 flex items-center gap-3">
-          <button onClick={() => setSelectedThread(null)} className="p-1 -ml-1 rounded-full hover:bg-muted transition-colors">
+          <button onClick={() => setSelectedThread(null)} className="p-1 -ml-1 rounded-full hover:bg-muted transition-colors" aria-label="戻る">
             <ChevronLeft className="w-5 h-5 text-charcoal" />
           </button>
           <AromaAvatar name={currentThread?.otherName} src={currentThread?.otherAvatar} size="sm" />
-          <div className="flex-1">
-            <div className="text-sm font-semibold text-foreground">{currentThread?.otherName}</div>
-            <div className="text-xs text-muted-foreground">{currentThread?.otherRole}</div>
+          <div className="flex-1 min-w-0">
+            <div className="text-sm font-semibold text-foreground truncate">{currentThread?.otherName}</div>
+            <div className="text-xs text-muted-foreground">{roleLabel(currentThread?.otherRole)}</div>
           </div>
-          <button onClick={() => reportMut.mutate({ messageId: selectedThread!, reason: "不適切なメッセージ" })}
-            className="p-2 rounded-full hover:bg-muted transition-colors">
+          <button onClick={reportLatestMessage} className="p-2 rounded-full hover:bg-muted transition-colors" aria-label="通報">
             <AlertTriangle className="w-4 h-4 text-muted-foreground" />
           </button>
         </header>
 
-        {/* Messages */}
         <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3 pb-32">
           {messageList.map((msg: any) => {
             const isMe = msg.senderRole === session?.role;
             return (
-              <motion.div key={msg.id} initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }}
-                className={`flex ${isMe ? "justify-end" : "justify-start"} gap-2`}>
+              <motion.div
+                key={msg.id}
+                initial={{ opacity: 0, y: 4 }}
+                animate={{ opacity: 1, y: 0 }}
+                className={`flex ${isMe ? "justify-end" : "justify-start"} gap-2`}
+              >
                 {!isMe && <AromaAvatar name={currentThread?.otherName} size="sm" />}
                 <div className={`max-w-[75%] ${isMe ? "items-end" : "items-start"} flex flex-col gap-0.5`}>
-                  <div className={`px-3 py-2 rounded-2xl text-sm ${isMe ? "bg-primary text-white rounded-br-sm" : "bg-white shadow-luxury text-foreground rounded-bl-sm"}`}>
+                  <div className={`px-3 py-2 rounded-2xl text-sm whitespace-pre-wrap ${isMe ? "bg-primary text-white rounded-br-sm" : "bg-white shadow-luxury text-foreground rounded-bl-sm"}`}>
                     {msg.imageUrl && <img src={msg.imageUrl} alt="" className="w-full rounded-lg mb-1 max-w-[200px]" />}
                     {msg.content}
                   </div>
@@ -180,28 +169,11 @@ export default function Messages() {
                       {msg.createdAt ? format(new Date(msg.createdAt), "HH:mm") : ""}
                       {isMe && (msg.isRead ? " 既読" : " 未読")}
                     </span>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <button className="w-6 h-6 rounded-full flex items-center justify-center text-muted-foreground hover:bg-muted">
-                          <MoreVertical className="w-3.5 h-3.5" />
-                        </button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align={isMe ? "end" : "start"} className="min-w-44">
-                        <DropdownMenuItem onClick={() => deleteMut.mutate({ messageId: msg.id, mode: "me" })}>
-                          <Trash2 className="w-4 h-4 mr-2" />
-                          自分の画面から削除
-                        </DropdownMenuItem>
-                        {isMe && (
-                          <DropdownMenuItem
-                            className="text-red-600 focus:text-red-600"
-                            onClick={() => deleteMut.mutate({ messageId: msg.id, mode: "everyone" })}
-                          >
-                            <Trash2 className="w-4 h-4 mr-2" />
-                            全員から削除
-                          </DropdownMenuItem>
-                        )}
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                    <MessageMenu
+                      isMe={isMe}
+                      onDeleteMe={() => deleteMut.mutate({ messageId: msg.id, mode: "me" })}
+                      onDeleteEveryone={() => deleteMut.mutate({ messageId: msg.id, mode: "everyone" })}
+                    />
                   </div>
                 </div>
               </motion.div>
@@ -210,25 +182,35 @@ export default function Messages() {
           <div ref={messagesEndRef} />
         </div>
 
-        {/* Quick replies */}
-        <div className="fixed bottom-16 left-0 right-0 px-4 pb-1" style={{maxWidth: '430px', margin: '0 auto'}}>
+        <div className="fixed bottom-16 left-0 right-0 px-4 pb-1" style={{ maxWidth: "430px", margin: "0 auto" }}>
           <div className="flex gap-1 overflow-x-auto scrollbar-none pb-1">
             {QUICK_REPLIES.map(q => (
-              <button key={q} onClick={() => setMessage(q)}
-                className="flex-shrink-0 text-xs px-2 py-1 rounded-full bg-white shadow-luxury text-muted-foreground hover:text-primary hover:border-primary border border-border/50 transition-colors">
+              <button
+                key={q}
+                onClick={() => setMessage(q)}
+                className="flex-shrink-0 text-xs px-2 py-1 rounded-full bg-white shadow-luxury text-muted-foreground hover:text-primary hover:border-primary border border-border/50 transition-colors"
+              >
                 {q}
               </button>
             ))}
           </div>
         </div>
 
-        {/* Input */}
-        <div className="fixed bottom-0 left-0 right-0 glass border-t border-border/50 px-4 py-3 flex items-center gap-2" style={{maxWidth: '430px', margin: '0 auto'}}>
-          <Input value={message} onChange={e => setMessage(e.target.value)}
+        <div className="fixed bottom-0 left-0 right-0 glass border-t border-border/50 px-4 py-3 flex items-center gap-2" style={{ maxWidth: "430px", margin: "0 auto" }}>
+          <Input
+            value={message}
+            onChange={e => setMessage(e.target.value)}
             onKeyDown={e => e.key === "Enter" && !e.shiftKey && handleSend()}
-            placeholder="メッセージを入力..." className="flex-1 rounded-xl h-9" />
-          <Button size="sm" className="w-9 h-9 rounded-xl gradient-luxury text-white p-0 flex-shrink-0"
-            onClick={handleSend} disabled={!message.trim() || sendMut.isPending}>
+            placeholder="メッセージを入力"
+            className="flex-1 rounded-xl h-9"
+          />
+          <Button
+            size="sm"
+            className="w-9 h-9 rounded-xl gradient-luxury text-white p-0 flex-shrink-0"
+            onClick={handleSend}
+            disabled={!message.trim() || sendMut.isPending}
+            aria-label="送信"
+          >
             <Send className="w-4 h-4" />
           </Button>
         </div>
@@ -246,8 +228,10 @@ export default function Messages() {
           </div>
         ) : threadList.map((thread: any, i: number) => (
           <motion.div key={thread.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}>
-            <button onClick={() => setSelectedThread(thread.id)}
-              className="w-full bg-white rounded-2xl p-4 shadow-luxury flex items-center gap-3 hover:shadow-md transition-shadow text-left">
+            <button
+              onClick={() => setSelectedThread(thread.id)}
+              className="w-full bg-white rounded-2xl p-4 shadow-luxury flex items-center gap-3 hover:shadow-md transition-shadow text-left"
+            >
               <div className="relative">
                 <AromaAvatar name={thread.otherName} src={thread.otherAvatar} size="md" />
                 {thread.unreadCount > 0 && (
@@ -257,13 +241,13 @@ export default function Messages() {
                 )}
               </div>
               <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-semibold text-foreground">{thread.otherName}</span>
-                  <span className="text-[10px] text-muted-foreground">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-sm font-semibold text-foreground truncate">{thread.otherName}</span>
+                  <span className="text-[10px] text-muted-foreground shrink-0">
                     {thread.lastMessageAt ? format(new Date(thread.lastMessageAt), "MM/dd HH:mm") : ""}
                   </span>
                 </div>
-                <p className="text-xs text-muted-foreground truncate mt-0.5">{thread.lastMessage ?? "メッセージがありません"}</p>
+                <p className="text-xs text-muted-foreground truncate mt-0.5">{thread.lastMessage ?? "メッセージはありません"}</p>
               </div>
             </button>
           </motion.div>
@@ -271,4 +255,35 @@ export default function Messages() {
       </div>
     </AromaLayout>
   );
+}
+
+function MessageMenu({ isMe, onDeleteMe, onDeleteEveryone }: { isMe: boolean; onDeleteMe: () => void; onDeleteEveryone: () => void }) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button className="w-6 h-6 rounded-full flex items-center justify-center text-muted-foreground hover:bg-muted" aria-label="メッセージメニュー">
+          <MoreVertical className="w-3.5 h-3.5" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align={isMe ? "end" : "start"} className="min-w-44">
+        <DropdownMenuItem onClick={onDeleteMe}>
+          <Trash2 className="w-4 h-4 mr-2" />
+          自分の画面から削除
+        </DropdownMenuItem>
+        {isMe && (
+          <DropdownMenuItem className="text-red-600 focus:text-red-600" onClick={onDeleteEveryone}>
+            <Trash2 className="w-4 h-4 mr-2" />
+            全員の画面から削除
+          </DropdownMenuItem>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+function roleLabel(role?: string) {
+  if (role === "store") return "店舗";
+  if (role === "therapist") return "セラピスト";
+  if (role === "customer") return "お客様";
+  return role ?? "";
 }
