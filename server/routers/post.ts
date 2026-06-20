@@ -3,7 +3,7 @@ import { publicProcedure, router } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import { getSession } from "../session";
-import { customerProfiles, favorites, postComments, postImages, posts, stores, therapists, therapistAccounts } from "../../drizzle/schema";
+import { customerProfiles, favorites, postComments, postImages, posts, storeAccounts, stores, therapists, therapistAccounts } from "../../drizzle/schema";
 import { eq, and, desc, inArray, sql } from "drizzle-orm";
 
 let postSchemaReady: Promise<void> | null = null;
@@ -56,18 +56,39 @@ async function ensureFavoritePostTarget(db: any) {
   }
 }
 
-async function filterActiveTherapistPosts(db: any, postRows: any[]) {
+async function filterPublicPostAuthors(db: any, postRows: any[]) {
   const therapistIds = Array.from(new Set(postRows.map(post => post.therapistId).filter(Boolean))) as number[];
-  if (!therapistIds.length) return postRows;
-  const activeRows = await db.select({ id: therapists.id }).from(therapists)
-    .innerJoin(therapistAccounts, eq(therapists.accountId, therapistAccounts.id))
-    .where(and(
-      inArray(therapists.id, therapistIds),
-      eq(therapists.isPublic, true),
-      eq(therapistAccounts.status, "active"),
-    ));
-  const activeIds = new Set(activeRows.map((row: any) => row.id));
-  return postRows.filter(post => !post.therapistId || activeIds.has(post.therapistId));
+  const storeIds = Array.from(new Set(postRows.map(post => post.storeId).filter(Boolean))) as number[];
+  const activeTherapistIds = new Set<number>();
+  const activeStoreIds = new Set<number>();
+
+  if (therapistIds.length) {
+    const activeRows = await db.select({ id: therapists.id }).from(therapists)
+      .innerJoin(therapistAccounts, eq(therapists.accountId, therapistAccounts.id))
+      .where(and(
+        inArray(therapists.id, therapistIds),
+        eq(therapists.isPublic, true),
+        eq(therapistAccounts.status, "active"),
+      ));
+    for (const row of activeRows) activeTherapistIds.add(row.id);
+  }
+
+  if (storeIds.length) {
+    const activeRows = await db.select({ id: stores.id }).from(stores)
+      .innerJoin(storeAccounts, eq(stores.accountId, storeAccounts.id))
+      .where(and(
+        inArray(stores.id, storeIds),
+        eq(stores.isPublic, true),
+        eq(storeAccounts.status, "active"),
+      ));
+    for (const row of activeRows) activeStoreIds.add(row.id);
+  }
+
+  return postRows.filter(post => {
+    if (post.therapistId && !activeTherapistIds.has(post.therapistId)) return false;
+    if (post.storeId && !activeStoreIds.has(post.storeId)) return false;
+    return true;
+  });
 }
 
 async function decoratePost(db: any, post: any, customerId?: number) {
@@ -128,7 +149,7 @@ export const postRouter = router({
       if (input.storeId) conditions.push(eq(posts.storeId, input.storeId));
       if (input.therapistId) conditions.push(eq(posts.therapistId, input.therapistId));
       const postRows = await db.select().from(posts).where(and(...conditions)).orderBy(desc(posts.createdAt)).limit(input.limit).offset(input.offset);
-      const visiblePosts = await filterActiveTherapistPosts(db, postRows);
+      const visiblePosts = await filterPublicPostAuthors(db, postRows);
       return Promise.all(visiblePosts.map((post: any) => decoratePost(db, post, session?.role === "customer" ? session.accountId : undefined)));
     }),
 
@@ -141,7 +162,7 @@ export const postRouter = router({
       await ensurePostInteractionSchema(db);
       if (session?.role === "customer") await ensureFavoritePostTarget(db);
       const postRows = await db.select().from(posts).where(and(eq(posts.id, input.id), eq(posts.isPublic, true))).limit(1);
-      const visiblePosts = await filterActiveTherapistPosts(db, postRows);
+      const visiblePosts = await filterPublicPostAuthors(db, postRows);
       if (!visiblePosts[0]) throw new TRPCError({ code: "NOT_FOUND" });
       return decoratePost(db, visiblePosts[0], session?.role === "customer" ? session.accountId : undefined);
     }),

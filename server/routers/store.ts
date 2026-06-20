@@ -4,7 +4,7 @@ import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import { getSession } from "../session";
 import {
-  stores, therapists, menus, menuOptions,
+  stores, storeAccounts, therapists, menus, menuOptions,
   coupons, reservations, reviews, posts,
   notifications, ngCustomers, sales, shifts,
 } from "../../drizzle/schema";
@@ -17,9 +17,16 @@ export const storeRouter = router({
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      const rows = await db.select().from(stores).where(eq(stores.id, input.storeId)).limit(1);
+      const rows = await db.select({ store: stores }).from(stores)
+        .innerJoin(storeAccounts, eq(stores.accountId, storeAccounts.id))
+        .where(and(
+          eq(stores.id, input.storeId),
+          eq(stores.isPublic, true),
+          eq(storeAccounts.status, "active"),
+        ))
+        .limit(1);
       if (!rows[0]) throw new TRPCError({ code: "NOT_FOUND" });
-      return rows[0];
+      return rows[0].store;
     }),
 
   search: publicProcedure
@@ -35,7 +42,13 @@ export const storeRouter = router({
       const conditions: any[] = [eq(stores.isPublic, true)];
       if (input.prefecture) conditions.push(eq(stores.prefecture, input.prefecture));
       if (input.keyword) conditions.push(like(stores.name, `%${input.keyword}%`));
-      return db.select().from(stores).where(and(...conditions)).orderBy(desc(stores.reviewAvg)).limit(input.limit).offset(input.offset);
+      const rows = await db.select({ store: stores }).from(stores)
+        .innerJoin(storeAccounts, eq(stores.accountId, storeAccounts.id))
+        .where(and(...conditions, eq(storeAccounts.status, "active")))
+        .orderBy(desc(stores.reviewAvg))
+        .limit(input.limit)
+        .offset(input.offset);
+      return rows.map(row => row.store);
     }),
 
   getMyStore: publicProcedure.query(async ({ ctx }) => {
@@ -97,6 +110,15 @@ export const storeRouter = router({
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const activeStoreRows = await db.select({ id: stores.id }).from(stores)
+        .innerJoin(storeAccounts, eq(stores.accountId, storeAccounts.id))
+        .where(and(
+          eq(stores.id, input.storeId),
+          eq(stores.isPublic, true),
+          eq(storeAccounts.status, "active"),
+        ))
+        .limit(1);
+      if (!activeStoreRows[0]) return [];
       return db.select().from(menus).where(and(eq(menus.storeId, input.storeId), eq(menus.isPublic, true))).orderBy(menus.sortOrder);
     }),
 

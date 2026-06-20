@@ -3,7 +3,7 @@ import { publicProcedure, router } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import { getSession } from "../session";
-import { storyPosts, therapists, therapistAccounts, stores } from "../../drizzle/schema";
+import { storyPosts, storeAccounts, therapists, therapistAccounts, stores } from "../../drizzle/schema";
 import { eq, and, gt, desc, inArray } from "drizzle-orm";
 
 export const storyRouter = router({
@@ -115,6 +115,15 @@ export const storyRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       const now = new Date();
+      const activeRows = await db.select({ id: stores.id }).from(stores)
+        .innerJoin(storeAccounts, eq(stores.accountId, storeAccounts.id))
+        .where(and(
+          eq(stores.id, input.storeId),
+          eq(stores.isPublic, true),
+          eq(storeAccounts.status, "active"),
+        ))
+        .limit(1);
+      if (!activeRows[0]) return [];
       return db.select().from(storyPosts)
         .where(and(eq(storyPosts.storeId, input.storeId), gt(storyPosts.expiresAt, now)))
         .orderBy(desc(storyPosts.createdAt));
@@ -155,10 +164,14 @@ export const storyRouter = router({
       const rows = await db
         .selectDistinct({ storeId: storyPosts.storeId })
         .from(storyPosts)
+        .innerJoin(stores, eq(storyPosts.storeId, stores.id))
+        .innerJoin(storeAccounts, eq(stores.accountId, storeAccounts.id))
         .where(
           and(
             inArray(storyPosts.storeId, input.storeIds),
-            gt(storyPosts.expiresAt, now)
+            gt(storyPosts.expiresAt, now),
+            eq(stores.isPublic, true),
+            eq(storeAccounts.status, "active"),
           )
         );
       return rows.map(r => r.storeId).filter(Boolean) as number[];
