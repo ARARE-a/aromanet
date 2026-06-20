@@ -5,7 +5,7 @@ import { getDb } from "../db";
 import { getSession } from "../session";
 import {
   customerProfiles, reservations, reviews, follows, favorites, notifications,
-  stores, therapists, menus,
+  stores, therapists, menus, customerAccounts, ageVerifications,
 } from "../../drizzle/schema";
 import { eq, and, desc, sql } from "drizzle-orm";
 
@@ -51,7 +51,21 @@ export const customerRouter = router({
     if (!session || session.role !== "customer") throw new TRPCError({ code: "UNAUTHORIZED" });
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-    const rows = await db.select().from(customerProfiles).where(eq(customerProfiles.accountId, session.accountId)).limit(1);
+    const [rows, accountRows, verificationRows] = await Promise.all([
+      db.select().from(customerProfiles).where(eq(customerProfiles.accountId, session.accountId)).limit(1),
+      db.select({
+        ageVerified: customerAccounts.ageVerified,
+        ageVerifiedAt: customerAccounts.ageVerifiedAt,
+      }).from(customerAccounts).where(eq(customerAccounts.id, session.accountId)).limit(1),
+      db.select({
+        status: ageVerifications.status,
+        createdAt: ageVerifications.createdAt,
+        verifiedAt: ageVerifications.verifiedAt,
+      }).from(ageVerifications)
+        .where(eq(ageVerifications.customerId, session.accountId))
+        .orderBy(desc(ageVerifications.createdAt))
+        .limit(1),
+    ]);
     const profile = rows[0];
     if (!profile) return null;
     const [reservationCountRows, favoriteCountRows] = await Promise.all([
@@ -60,6 +74,10 @@ export const customerRouter = router({
     ]);
     return {
       ...profile,
+      isVerified: Boolean(accountRows[0]?.ageVerified),
+      ageVerified: Boolean(accountRows[0]?.ageVerified),
+      ageVerifiedAt: accountRows[0]?.ageVerifiedAt ?? null,
+      verificationStatus: verificationRows[0]?.status ?? "not_submitted",
       reservationCount: Number(reservationCountRows[0]?.count ?? 0),
       favoriteCount: Number(favoriteCountRows[0]?.count ?? 0),
     };

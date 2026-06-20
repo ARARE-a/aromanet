@@ -16,19 +16,19 @@ import { eq, and, inArray, or, sql } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import { SignJWT, jwtVerify, type JWTPayload } from "jose";
 import { ensureTherapistInviteLinksTable, getInviteInvalidReason } from "../therapistInvites";
+import { getJwtSecretKey } from "../jwtSecret";
 
-const JWT_SECRET_KEY = new TextEncoder().encode(process.env.JWT_SECRET || "aromanet-secret-key");
 const SESSION_COOKIE = "aromanet_session";
 
 async function signToken(payload: Record<string, unknown>): Promise<string> {
   return new SignJWT(payload)
     .setProtectedHeader({ alg: "HS256" })
     .setExpirationTime("30d")
-    .sign(JWT_SECRET_KEY);
+    .sign(getJwtSecretKey());
 }
 
 async function verifyToken(token: string): Promise<JWTPayload & Record<string, any>> {
-  const { payload } = await jwtVerify(token, JWT_SECRET_KEY);
+  const { payload } = await jwtVerify(token, getJwtSecretKey());
   return payload as JWTPayload & Record<string, any>;
 }
 
@@ -276,7 +276,7 @@ export const authRouter = router({
       const existing = await db.select().from(customerAccounts).where(eq(customerAccounts.email, input.email)).limit(1);
       if (existing.length > 0) throw new TRPCError({ code: "CONFLICT", message: "このメールアドレスは既に登録されています" });
       const passwordHash = await bcrypt.hash(input.password, 12);
-      const result = await db.insert(customerAccounts).values({ email: input.email, passwordHash, ageVerified: true });
+      const result = await db.insert(customerAccounts).values({ email: input.email, passwordHash, ageVerified: false });
       const accountId = (result as any)[0].insertId as number;
       await db.insert(customerProfiles).values({ accountId, displayName: input.displayName });
       setSessionCookie(ctx.res, { role: "customer", accountId, email: input.email });

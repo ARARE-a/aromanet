@@ -1,6 +1,6 @@
 import { jwtVerify } from "jose";
+import { getJwtSecretKey } from "./jwtSecret";
 
-const JWT_SECRET_KEY = new TextEncoder().encode(process.env.JWT_SECRET || "aromanet-secret-key");
 const SESSION_COOKIE = "aromanet_session";
 
 export interface AromaSession {
@@ -15,7 +15,7 @@ export async function getSession(req: any): Promise<AromaSession | null> {
   const token = req.cookies?.[SESSION_COOKIE];
   if (!token) return null;
   try {
-    const { payload } = await jwtVerify(token, JWT_SECRET_KEY);
+    const { payload } = await jwtVerify(token, getJwtSecretKey());
     return payload as unknown as AromaSession;
   } catch {
     return null;

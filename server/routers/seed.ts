@@ -2,6 +2,7 @@ import { publicProcedure, router } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import bcrypt from "bcryptjs";
+import crypto from "node:crypto";
 import {
   storeAccounts, therapistAccounts, customerAccounts,
   stores, therapists, customerProfiles, menus, menuOptions,
@@ -10,9 +11,27 @@ import {
 } from "../../drizzle/schema";
 import { eq } from "drizzle-orm";
 
+function assertSeedAllowed(req: any) {
+  if (process.env.NODE_ENV === "production") {
+    throw new TRPCError({ code: "FORBIDDEN", message: "Seed operations are disabled in production." });
+  }
+  if (process.env.AROMANET_ENABLE_SEED !== "1") {
+    throw new TRPCError({ code: "FORBIDDEN", message: "Seed operations require AROMANET_ENABLE_SEED=1." });
+  }
+
+  const expectedToken = process.env.AROMANET_SEED_TOKEN?.trim();
+  if (expectedToken) {
+    const actualToken = String(req?.headers?.["x-aromanet-seed-token"] ?? "");
+    if (actualToken !== expectedToken) {
+      throw new TRPCError({ code: "UNAUTHORIZED", message: "Invalid seed token." });
+    }
+  }
+}
+
 export const seedRouter = router({
   // Seed mock data (only in dev or if DB is empty)
-  seedAll: publicProcedure.mutation(async () => {
+  seedAll: publicProcedure.mutation(async ({ ctx }) => {
+    assertSeedAllowed(ctx.req);
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
@@ -20,8 +39,12 @@ export const seedRouter = router({
     const existingStores = await db.select().from(storeAccounts).limit(1);
     if (existingStores.length > 0) return { success: true, message: "Already seeded" };
 
-    const hash = await bcrypt.hash("password123", 12);
-    const crashHash = await bcrypt.hash("crash123", 12);
+    const seedPassword = process.env.AROMANET_SEED_PASSWORD?.trim() || crypto.randomBytes(24).toString("base64url");
+    if (seedPassword.length < 12) {
+      throw new TRPCError({ code: "BAD_REQUEST", message: "AROMANET_SEED_PASSWORD must be at least 12 characters." });
+    }
+    const hash = await bcrypt.hash(seedPassword, 12);
+    const crashHash = await bcrypt.hash(crypto.randomBytes(24).toString("base64url"), 12);
 
     // Seed customer levels
     const levels = [
@@ -158,12 +181,12 @@ export const seedRouter = router({
     await db.insert(coupons).values({ storeId, code: "SUMMER500", name: "夏季500円OFF", discountType: "fixed", discountValue: 500, minAmount: 8000, isPublic: true });
 
     // Customer 1
-    const cAccResult = await db.insert(customerAccounts).values({ email: "customer1@example.com", passwordHash: hash, crashPasswordHash: crashHash, ageVerified: true });
+    const cAccResult = await db.insert(customerAccounts).values({ email: "customer1@example.com", passwordHash: hash, crashPasswordHash: crashHash, ageVerified: false });
     const cAccId = (cAccResult as any)[0].insertId as number;
     await db.insert(customerProfiles).values({ accountId: cAccId, displayName: "田中 太郎", nickname: "タナカ", totalSpent: 85000, memberLevel: 3 });
 
     // Customer 2
-    const cAccResult2 = await db.insert(customerAccounts).values({ email: "customer2@example.com", passwordHash: hash, ageVerified: true });
+    const cAccResult2 = await db.insert(customerAccounts).values({ email: "customer2@example.com", passwordHash: hash, ageVerified: false });
     const cAccId2 = (cAccResult2 as any)[0].insertId as number;
     await db.insert(customerProfiles).values({ accountId: cAccId2, displayName: "鈴木 一郎", nickname: "スズキ", totalSpent: 320000, memberLevel: 5 });
 

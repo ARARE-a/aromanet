@@ -4,7 +4,7 @@ import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import { getSession } from "../session";
 import {
-  reports, therapistAccounts, customerAccounts,
+  reports, storeAccounts, therapistAccounts, customerAccounts,
   identityVerifications, ageVerifications, auditLogs,
   reservations, reservationOptions, reviews, messages, posts, postImages,
   shifts, notifications, sales, menus, rooms, customerProfiles,
@@ -240,7 +240,6 @@ export const adminRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       await db.insert(ageVerifications).values({ customerId: session.accountId, method: input.method });
-      await db.update(customerAccounts).set({ ageVerified: true, ageVerifiedAt: new Date() }).where(eq(customerAccounts.id, session.accountId));
       return { success: true };
     }),
 
@@ -257,6 +256,85 @@ export const adminRouter = router({
       return rows[0] ?? null;
     }
   }),
+
+  reviewIdentityVerification: adminProcedure
+    .input(z.object({
+      id: z.number(),
+      status: z.enum(["approved", "rejected"]),
+      adminNote: z.string().optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const rows = await db.select().from(identityVerifications).where(eq(identityVerifications.id, input.id)).limit(1);
+      const request = rows[0];
+      if (!request) throw new TRPCError({ code: "NOT_FOUND" });
+
+      const approved = input.status === "approved";
+      await db.update(identityVerifications).set({
+        status: input.status,
+        adminNote: input.adminNote,
+        reviewedAt: new Date(),
+      }).where(eq(identityVerifications.id, input.id));
+
+      if (request.role === "store") {
+        await db.update(storeAccounts).set({
+          identityVerified: approved,
+          identityVerifiedAt: approved ? new Date() : null,
+        }).where(eq(storeAccounts.id, request.accountId));
+      } else {
+        await db.update(therapistAccounts).set({
+          identityVerified: approved,
+          identityVerifiedAt: approved ? new Date() : null,
+        }).where(eq(therapistAccounts.id, request.accountId));
+      }
+
+      await db.insert(auditLogs).values({
+        actorRole: "admin",
+        actorId: ctx.user.id,
+        action: "review_identity_verification",
+        targetType: request.role,
+        targetId: request.accountId,
+        detail: JSON.stringify({ verificationId: input.id, status: input.status }),
+        ipAddress: ctx.req.ip ?? String(ctx.req.headers["x-forwarded-for"] ?? "unknown"),
+      });
+      return { success: true };
+    }),
+
+  reviewAgeVerification: adminProcedure
+    .input(z.object({
+      id: z.number(),
+      status: z.enum(["approved", "rejected"]),
+      adminNote: z.string().optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const rows = await db.select().from(ageVerifications).where(eq(ageVerifications.id, input.id)).limit(1);
+      const request = rows[0];
+      if (!request) throw new TRPCError({ code: "NOT_FOUND" });
+
+      const approved = input.status === "approved";
+      await db.update(ageVerifications).set({
+        status: input.status,
+        verifiedAt: approved ? new Date() : null,
+      }).where(eq(ageVerifications.id, input.id));
+      await db.update(customerAccounts).set({
+        ageVerified: approved,
+        ageVerifiedAt: approved ? new Date() : null,
+      }).where(eq(customerAccounts.id, request.customerId));
+
+      await db.insert(auditLogs).values({
+        actorRole: "admin",
+        actorId: ctx.user.id,
+        action: "review_age_verification",
+        targetType: "customer",
+        targetId: request.customerId,
+        detail: JSON.stringify({ verificationId: input.id, status: input.status, adminNote: input.adminNote }),
+        ipAddress: ctx.req.ip ?? String(ctx.req.headers["x-forwarded-for"] ?? "unknown"),
+      });
+      return { success: true };
+    }),
 
   resolveReport: adminProcedure
     .input(z.object({ id: z.number(), resolution: z.string().optional() }))
