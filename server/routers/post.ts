@@ -23,7 +23,20 @@ function ensurePostInteractionSchema(db: any) {
           CONSTRAINT post_comments_id PRIMARY KEY(id)
         )
       `));
-      await db.execute(sql.raw("CREATE INDEX idx_post_comments_post ON post_comments (postId)"));
+      try {
+        await db.execute(sql.raw("CREATE INDEX idx_post_comments_post ON post_comments (postId)"));
+      } catch (error: any) {
+        const code = String(error?.code ?? "");
+        const errno = Number(error?.errno ?? 0);
+        const message = String(error?.message ?? "");
+        const duplicateIndex =
+          code === "ER_DUP_KEYNAME" ||
+          errno === 1061 ||
+          message.includes("Duplicate key name") ||
+          message.includes("already exists") ||
+          message.includes("CREATE INDEX idx_post_comments_post");
+        if (!duplicateIndex) throw error;
+      }
     })().catch((error: any) => {
       if (!String(error?.message ?? "").includes("Duplicate key name")) throw error;
     });
