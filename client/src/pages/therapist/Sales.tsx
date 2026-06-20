@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { motion } from "framer-motion";
 import {
@@ -13,19 +13,43 @@ import {
   ReceiptText,
   User,
 } from "lucide-react";
-import { AromaLayout, AromaAvatar } from "@/components/AromaLayout";
-
-import { trpc } from "@/lib/trpc";
-import { useSession } from "@/contexts/SessionContext";
-import { format, subMonths, addMonths } from "date-fns";
+import { addMonths, format, subMonths } from "date-fns";
 import { ja } from "date-fns/locale";
+import { AromaAvatar, AromaLayout } from "@/components/AromaLayout";
+import { useSession } from "@/contexts/SessionContext";
+import { trpc } from "@/lib/trpc";
 
 const navItems = [
-  { href: "/therapist/dashboard", icon: <Home className="w-[26px] h-[26px]" strokeWidth={1.5} />, activeIcon: <Home className="w-[26px] h-[26px]" strokeWidth={2.5} fill="currentColor" />, label: "ホーム" },
-  { href: "/therapist/shifts", icon: <Clock className="w-[26px] h-[26px]" strokeWidth={1.5} />, activeIcon: <Clock className="w-[26px] h-[26px]" strokeWidth={2.5} />, label: "出勤" },
-  { href: "/therapist/posts", icon: <PlusSquare className="w-[26px] h-[26px]" strokeWidth={1.5} />, activeIcon: <PlusSquare className="w-[26px] h-[26px]" strokeWidth={2.5} fill="currentColor" />, label: "投稿" },
-  { href: "/messages", icon: <MessageCircle className="w-[26px] h-[26px]" strokeWidth={1.5} />, activeIcon: <MessageCircle className="w-[26px] h-[26px]" strokeWidth={2.5} fill="currentColor" />, label: "DM" },
-  { href: "/therapist/profile", icon: <User className="w-[26px] h-[26px]" strokeWidth={1.5} />, activeIcon: <User className="w-[26px] h-[26px]" strokeWidth={2.5} fill="currentColor" />, label: "プロフィール" },
+  {
+    href: "/therapist/dashboard",
+    icon: <Home className="w-[26px] h-[26px]" strokeWidth={1.5} />,
+    activeIcon: <Home className="w-[26px] h-[26px]" strokeWidth={2.5} fill="currentColor" />,
+    label: "ホーム",
+  },
+  {
+    href: "/therapist/shifts",
+    icon: <Clock className="w-[26px] h-[26px]" strokeWidth={1.5} />,
+    activeIcon: <Clock className="w-[26px] h-[26px]" strokeWidth={2.5} />,
+    label: "出勤",
+  },
+  {
+    href: "/therapist/posts",
+    icon: <PlusSquare className="w-[26px] h-[26px]" strokeWidth={1.5} />,
+    activeIcon: <PlusSquare className="w-[26px] h-[26px]" strokeWidth={2.5} fill="currentColor" />,
+    label: "投稿",
+  },
+  {
+    href: "/messages",
+    icon: <MessageCircle className="w-[26px] h-[26px]" strokeWidth={1.5} />,
+    activeIcon: <MessageCircle className="w-[26px] h-[26px]" strokeWidth={2.5} fill="currentColor" />,
+    label: "DM",
+  },
+  {
+    href: "/therapist/profile",
+    icon: <User className="w-[26px] h-[26px]" strokeWidth={1.5} />,
+    activeIcon: <User className="w-[26px] h-[26px]" strokeWidth={2.5} fill="currentColor" />,
+    label: "プロフィール",
+  },
 ];
 
 const statusLabels: Record<string, string> = {
@@ -68,6 +92,12 @@ export default function TherapistSales() {
     if (!isLoading && (!session || session.role !== "therapist")) navigate("/therapist/login");
   }, [session, isLoading, navigate]);
 
+  useEffect(() => {
+    return () => {
+      if (highlightTimerRef.current) window.clearTimeout(highlightTimerRef.current);
+    };
+  }, []);
+
   const monthStr = format(month, "yyyy-MM");
   const year = month.getFullYear();
   const monthNum = month.getMonth() + 1;
@@ -94,18 +124,16 @@ export default function TherapistSales() {
     { label: "給与（見込み）", value: shortYen(estimatedPay), color: "text-teal-600", target: "payroll" as const },
   ];
 
-  useEffect(() => {
-    return () => {
-      if (highlightTimerRef.current) window.clearTimeout(highlightTimerRef.current);
-    };
-  }, []);
-
   return (
     <AromaLayout title="売上確認" showBack backHref="/therapist/dashboard" showNav navItems={navItems}>
       <div className="px-4 py-3 flex items-center justify-between">
-        <button onClick={() => setMonth(subMonths(month, 1))} className="p-2 rounded-full hover:bg-muted transition-colors"><ChevronLeft className="w-5 h-5" /></button>
+        <button onClick={() => setMonth(subMonths(month, 1))} className="p-2 rounded-full hover:bg-muted transition-colors" aria-label="前月">
+          <ChevronLeft className="w-5 h-5" />
+        </button>
         <span className="font-semibold text-foreground">{format(month, "yyyy年M月", { locale: ja })}</span>
-        <button onClick={() => setMonth(addMonths(month, 1))} className="p-2 rounded-full hover:bg-muted transition-colors"><ChevronRight className="w-5 h-5" /></button>
+        <button onClick={() => setMonth(addMonths(month, 1))} className="p-2 rounded-full hover:bg-muted transition-colors" aria-label="翌月">
+          <ChevronRight className="w-5 h-5" />
+        </button>
       </div>
 
       <div className="px-4 grid grid-cols-2 gap-3 mb-4">
@@ -138,7 +166,7 @@ export default function TherapistSales() {
             <div className="flex justify-between"><span className="text-muted-foreground">基本給与</span><span className="font-medium">{yen(p.baseAmount)}</span></div>
             {p.adjustmentAmount !== 0 && <div className="flex justify-between"><span className="text-muted-foreground">調整金</span><span className="font-medium">{p.adjustmentAmount > 0 ? "+" : ""}{yen(p.adjustmentAmount)}</span></div>}
             <div className="flex justify-between border-t border-border/50 pt-2"><span className="font-semibold">合計</span><span className="font-bold text-teal-600">{yen(p.totalAmount)}</span></div>
-            <div className="flex justify-between"><span className="text-muted-foreground">支払い状況</span><span className={`font-medium ${p.paymentStatus === "paid" ? "text-green-600" : "text-yellow-600"}`}>{p.paymentStatus === "paid" ? "支払済" : "未払い"}</span></div>
+            <div className="flex justify-between"><span className="text-muted-foreground">支払い状況</span><span className={`font-medium ${p.paymentStatus === "paid" ? "text-green-600" : "text-yellow-600"}`}>{p.paymentStatus === "paid" ? "支払い済み" : "未払い"}</span></div>
           </div>
         </div>
       )}
@@ -161,8 +189,13 @@ export default function TherapistSales() {
             {details.map((sale, i) => {
               const isExpanded = expandedSaleId === sale.id;
               return (
-                <motion.div key={sale.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }}
-                  className="bg-white rounded-2xl shadow-luxury overflow-hidden">
+                <motion.div
+                  key={sale.id}
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: i * 0.04 }}
+                  className="bg-white rounded-2xl shadow-luxury overflow-hidden"
+                >
                   <button
                     type="button"
                     onClick={() => setExpandedSaleId(isExpanded ? null : sale.id)}
