@@ -78,15 +78,15 @@ export default function StoreAffiliations() {
   };
 
   return (
-    <AromaLayout title="所属申請管理" showBack backHref="/store/dashboard">
+    <AromaLayout title="招待・所属管理" showBack backHref="/store/dashboard">
       <div className="px-4 py-3">
         <div className="bg-white rounded-2xl p-3 shadow-luxury flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
             <Users className="w-5 h-5 text-primary" />
           </div>
           <div>
-            <div className="text-sm font-semibold text-foreground">申請中: {pendingReqs.length}件</div>
-            <div className="text-xs text-muted-foreground">セラピストからの所属申請を承認・却下できます</div>
+            <div className="text-sm font-semibold text-foreground">所属申請: {pendingReqs.length}件</div>
+            <div className="text-xs text-muted-foreground">通常は招待URLを発行して、店舗所属を自動登録します</div>
           </div>
         </div>
       </div>

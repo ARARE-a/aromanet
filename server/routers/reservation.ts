@@ -5,7 +5,7 @@ import { getDb } from "../db";
 import { getSession } from "../session";
 import {
   reservations, reservationOptions, menus, menuOptions,
-  coupons, notifications, customerProfiles, therapists, stores, sales,
+  coupons, notifications, customerProfiles, therapists, stores, sales, therapistSalarySettings,
 } from "../../drizzle/schema";
 import { eq, and, desc, sql } from "drizzle-orm";
 
@@ -219,33 +219,43 @@ export const reservationRouter = router({
         const resRows = await db.select().from(reservations).where(eq(reservations.id, id)).limit(1);
         if (resRows[0]) {
           const r = resRows[0];
+          const existingSales = await db.select({ id: sales.id }).from(sales).where(eq(sales.reservationId, id)).limit(1);
           let backRate = 50;
           if (r.therapistId) {
-            const tRows = await db.select().from(therapists).where(eq(therapists.id, r.therapistId)).limit(1);
-            if (tRows[0]) backRate = Number(tRows[0].backRate);
+            const salaryRows = await db.select().from(therapistSalarySettings)
+              .where(and(eq(therapistSalarySettings.therapistId, r.therapistId), eq(therapistSalarySettings.storeId, r.storeId)))
+              .limit(1);
+            if (salaryRows[0]) {
+              backRate = Number(salaryRows[0].backRate);
+            } else {
+              const tRows = await db.select().from(therapists).where(eq(therapists.id, r.therapistId)).limit(1);
+              if (tRows[0]) backRate = Number(tRows[0].backRate);
+            }
           }
           const therapistBack = Math.floor((r.totalPrice - r.nominationFee) * backRate / 100);
-          await db.insert(sales).values({
-            reservationId: id,
-            storeId: r.storeId,
-            therapistId: r.therapistId,
-            date: r.date,
-            menuAmount: r.totalPrice - r.nominationFee - r.optionTotal + r.discountAmount,
-            nominationFee: r.nominationFee,
-            optionAmount: r.optionTotal,
-            discountAmount: r.discountAmount,
-            totalAmount: r.totalPrice,
-            therapistBack,
-          });
-          await db.update(customerProfiles).set({ totalSpent: sql`totalSpent + ${r.totalPrice}` }).where(eq(customerProfiles.accountId, r.customerId));
-          await db.insert(notifications).values({
-            recipientRole: "customer",
-            recipientId: r.customerId,
-            type: "reservation_completed",
-            title: "施術が完了しました",
-            body: "口コミを投稿してください",
-            relatedId: id,
-          });
+          if (!existingSales[0]) {
+            await db.insert(sales).values({
+              reservationId: id,
+              storeId: r.storeId,
+              therapistId: r.therapistId,
+              date: r.date,
+              menuAmount: r.totalPrice - r.nominationFee - r.optionTotal + r.discountAmount,
+              nominationFee: r.nominationFee,
+              optionAmount: r.optionTotal,
+              discountAmount: r.discountAmount,
+              totalAmount: r.totalPrice,
+              therapistBack,
+            });
+            await db.update(customerProfiles).set({ totalSpent: sql`totalSpent + ${r.totalPrice}` }).where(eq(customerProfiles.accountId, r.customerId));
+            await db.insert(notifications).values({
+              recipientRole: "customer",
+              recipientId: r.customerId,
+              type: "reservation_completed",
+              title: "施術が完了しました",
+              body: "口コミを投稿してください",
+              relatedId: id,
+            });
+          }
         }
       }
       return { success: true };

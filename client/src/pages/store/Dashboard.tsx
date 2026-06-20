@@ -105,7 +105,7 @@ export default function StoreDashboard() {
     { href: "/store/reviews", icon: <Star className="w-6 h-6" />, label: "口コミ管理", color: "bg-yellow-50 text-yellow-600" },
     { href: "/store/customers", icon: <UserCheck className="w-6 h-6" />, label: "顧客管理", color: "bg-indigo-50 text-indigo-600" },
     { href: "/store/rooms", icon: <DoorOpen className="w-6 h-6" />, label: "ルーム管理", color: "bg-cyan-50 text-cyan-600" },
-    { href: "/store/affiliations", icon: <Users className="w-6 h-6" />, label: "所属申請", color: "bg-rose-50 text-rose-600" },
+    { href: "/store/affiliations", icon: <Users className="w-6 h-6" />, label: "招待・所属", color: "bg-rose-50 text-rose-600" },
     { href: "/store/profile", icon: <Settings className="w-6 h-6" />, label: "店舗設定", color: "bg-gray-50 text-gray-600" },
   ];
 

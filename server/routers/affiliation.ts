@@ -273,6 +273,8 @@ export const affiliationRouter = router({
           adjustmentNote: input.adjustmentNote,
         });
       }
+      await db.update(therapists).set({ backRate: String(input.backRate) })
+        .where(and(eq(therapists.id, input.therapistId), eq(therapists.storeId, session.storeId!)));
       return { success: true };
     }),
 

@@ -174,6 +174,16 @@ try {
     assert(therapists.some((row) => row.id === ids.therapistId), "store cannot see invited therapist", therapists);
   });
 
+  await step("店舗が給与設定を変更できる", async () => {
+    await store.client.affiliation.updateSalarySettings.mutate({
+      therapistId: ids.therapistId,
+      backRate: 70,
+      nominationFee: 2000,
+      adjustmentNote: "QAバック率設定",
+    });
+    ids.expectedBackRate = 70;
+  });
+
   await step("セラピストがシフト申請し、店舗が承認できる", async () => {
     const created = await therapist.client.therapist.createShift.mutate({
       date: targetDate,
@@ -299,10 +309,12 @@ try {
     assert(Number(summary?.count ?? 0) >= 1, "therapist sales count did not update", summary);
     const details = await therapist.client.therapist.getSalesDetails.query({ month });
     assert(details.some((row) => row.reservationId === ids.reservationId), "therapist sales details missing reservation", details);
+    const detail = details.find((row) => row.reservationId === ids.reservationId);
+    assert(Number(detail?.therapistBack ?? 0) === 7000, "therapist back amount did not use store salary settings", detail);
     const payroll = await therapist.client.therapist.getPayroll.query({ year, month: monthNum });
-    assert(Number(payroll?.totalAmount ?? 0) >= 2000, "therapist payroll did not include salary notification", payroll);
+    assert(Number(payroll?.totalAmount ?? 0) >= 9000, "therapist payroll did not include calculated back amount and salary notification", payroll);
     const storePayrolls = await store.client.sales.getTherapistPayrolls.query({ year, month: monthNum });
-    assert(storePayrolls.some((row) => row.therapistId === ids.therapistId && Number(row.totalAmount ?? 0) >= 2000), "store payroll list missing therapist payroll", storePayrolls);
+    assert(storePayrolls.some((row) => row.therapistId === ids.therapistId && Number(row.totalAmount ?? 0) >= 9000), "store payroll list missing therapist payroll", storePayrolls);
   });
 
   console.log(JSON.stringify({ ok: true, baseUrl, ids, emails, password: "[hidden]" }, null, 2));

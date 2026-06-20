@@ -1,37 +1,23 @@
 import { useState, useEffect } from "react";
 import { useLocation, Link } from "wouter";
 import { motion } from "framer-motion";
-import { Plus, Search, UserX, Star, MessageCircle } from "lucide-react";
+import { Link2, Search, UserX, Star, MessageCircle } from "lucide-react";
 import { AromaLayout, AromaAvatar } from "@/components/AromaLayout";
 import { trpc } from "@/lib/trpc";
 import { useSession } from "@/contexts/SessionContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { toast } from "sonner";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
 
 export default function StoreTherapists() {
   const [, navigate] = useLocation();
   const { session, isLoading } = useSession();
   const [search, setSearch] = useState("");
-  const [showAdd, setShowAdd] = useState(false);
-  const [form, setForm] = useState({ email: "", password: "", displayName: "" });
 
   useEffect(() => {
     if (!isLoading && (!session || session.role !== "store")) navigate("/store/login");
-  }, [session, isLoading]);
+  }, [session, isLoading, navigate]);
 
-  const { data: therapists, refetch } = trpc.store.getTherapists.useQuery(undefined, { enabled: !!session });
-  const addMut = trpc.aroAuth.therapistRegister.useMutation({
-    onSuccess: () => {
-      toast.success("セラピストを追加しました");
-      setShowAdd(false);
-      setForm({ email: "", password: "", displayName: "" });
-      refetch();
-    },
-    onError: (e) => toast.error(e.message),
-  });
+  const { data: therapists } = trpc.store.getTherapists.useQuery(undefined, { enabled: !!session });
 
   const list = ((therapists as any[]) ?? []).filter((t: any) =>
     !search || t.displayName?.includes(search)
@@ -44,9 +30,21 @@ export default function StoreTherapists() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input value={search} onChange={e => setSearch(e.target.value)} placeholder="名前で検索" className="pl-9 h-9 rounded-xl" />
         </div>
-        <Button size="sm" className="h-9 rounded-xl gradient-luxury text-white" onClick={() => setShowAdd(true)}>
-          <Plus className="w-4 h-4 mr-1" />追加
+        <Button size="sm" className="h-9 rounded-xl gradient-luxury text-white" onClick={() => navigate("/store/affiliations")}>
+          <Link2 className="w-4 h-4 mr-1" />招待
         </Button>
+      </div>
+      <div className="px-4 pb-3">
+        <button
+          type="button"
+          onClick={() => navigate("/store/affiliations")}
+          className="w-full rounded-2xl bg-white p-3 text-left shadow-luxury active:scale-[0.99] transition"
+        >
+          <div className="text-sm font-semibold text-foreground">セラピスト招待URLを発行</div>
+          <div className="text-xs text-muted-foreground mt-0.5">
+            URLから登録したセラピストだけが、この店舗の所属として自動登録されます。
+          </div>
+        </button>
       </div>
       <div className="px-4 space-y-3">
         {list.map((t: any, i: number) => (
@@ -74,20 +72,10 @@ export default function StoreTherapists() {
           <div className="text-center py-12 text-muted-foreground">
             <UserX className="w-10 h-10 mx-auto mb-2 opacity-30" />
             <p className="text-sm">スタッフが登録されていません</p>
+            <p className="text-xs mt-1">招待URLを発行して、セラピスト本人に登録してもらってください</p>
           </div>
         )}
       </div>
-      <Dialog open={showAdd} onOpenChange={setShowAdd}>
-        <DialogContent className="max-w-sm rounded-2xl">
-          <DialogHeader><DialogTitle>セラピスト追加</DialogTitle></DialogHeader>
-          <div className="space-y-3">
-            <div><Label>源氏名</Label><Input value={form.displayName} onChange={e => setForm(f => ({...f, displayName: e.target.value}))} className="mt-1 rounded-xl" /></div>
-            <div><Label>メールアドレス</Label><Input type="email" value={form.email} onChange={e => setForm(f => ({...f, email: e.target.value}))} className="mt-1 rounded-xl" /></div>
-            <div><Label>初期パスワード（8文字以上）</Label><Input type="password" value={form.password} onChange={e => setForm(f => ({...f, password: e.target.value}))} className="mt-1 rounded-xl" /></div>
-            <Button className="w-full rounded-xl gradient-luxury text-white" onClick={() => addMut.mutate({ ...form, skipEmailVerify: true })} disabled={addMut.isPending || !form.email || !form.password || !form.displayName}>追加する</Button>
-          </div>
-        </DialogContent>
-      </Dialog>
     </AromaLayout>
   );
 }
