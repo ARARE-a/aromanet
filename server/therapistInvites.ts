@@ -7,8 +7,17 @@ async function ignoreDuplicateIndex(promise: Promise<unknown>) {
   try {
     await promise;
   } catch (error: any) {
+    const code = String(error?.code ?? "");
+    const errno = Number(error?.errno ?? 0);
     const message = String(error?.message ?? "");
-    if (!message.includes("Duplicate key name") && !message.includes("already exists")) throw error;
+    const duplicateIndex =
+      code === "ER_DUP_KEYNAME" ||
+      errno === 1061 ||
+      message.includes("Duplicate key name") ||
+      message.includes("already exists") ||
+      message.includes("CREATE UNIQUE INDEX idx_therapist_invite_token") ||
+      message.includes("CREATE INDEX idx_therapist_invite_store");
+    if (!duplicateIndex) throw error;
   }
 }
 
