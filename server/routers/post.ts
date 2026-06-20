@@ -3,8 +3,8 @@ import { publicProcedure, router } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import { getSession } from "../session";
-import { customerProfiles, favorites, postComments, postImages, posts, stores, therapists } from "../../drizzle/schema";
-import { eq, and, desc, sql } from "drizzle-orm";
+import { customerProfiles, favorites, postComments, postImages, posts, stores, therapists, therapistAccounts } from "../../drizzle/schema";
+import { eq, and, desc, inArray, sql } from "drizzle-orm";
 
 let postSchemaReady: Promise<void> | null = null;
 
@@ -54,6 +54,20 @@ async function ensureFavoritePostTarget(db: any) {
       console.warn("[Post] favorites enum migration skipped:", message);
     }
   }
+}
+
+async function filterActiveTherapistPosts(db: any, postRows: any[]) {
+  const therapistIds = Array.from(new Set(postRows.map(post => post.therapistId).filter(Boolean))) as number[];
+  if (!therapistIds.length) return postRows;
+  const activeRows = await db.select({ id: therapists.id }).from(therapists)
+    .innerJoin(therapistAccounts, eq(therapists.accountId, therapistAccounts.id))
+    .where(and(
+      inArray(therapists.id, therapistIds),
+      eq(therapists.isPublic, true),
+      eq(therapistAccounts.status, "active"),
+    ));
+  const activeIds = new Set(activeRows.map((row: any) => row.id));
+  return postRows.filter(post => !post.therapistId || activeIds.has(post.therapistId));
 }
 
 async function decoratePost(db: any, post: any, customerId?: number) {
@@ -114,7 +128,8 @@ export const postRouter = router({
       if (input.storeId) conditions.push(eq(posts.storeId, input.storeId));
       if (input.therapistId) conditions.push(eq(posts.therapistId, input.therapistId));
       const postRows = await db.select().from(posts).where(and(...conditions)).orderBy(desc(posts.createdAt)).limit(input.limit).offset(input.offset);
-      return Promise.all(postRows.map((post: any) => decoratePost(db, post, session?.role === "customer" ? session.accountId : undefined)));
+      const visiblePosts = await filterActiveTherapistPosts(db, postRows);
+      return Promise.all(visiblePosts.map((post: any) => decoratePost(db, post, session?.role === "customer" ? session.accountId : undefined)));
     }),
 
   getById: publicProcedure
@@ -126,8 +141,9 @@ export const postRouter = router({
       await ensurePostInteractionSchema(db);
       if (session?.role === "customer") await ensureFavoritePostTarget(db);
       const postRows = await db.select().from(posts).where(and(eq(posts.id, input.id), eq(posts.isPublic, true))).limit(1);
-      if (!postRows[0]) throw new TRPCError({ code: "NOT_FOUND" });
-      return decoratePost(db, postRows[0], session?.role === "customer" ? session.accountId : undefined);
+      const visiblePosts = await filterActiveTherapistPosts(db, postRows);
+      if (!visiblePosts[0]) throw new TRPCError({ code: "NOT_FOUND" });
+      return decoratePost(db, visiblePosts[0], session?.role === "customer" ? session.accountId : undefined);
     }),
 
   create: publicProcedure

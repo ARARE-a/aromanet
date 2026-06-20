@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="AromaNet">
+  <rect width="512" height="512" rx="108" fill="#0f5f5b"/>
+  <circle cx="256" cy="256" r="176" fill="#f6efe4"/>
+  <path d="M174 328c28-88 52-144 82-144s54 56 82 144" fill="none" stroke="#0f5f5b" stroke-width="34" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M204 292h104" fill="none" stroke="#c8a96a" stroke-width="30" stroke-linecap="round"/>
+  <circle cx="256" cy="144" r="24" fill="#c8a96a"/>
+</svg>

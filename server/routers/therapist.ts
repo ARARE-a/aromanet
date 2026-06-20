@@ -4,7 +4,7 @@ import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import { getSession } from "../session";
 import {
-  therapists, stores, shifts, reservations,
+  therapists, therapistAccounts, stores, shifts, reservations,
   posts, postImages, customerMemos, follows, favorites,
   sales, therapistPayrolls, customerProfiles, menus, notifications,
 } from "../../drizzle/schema";
@@ -27,9 +27,16 @@ export const therapistRouter = router({
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      const rows = await db.select().from(therapists).where(eq(therapists.id, input.therapistId)).limit(1);
+      const rows = await db.select({ therapist: therapists }).from(therapists)
+        .innerJoin(therapistAccounts, eq(therapists.accountId, therapistAccounts.id))
+        .where(and(
+          eq(therapists.id, input.therapistId),
+          eq(therapists.isPublic, true),
+          eq(therapistAccounts.status, "active"),
+        ))
+        .limit(1);
       if (!rows[0]) throw new TRPCError({ code: "NOT_FOUND" });
-      return rows[0];
+      return rows[0].therapist;
     }),
 
   getByStore: publicProcedure
@@ -37,9 +44,15 @@ export const therapistRouter = router({
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      return db.select().from(therapists)
-        .where(and(eq(therapists.storeId, input.storeId), eq(therapists.isPublic, true)))
+      const rows = await db.select({ therapist: therapists }).from(therapists)
+        .innerJoin(therapistAccounts, eq(therapists.accountId, therapistAccounts.id))
+        .where(and(
+          eq(therapists.storeId, input.storeId),
+          eq(therapists.isPublic, true),
+          eq(therapistAccounts.status, "active"),
+        ))
         .orderBy(desc(therapists.nominationCount));
+      return rows.map(row => row.therapist);
     }),
 
   search: publicProcedure
@@ -56,7 +69,12 @@ export const therapistRouter = router({
       const conditions: any[] = [eq(therapists.isPublic, true)];
       if (input.storeId) conditions.push(eq(therapists.storeId, input.storeId));
       if (input.keyword) conditions.push(like(therapists.displayName, `%${input.keyword}%`));
-      let results = await db.select().from(therapists).where(and(...conditions)).orderBy(desc(therapists.nominationCount)).limit(200);
+      const rows = await db.select({ therapist: therapists }).from(therapists)
+        .innerJoin(therapistAccounts, eq(therapists.accountId, therapistAccounts.id))
+        .where(and(...conditions, eq(therapistAccounts.status, "active")))
+        .orderBy(desc(therapists.nominationCount))
+        .limit(200);
+      let results = rows.map(row => row.therapist);
       // Filter by prefecture via store
       if (input.prefecture) {
         const storeRows = await db.select({ id: stores.id }).from(stores).where(eq(stores.prefecture, input.prefecture));

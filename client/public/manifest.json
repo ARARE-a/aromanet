@@ -1,7 +1,7 @@
 {
   "name": "AromaNet",
   "short_name": "AromaNet",
-  "description": "メンズエステ予約・管理プラットフォーム",
+  "description": "メンズエステ店舗・セラピスト・顧客をつなぐ予約管理プラットフォーム",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",
@@ -9,15 +9,15 @@
   "orientation": "portrait",
   "icons": [
     {
-      "src": "/manus-storage/icon-192_d999fb1c.png",
-      "sizes": "192x192",
-      "type": "image/png",
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
       "purpose": "any maskable"
     },
     {
-      "src": "/manus-storage/icon-512_25da1b7f.png",
-      "sizes": "512x512",
-      "type": "image/png",
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
       "purpose": "any maskable"
     }
   ],
