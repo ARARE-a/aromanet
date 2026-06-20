@@ -14,7 +14,8 @@
     "prod:setup-accounts": "node scripts/setup-production-accounts.mjs",
     "prod:disable-demo-accounts": "node scripts/disable-demo-accounts.mjs",
     "prod:disable-qa-accounts": "node scripts/disable-qa-accounts.mjs",
-    "prod:cleanup-smoke": "node scripts/cleanup-smoke-data.mjs"
+    "prod:cleanup-smoke": "node scripts/cleanup-smoke-data.mjs",
+    "prod:smoke": "node scripts/prod-smoke-test.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.693.0",
