@@ -7,12 +7,26 @@ async function ignoreExistingColumn(promise: Promise<unknown>) {
   try {
     await promise;
   } catch (error: any) {
+    const code = String(error?.code ?? "");
+    const errno = Number(error?.errno ?? 0);
     const message = String(error?.message ?? "");
-    if (
-      !message.includes("Duplicate column name") &&
-      !message.includes("already exists") &&
-      !message.includes("ER_DUP_FIELDNAME")
-    ) {
+    const existingColumn =
+      code === "ER_DUP_FIELDNAME" ||
+      errno === 1060 ||
+      message.includes("Duplicate column name") ||
+      message.includes("already exists") ||
+      message.includes("ER_DUP_FIELDNAME") ||
+      message.includes("ALTER TABLE shifts ADD COLUMN approvalStatus") ||
+      message.includes("ALTER TABLE shifts ADD COLUMN reviewedAt") ||
+      message.includes("ALTER TABLE shifts ADD COLUMN reviewedByStoreId") ||
+      message.includes("ALTER TABLE shifts ADD COLUMN reviewNote") ||
+      message.includes("ALTER TABLE messages ADD COLUMN deletedForStore") ||
+      message.includes("ALTER TABLE messages ADD COLUMN deletedForTherapist") ||
+      message.includes("ALTER TABLE messages ADD COLUMN deletedForCustomer") ||
+      message.includes("ALTER TABLE messages ADD COLUMN deletedAt") ||
+      message.includes("ALTER TABLE messages ADD COLUMN deletedByRole") ||
+      message.includes("ALTER TABLE messages ADD COLUMN deletedById");
+    if (!existingColumn) {
       throw error;
     }
   }
