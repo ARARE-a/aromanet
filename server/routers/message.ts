@@ -213,24 +213,34 @@ export const messageRouter = router({
       let otherName: string | null = null;
       let otherAvatar: string | null = null;
       let otherRole: string | null = null;
+      let contextLabel: string | null = null;
       let unreadCount = 0;
       if (session.role === "store") {
         unreadCount = thread.storeUnread;
         if (thread.therapistId && thread.threadType === "store_therapist") {
           const tRows = await db.select({ displayName: therapists.displayName, profileImageUrl: therapists.profileImageUrl }).from(therapists).where(eq(therapists.id, thread.therapistId)).limit(1);
           otherName = tRows[0]?.displayName ?? null; otherAvatar = tRows[0]?.profileImageUrl ?? null; otherRole = "セラピスト";
+          contextLabel = "業務DM";
+        } else if (thread.therapistId && thread.customerId && thread.threadType === "therapist_customer") {
+          const tRows = await db.select({ displayName: therapists.displayName }).from(therapists).where(eq(therapists.id, thread.therapistId)).limit(1);
+          const cpRows = await db.select({ displayName: customerProfiles.displayName, nickname: customerProfiles.nickname, profileImageUrl: customerProfiles.profileImageUrl }).from(customerProfiles).where(eq(customerProfiles.accountId, thread.customerId)).limit(1);
+          otherName = customerDisplayName(cpRows[0], thread.customerId); otherAvatar = cpRows[0]?.profileImageUrl ?? null; otherRole = "お客様";
+          contextLabel = `${tRows[0]?.displayName ?? "セラピスト"}とのDM`;
         } else if (thread.customerId) {
           const cpRows = await db.select({ displayName: customerProfiles.displayName, nickname: customerProfiles.nickname, profileImageUrl: customerProfiles.profileImageUrl }).from(customerProfiles).where(eq(customerProfiles.accountId, thread.customerId)).limit(1);
           otherName = customerDisplayName(cpRows[0], thread.customerId); otherAvatar = cpRows[0]?.profileImageUrl ?? null; otherRole = "お客様";
+          contextLabel = "店舗DM";
         }
       } else if (session.role === "therapist") {
         unreadCount = thread.therapistUnread;
         if (thread.storeId && thread.threadType === "store_therapist") {
           const sRows = await db.select({ name: stores.name, logoUrl: stores.logoUrl }).from(stores).where(eq(stores.id, thread.storeId)).limit(1);
           otherName = sRows[0]?.name ?? null; otherAvatar = sRows[0]?.logoUrl ?? null; otherRole = "店舗";
+          contextLabel = "業務DM";
         } else if (thread.customerId) {
           const cpRows = await db.select({ displayName: customerProfiles.displayName, nickname: customerProfiles.nickname, profileImageUrl: customerProfiles.profileImageUrl }).from(customerProfiles).where(eq(customerProfiles.accountId, thread.customerId)).limit(1);
           otherName = customerDisplayName(cpRows[0], thread.customerId); otherAvatar = cpRows[0]?.profileImageUrl ?? null; otherRole = "お客様";
+          contextLabel = "顧客DM";
         }
       } else {
         // customer
@@ -238,12 +248,14 @@ export const messageRouter = router({
         if (thread.therapistId) {
           const tRows = await db.select({ displayName: therapists.displayName, profileImageUrl: therapists.profileImageUrl }).from(therapists).where(eq(therapists.id, thread.therapistId)).limit(1);
           otherName = tRows[0]?.displayName ?? null; otherAvatar = tRows[0]?.profileImageUrl ?? null; otherRole = "セラピスト";
+          contextLabel = "セラピストDM";
         } else if (thread.storeId) {
           const sRows = await db.select({ name: stores.name, logoUrl: stores.logoUrl }).from(stores).where(eq(stores.id, thread.storeId)).limit(1);
           otherName = sRows[0]?.name ?? null; otherAvatar = sRows[0]?.logoUrl ?? null; otherRole = "店舗";
+          contextLabel = "店舗DM";
         }
       }
-      result.push({ ...thread, otherName, otherAvatar, otherRole, unreadCount, lastMessage: lastMsgRows[0]?.content ?? null });
+      result.push({ ...thread, otherName, otherAvatar, otherRole, contextLabel, unreadCount, lastMessage: lastMsgRows[0]?.content ?? null });
     }
     return result;
   }),

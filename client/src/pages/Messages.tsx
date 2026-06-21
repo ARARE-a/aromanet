@@ -235,6 +235,9 @@ export default function Messages() {
                   <span className="text-sm font-semibold text-foreground truncate">{thread.otherName}</span>
                   <span className="text-[10px] text-muted-foreground shrink-0">{thread.lastMessageAt ? format(new Date(thread.lastMessageAt), "MM/dd HH:mm") : ""}</span>
                 </div>
+                {thread.contextLabel && (
+                  <div className="text-[10px] text-primary font-medium truncate mt-0.5">{thread.contextLabel}</div>
+                )}
                 <p className="text-xs text-muted-foreground truncate mt-0.5">{thread.lastMessage ?? "メッセージはまだありません"}</p>
               </div>
             </button>
