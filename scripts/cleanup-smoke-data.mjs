@@ -1,10 +1,9 @@
 import mysql from "mysql2/promise";
 
 const apply = process.argv.includes("--apply");
-const recalculatePayroll = process.argv.includes("--recalculate-payroll");
-const markers = (process.env.SMOKE_DATA_MARKERS ?? "本番動作確認,動作確認")
+const patterns = (process.env.QA_ACCOUNT_PATTERNS ?? "qa-%@example.com,probe-%@example.com")
   .split(",")
-  .map(marker => marker.trim())
+  .map((pattern) => pattern.trim())
   .filter(Boolean);
 
 function required(name) {
@@ -13,173 +12,266 @@ function required(name) {
   return value;
 }
 
-function likeParams() {
-  return markers.map(marker => `%${marker}%`);
+function whereLike(column) {
+  return patterns.map(() => `${column} like ?`).join(" or ");
 }
 
-function markerWhere(columns) {
-  return columns.map(column => `${column} like ?`).join(" or ");
+function placeholders(values) {
+  return values.map(() => "?").join(",");
+}
+
+function uniqueIds(rows) {
+  return Array.from(new Set(rows.map((row) => Number(row.id)).filter(Number.isInteger)));
 }
 
 async function selectIds(conn, sql, params = []) {
   const [rows] = await conn.execute(sql, params);
-  return rows;
-}
-
-function ids(rows) {
-  return Array.from(new Set(rows.map(row => row.id).filter(id => Number.isInteger(id))));
+  return uniqueIds(rows);
 }
 
 async function deleteIn(conn, table, column, values) {
   if (!values.length) return 0;
-  const placeholders = values.map(() => "?").join(",");
-  const [result] = await conn.execute(`delete from ${table} where ${column} in (${placeholders})`, values);
-  return result.affectedRows ?? values.length;
+  const [result] = await conn.execute(
+    `delete from ${table} where ${column} in (${placeholders(values)})`,
+    values,
+  );
+  return result.affectedRows ?? 0;
+}
+
+async function deleteWhere(conn, table, where, params) {
+  if (!params.length) return 0;
+  const [result] = await conn.execute(`delete from ${table} where ${where}`, params);
+  return result.affectedRows ?? 0;
+}
+
+async function deleteAny(conn, table, clauses) {
+  const active = clauses.filter((clause) => clause.values.length > 0);
+  if (!active.length) return 0;
+  const where = active.map((clause) => clause.sql).join(" or ");
+  const params = active.flatMap((clause) => clause.values);
+  return deleteWhere(conn, table, where, params);
 }
 
 async function collect(conn) {
-  const params = likeParams();
-  const reservationRows = await selectIds(
+  const storeAccountIds = await selectIds(
     conn,
-    `select id, customerId, storeId, therapistId, date, totalPrice from reservations where ${markerWhere(["customerNote", "note"])}`,
-    [...params, ...params]
+    `select id from store_accounts where ${whereLike("email")}`,
+    patterns,
   );
-  const reservationIds = ids(reservationRows);
+  const therapistAccountIds = await selectIds(
+    conn,
+    `select id from therapist_accounts where ${whereLike("email")}`,
+    patterns,
+  );
+  const customerIds = await selectIds(
+    conn,
+    `select id from customer_accounts where ${whereLike("email")}`,
+    patterns,
+  );
 
-  const reviewParams = [...params];
-  let reviewSql = `select id from reviews where ${markerWhere(["comment"])}`;
-  if (reservationIds.length) {
-    reviewSql += ` or reservationId in (${reservationIds.map(() => "?").join(",")})`;
-    reviewParams.push(...reservationIds);
-  }
-  const reviewRows = await selectIds(conn, reviewSql, reviewParams);
+  const storeIds = await selectIds(
+    conn,
+    `select id from stores where accountId in (${placeholders(storeAccountIds.length ? storeAccountIds : [-1])})`,
+    storeAccountIds.length ? storeAccountIds : [-1],
+  );
+  const therapistIds = await selectIds(
+    conn,
+    `select id from therapists where accountId in (${placeholders(therapistAccountIds.length ? therapistAccountIds : [-1])}) or storeId in (${placeholders(storeIds.length ? storeIds : [-1])})`,
+    [...(therapistAccountIds.length ? therapistAccountIds : [-1]), ...(storeIds.length ? storeIds : [-1])],
+  );
+  const allTherapistAccountIds = Array.from(new Set([
+    ...therapistAccountIds,
+    ...await selectIds(
+      conn,
+      `select accountId as id from therapists where id in (${placeholders(therapistIds.length ? therapistIds : [-1])})`,
+      therapistIds.length ? therapistIds : [-1],
+    ),
+  ]));
 
-  const messageRows = await selectIds(conn, `select id from messages where ${markerWhere(["content"])}`, params);
-  const postRows = await selectIds(conn, `select id from posts where ${markerWhere(["content"])}`, params);
-  const shiftRows = await selectIds(conn, `select id from shifts where ${markerWhere(["note"])}`, params);
-  const menuRows = await selectIds(conn, `select id from menus where ${markerWhere(["name", "description"])}`, [...params, ...params]);
-  const roomRows = await selectIds(conn, `select id from rooms where ${markerWhere(["name", "description"])}`, [...params, ...params]);
-
-  const notificationParams = [...params, ...params];
-  let notificationSql = `select id from notifications where ${markerWhere(["title", "body"])}`;
-  if (reservationIds.length) {
-    notificationSql += ` or relatedId in (${reservationIds.map(() => "?").join(",")})`;
-    notificationParams.push(...reservationIds);
-  }
-  const notificationRows = await selectIds(conn, notificationSql, notificationParams);
-
-  const impactedPayrollMonths = Array.from(new Set(
-    reservationRows
-      .filter(row => row.storeId && row.therapistId && row.date)
-      .map(row => `${row.storeId}:${row.therapistId}:${String(row.date).slice(0, 7)}`)
-  ));
+  const reservationIds = await selectIds(
+    conn,
+    `select id from reservations where storeId in (${placeholders(storeIds.length ? storeIds : [-1])}) or therapistId in (${placeholders(therapistIds.length ? therapistIds : [-1])}) or customerId in (${placeholders(customerIds.length ? customerIds : [-1])})`,
+    [
+      ...(storeIds.length ? storeIds : [-1]),
+      ...(therapistIds.length ? therapistIds : [-1]),
+      ...(customerIds.length ? customerIds : [-1]),
+    ],
+  );
+  const threadIds = await selectIds(
+    conn,
+    `select id from message_threads where storeId in (${placeholders(storeIds.length ? storeIds : [-1])}) or therapistId in (${placeholders(therapistIds.length ? therapistIds : [-1])}) or customerId in (${placeholders(customerIds.length ? customerIds : [-1])}) or reservationId in (${placeholders(reservationIds.length ? reservationIds : [-1])})`,
+    [
+      ...(storeIds.length ? storeIds : [-1]),
+      ...(therapistIds.length ? therapistIds : [-1]),
+      ...(customerIds.length ? customerIds : [-1]),
+      ...(reservationIds.length ? reservationIds : [-1]),
+    ],
+  );
+  const messageIds = await selectIds(
+    conn,
+    `select id from messages where threadId in (${placeholders(threadIds.length ? threadIds : [-1])})`,
+    threadIds.length ? threadIds : [-1],
+  );
+  const postIds = await selectIds(
+    conn,
+    `select id from posts where storeId in (${placeholders(storeIds.length ? storeIds : [-1])}) or therapistId in (${placeholders(therapistIds.length ? therapistIds : [-1])})`,
+    [...(storeIds.length ? storeIds : [-1]), ...(therapistIds.length ? therapistIds : [-1])],
+  );
+  const reviewIds = await selectIds(
+    conn,
+    `select id from reviews where reservationId in (${placeholders(reservationIds.length ? reservationIds : [-1])}) or storeId in (${placeholders(storeIds.length ? storeIds : [-1])}) or therapistId in (${placeholders(therapistIds.length ? therapistIds : [-1])}) or customerId in (${placeholders(customerIds.length ? customerIds : [-1])})`,
+    [
+      ...(reservationIds.length ? reservationIds : [-1]),
+      ...(storeIds.length ? storeIds : [-1]),
+      ...(therapistIds.length ? therapistIds : [-1]),
+      ...(customerIds.length ? customerIds : [-1]),
+    ],
+  );
 
   return {
-    reservationRows,
+    storeAccountIds,
+    therapistAccountIds: allTherapistAccountIds,
+    customerIds,
+    storeIds,
+    therapistIds,
     reservationIds,
-    reviewIds: ids(reviewRows),
-    messageIds: ids(messageRows),
-    postIds: ids(postRows),
-    shiftIds: ids(shiftRows),
-    menuIds: ids(menuRows),
-    roomIds: ids(roomRows),
-    notificationIds: ids(notificationRows),
-    impactedPayrollMonths,
+    threadIds,
+    messageIds,
+    postIds,
+    reviewIds,
   };
-}
-
-async function adjustCustomerSpend(conn, reservationRows) {
-  const spendByCustomer = new Map();
-  for (const row of reservationRows) {
-    spendByCustomer.set(row.customerId, (spendByCustomer.get(row.customerId) ?? 0) + Number(row.totalPrice ?? 0));
-  }
-  for (const [customerId, amount] of spendByCustomer) {
-    if (amount > 0) {
-      await conn.execute(
-        "update customer_profiles set totalSpent = greatest(totalSpent - ?, 0) where accountId = ?",
-        [amount, customerId]
-      );
-    }
-  }
-}
-
-async function recalculateImpactedPayroll(conn, impactedPayrollMonths) {
-  for (const key of impactedPayrollMonths) {
-    const [storeIdRaw, therapistIdRaw, month] = key.split(":");
-    const storeId = Number(storeIdRaw);
-    const therapistId = Number(therapistIdRaw);
-    const year = Number(month.slice(0, 4));
-    const monthNumber = Number(month.slice(5, 7));
-    const [rows] = await conn.execute(
-      `select
-        coalesce(sum(therapistBack), 0) as totalBack,
-        count(case when nominationFee > 0 then 1 end) as nominationCount
-       from sales
-       where storeId = ? and therapistId = ? and date >= ? and date < date_add(?, interval 1 month)`,
-      [storeId, therapistId, `${month}-01`, `${month}-01`]
-    );
-    const summary = rows[0] ?? { totalBack: 0, nominationCount: 0 };
-    await conn.execute(
-      `update therapist_payrolls
-       set nominationCount = ?, totalSales = ?, backAmount = ?, totalPayroll = ?
-       where storeId = ? and therapistId = ? and year = ? and month = ?`,
-      [
-        Number(summary.nominationCount ?? 0),
-        Number(summary.totalBack ?? 0),
-        Number(summary.totalBack ?? 0),
-        Number(summary.totalBack ?? 0),
-        storeId,
-        therapistId,
-        year,
-        monthNumber,
-      ]
-    );
-  }
 }
 
 async function purge(conn, data) {
   const deleted = {};
+
+  deleted.reports = await deleteAny(conn, "reports", [
+    { sql: `targetType = 'message' and targetId in (${placeholders(data.messageIds)})`, values: data.messageIds },
+    { sql: `targetType = 'review' and targetId in (${placeholders(data.reviewIds)})`, values: data.reviewIds },
+    { sql: `targetType = 'post' and targetId in (${placeholders(data.postIds)})`, values: data.postIds },
+    { sql: `targetType = 'store' and targetId in (${placeholders(data.storeIds)})`, values: data.storeIds },
+    { sql: `targetType = 'therapist' and targetId in (${placeholders(data.therapistIds)})`, values: data.therapistIds },
+    { sql: `targetType = 'customer' and targetId in (${placeholders(data.customerIds)})`, values: data.customerIds },
+    { sql: `reporterRole = 'store' and reporterId in (${placeholders(data.storeIds)})`, values: data.storeIds },
+    { sql: `reporterRole = 'therapist' and reporterId in (${placeholders(data.therapistIds)})`, values: data.therapistIds },
+    { sql: `reporterRole = 'customer' and reporterId in (${placeholders(data.customerIds)})`, values: data.customerIds },
+  ]);
+  deleted.blocks = await deleteAny(conn, "blocks", [
+    { sql: `blockerRole = 'store' and blockerId in (${placeholders(data.storeIds)})`, values: data.storeIds },
+    { sql: `blockedRole = 'store' and blockedId in (${placeholders(data.storeIds)})`, values: data.storeIds },
+    { sql: `blockerRole = 'therapist' and blockerId in (${placeholders(data.therapistIds)})`, values: data.therapistIds },
+    { sql: `blockedRole = 'therapist' and blockedId in (${placeholders(data.therapistIds)})`, values: data.therapistIds },
+    { sql: `blockerRole = 'customer' and blockerId in (${placeholders(data.customerIds)})`, values: data.customerIds },
+    { sql: `blockedRole = 'customer' and blockedId in (${placeholders(data.customerIds)})`, values: data.customerIds },
+  ]);
+
+  deleted.postComments = await deleteIn(conn, "post_comments", "postId", data.postIds);
   deleted.postImages = await deleteIn(conn, "post_images", "postId", data.postIds);
-  deleted.posts = await deleteIn(conn, "posts", "id", data.postIds);
-  deleted.messages = await deleteIn(conn, "messages", "id", data.messageIds);
-  deleted.reviews = await deleteIn(conn, "reviews", "id", data.reviewIds);
+  deleted.favorites = await deleteAny(conn, "favorites", [
+    { sql: `customerId in (${placeholders(data.customerIds)})`, values: data.customerIds },
+    { sql: `targetType = 'store' and targetId in (${placeholders(data.storeIds)})`, values: data.storeIds },
+    { sql: `targetType = 'therapist' and targetId in (${placeholders(data.therapistIds)})`, values: data.therapistIds },
+    { sql: `targetType = 'post' and targetId in (${placeholders(data.postIds)})`, values: data.postIds },
+  ]);
+  deleted.follows = await deleteAny(conn, "follows", [
+    { sql: `customerId in (${placeholders(data.customerIds)})`, values: data.customerIds },
+    { sql: `targetType = 'store' and targetId in (${placeholders(data.storeIds)})`, values: data.storeIds },
+    { sql: `targetType = 'therapist' and targetId in (${placeholders(data.therapistIds)})`, values: data.therapistIds },
+  ]);
+
+  deleted.messages = await deleteIn(conn, "messages", "threadId", data.threadIds);
+  deleted.messageThreads = await deleteIn(conn, "message_threads", "id", data.threadIds);
   deleted.reservationOptions = await deleteIn(conn, "reservation_options", "reservationId", data.reservationIds);
   deleted.sales = await deleteIn(conn, "sales", "reservationId", data.reservationIds);
+  deleted.reviews = await deleteIn(conn, "reviews", "id", data.reviewIds);
   deleted.reservations = await deleteIn(conn, "reservations", "id", data.reservationIds);
-  deleted.shifts = await deleteIn(conn, "shifts", "id", data.shiftIds);
-  deleted.notifications = await deleteIn(conn, "notifications", "id", data.notificationIds);
-  deleted.menus = await deleteIn(conn, "menus", "id", data.menuIds);
-  deleted.rooms = await deleteIn(conn, "rooms", "id", data.roomIds);
-  await adjustCustomerSpend(conn, data.reservationRows);
-  if (recalculatePayroll) await recalculateImpactedPayroll(conn, data.impactedPayrollMonths);
+
+  deleted.storyPosts = await deleteAny(conn, "story_posts", [
+    { sql: `storeId in (${placeholders(data.storeIds)})`, values: data.storeIds },
+    { sql: `therapistId in (${placeholders(data.therapistIds)})`, values: data.therapistIds },
+  ]);
+  deleted.posts = await deleteIn(conn, "posts", "id", data.postIds);
+  deleted.shifts = await deleteAny(conn, "shifts", [
+    { sql: `storeId in (${placeholders(data.storeIds)})`, values: data.storeIds },
+    { sql: `therapistId in (${placeholders(data.therapistIds)})`, values: data.therapistIds },
+  ]);
+  deleted.therapistPayrolls = await deleteAny(conn, "therapist_payrolls", [
+    { sql: `storeId in (${placeholders(data.storeIds)})`, values: data.storeIds },
+    { sql: `therapistId in (${placeholders(data.therapistIds)})`, values: data.therapistIds },
+  ]);
+  deleted.therapistSalarySettings = await deleteAny(conn, "therapist_salary_settings", [
+    { sql: `storeId in (${placeholders(data.storeIds)})`, values: data.storeIds },
+    { sql: `therapistId in (${placeholders(data.therapistIds)})`, values: data.therapistIds },
+  ]);
+  deleted.customerMemos = await deleteAny(conn, "customer_memos", [
+    { sql: `therapistId in (${placeholders(data.therapistIds)})`, values: data.therapistIds },
+    { sql: `customerId in (${placeholders(data.customerIds)})`, values: data.customerIds },
+  ]);
+  deleted.ngCustomers = await deleteAny(conn, "ng_customers", [
+    { sql: `storeId in (${placeholders(data.storeIds)})`, values: data.storeIds },
+    { sql: `therapistId in (${placeholders(data.therapistIds)})`, values: data.therapistIds },
+    { sql: `customerId in (${placeholders(data.customerIds)})`, values: data.customerIds },
+  ]);
+
+  deleted.notifications = await deleteAny(conn, "notifications", [
+    { sql: `recipientRole = 'store' and recipientId in (${placeholders(data.storeIds)})`, values: data.storeIds },
+    { sql: `recipientRole = 'therapist' and recipientId in (${placeholders(data.therapistIds)})`, values: data.therapistIds },
+    { sql: `recipientRole = 'customer' and recipientId in (${placeholders(data.customerIds)})`, values: data.customerIds },
+    { sql: `relatedId in (${placeholders(data.reservationIds)})`, values: data.reservationIds },
+  ]);
+  deleted.affiliationRequests = await deleteAny(conn, "affiliation_requests", [
+    { sql: `storeId in (${placeholders(data.storeIds)})`, values: data.storeIds },
+    { sql: `therapistId in (${placeholders(data.therapistIds)})`, values: data.therapistIds },
+  ]);
+  deleted.therapistInviteLinks = await deleteIn(conn, "therapist_invite_links", "storeId", data.storeIds);
+  deleted.menuOptions = await deleteIn(conn, "menu_options", "storeId", data.storeIds);
+  deleted.coupons = await deleteIn(conn, "coupons", "storeId", data.storeIds);
+  deleted.menus = await deleteIn(conn, "menus", "storeId", data.storeIds);
+  deleted.rooms = await deleteIn(conn, "rooms", "storeId", data.storeIds);
+
+  deleted.ageVerifications = await deleteIn(conn, "age_verifications", "customerId", data.customerIds);
+  deleted.identityVerifications = await deleteAny(conn, "identity_verifications", [
+    { sql: `role = 'store' and accountId in (${placeholders(data.storeAccountIds)})`, values: data.storeAccountIds },
+    { sql: `role = 'therapist' and accountId in (${placeholders(data.therapistAccountIds)})`, values: data.therapistAccountIds },
+  ]);
+  deleted.auditLogs = await deleteAny(conn, "audit_logs", [
+    { sql: `actorRole = 'store' and actorId in (${placeholders(data.storeAccountIds)})`, values: data.storeAccountIds },
+    { sql: `actorRole = 'therapist' and actorId in (${placeholders(data.therapistAccountIds)})`, values: data.therapistAccountIds },
+    { sql: `actorRole = 'customer' and actorId in (${placeholders(data.customerIds)})`, values: data.customerIds },
+  ]);
+
+  deleted.customerProfiles = await deleteIn(conn, "customer_profiles", "accountId", data.customerIds);
+  deleted.therapists = await deleteIn(conn, "therapists", "id", data.therapistIds);
+  deleted.stores = await deleteIn(conn, "stores", "id", data.storeIds);
+  deleted.customerAccounts = await deleteIn(conn, "customer_accounts", "id", data.customerIds);
+  deleted.therapistAccounts = await deleteIn(conn, "therapist_accounts", "id", data.therapistAccountIds);
+  deleted.storeAccounts = await deleteIn(conn, "store_accounts", "id", data.storeAccountIds);
+
   return deleted;
 }
 
 async function main() {
-  if (!markers.length) throw new Error("SMOKE_DATA_MARKERS must contain at least one marker");
+  if (!patterns.length) throw new Error("QA_ACCOUNT_PATTERNS must contain at least one pattern.");
+
   const conn = await mysql.createConnection(required("DATABASE_URL"));
   try {
     const data = await collect(conn);
-    const preview = {
-      markers,
-      reservations: data.reservationIds.length,
-      reviews: data.reviewIds.length,
-      messages: data.messageIds.length,
-      posts: data.postIds.length,
-      shifts: data.shiftIds.length,
-      notifications: data.notificationIds.length,
-      menus: data.menuIds.length,
-      rooms: data.roomIds.length,
-      impactedPayrollMonths: data.impactedPayrollMonths,
-    };
+    const preview = Object.fromEntries(Object.entries(data).map(([key, value]) => [key, value.length]));
+
     if (!apply) {
-      console.log(JSON.stringify({ mode: "dry-run", preview, note: "Pass --apply to delete these rows." }, null, 2));
+      console.log(JSON.stringify({
+        mode: "dry-run",
+        patterns,
+        preview,
+        note: "Pass --apply to permanently delete QA smoke accounts and their linked data.",
+      }, null, 2));
       return;
     }
+
     await conn.beginTransaction();
     const deleted = await purge(conn, data);
     await conn.commit();
-    console.log(JSON.stringify({ mode: "applied", deleted, impactedPayrollMonths: data.impactedPayrollMonths, recalculatePayroll }, null, 2));
+    console.log(JSON.stringify({ mode: "applied", patterns, preview, deleted }, null, 2));
   } catch (error) {
     if (apply) await conn.rollback();
     throw error;
@@ -188,7 +280,7 @@ async function main() {
   }
 }
 
-main().catch(error => {
+main().catch((error) => {
   console.error(error.message);
   process.exit(1);
 });
