@@ -10,6 +10,7 @@ import {
 } from "../../drizzle/schema";
 import { eq, and, desc, like, gte, lt, lte, sql } from "drizzle-orm";
 import { ensureRuntimeSchema } from "../runtimeMigrations";
+import { excludeQaAccountEmails } from "../publicFilters";
 
 export const storeRouter = router({
   getById: publicProcedure
@@ -23,6 +24,7 @@ export const storeRouter = router({
           eq(stores.id, input.storeId),
           eq(stores.isPublic, true),
           eq(storeAccounts.status, "active"),
+          ...excludeQaAccountEmails(storeAccounts),
         ))
         .limit(1);
       if (!rows[0]) throw new TRPCError({ code: "NOT_FOUND" });
@@ -44,7 +46,7 @@ export const storeRouter = router({
       if (input.keyword) conditions.push(like(stores.name, `%${input.keyword}%`));
       const rows = await db.select({ store: stores }).from(stores)
         .innerJoin(storeAccounts, eq(stores.accountId, storeAccounts.id))
-        .where(and(...conditions, eq(storeAccounts.status, "active")))
+        .where(and(...conditions, eq(storeAccounts.status, "active"), ...excludeQaAccountEmails(storeAccounts)))
         .orderBy(desc(stores.reviewAvg))
         .limit(input.limit)
         .offset(input.offset);
@@ -116,6 +118,7 @@ export const storeRouter = router({
           eq(stores.id, input.storeId),
           eq(stores.isPublic, true),
           eq(storeAccounts.status, "active"),
+          ...excludeQaAccountEmails(storeAccounts),
         ))
         .limit(1);
       if (!activeStoreRows[0]) return [];

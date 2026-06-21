@@ -5,6 +5,7 @@ import { getDb } from "../db";
 import { getSession } from "../session";
 import { storyPosts, storeAccounts, therapists, therapistAccounts, stores } from "../../drizzle/schema";
 import { eq, and, gt, desc, inArray } from "drizzle-orm";
+import { excludeQaAccountEmails } from "../publicFilters";
 
 export const storyRouter = router({
   // Create a story (therapist or store)
@@ -104,6 +105,8 @@ export const storyRouter = router({
           eq(therapistAccounts.status, "active"),
           eq(stores.isPublic, true),
           eq(storeAccounts.status, "active"),
+          ...excludeQaAccountEmails(therapistAccounts),
+          ...excludeQaAccountEmails(storeAccounts),
         ))
         .limit(1);
       if (!activeRows[0]) return [];
@@ -125,6 +128,7 @@ export const storyRouter = router({
           eq(stores.id, input.storeId),
           eq(stores.isPublic, true),
           eq(storeAccounts.status, "active"),
+          ...excludeQaAccountEmails(storeAccounts),
         ))
         .limit(1);
       if (!activeRows[0]) return [];
@@ -156,6 +160,8 @@ export const storyRouter = router({
             eq(therapistAccounts.status, "active"),
             eq(stores.isPublic, true),
             eq(storeAccounts.status, "active"),
+            ...excludeQaAccountEmails(therapistAccounts),
+            ...excludeQaAccountEmails(storeAccounts),
           )
         );
       return rows.map(r => r.therapistId).filter(Boolean) as number[];
@@ -180,6 +186,7 @@ export const storyRouter = router({
             gt(storyPosts.expiresAt, now),
             eq(stores.isPublic, true),
             eq(storeAccounts.status, "active"),
+            ...excludeQaAccountEmails(storeAccounts),
           )
         );
       return rows.map(r => r.storeId).filter(Boolean) as number[];
@@ -208,6 +215,8 @@ export const storyRouter = router({
             eq(therapistAccounts.status, "active"),
             eq(stores.isPublic, true),
             eq(storeAccounts.status, "active"),
+            ...excludeQaAccountEmails(therapistAccounts),
+            ...excludeQaAccountEmails(storeAccounts),
           ))
           .limit(1);
         if (!activeRows[0]) throw new TRPCError({ code: "NOT_FOUND" });
@@ -215,7 +224,12 @@ export const storyRouter = router({
       if (story.storeId) {
         const activeRows = await db.select({ id: stores.id }).from(stores)
           .innerJoin(storeAccounts, eq(stores.accountId, storeAccounts.id))
-          .where(and(eq(stores.id, story.storeId), eq(stores.isPublic, true), eq(storeAccounts.status, "active")))
+          .where(and(
+            eq(stores.id, story.storeId),
+            eq(stores.isPublic, true),
+            eq(storeAccounts.status, "active"),
+            ...excludeQaAccountEmails(storeAccounts),
+          ))
           .limit(1);
         if (!activeRows[0]) throw new TRPCError({ code: "NOT_FOUND" });
       }

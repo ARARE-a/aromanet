@@ -11,6 +11,7 @@ import {
 } from "../../drizzle/schema";
 import { eq, and, desc, gte, lt, sql, like } from "drizzle-orm";
 import { ensureRuntimeSchema } from "../runtimeMigrations";
+import { excludeQaAccountEmails } from "../publicFilters";
 
 function getMonthBounds(month: string) {
   const [yearValue, monthValue] = month.split("-").map(Number);
@@ -38,6 +39,8 @@ export const therapistRouter = router({
           eq(therapistAccounts.status, "active"),
           eq(stores.isPublic, true),
           eq(storeAccounts.status, "active"),
+          ...excludeQaAccountEmails(therapistAccounts),
+          ...excludeQaAccountEmails(storeAccounts),
         ))
         .limit(1);
       if (!rows[0]) throw new TRPCError({ code: "NOT_FOUND" });
@@ -51,7 +54,12 @@ export const therapistRouter = router({
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       const storeRows = await db.select({ id: stores.id }).from(stores)
         .innerJoin(storeAccounts, eq(stores.accountId, storeAccounts.id))
-        .where(and(eq(stores.id, input.storeId), eq(stores.isPublic, true), eq(storeAccounts.status, "active")))
+        .where(and(
+          eq(stores.id, input.storeId),
+          eq(stores.isPublic, true),
+          eq(storeAccounts.status, "active"),
+          ...excludeQaAccountEmails(storeAccounts),
+        ))
         .limit(1);
       if (!storeRows[0]) return [];
       const rows = await db.select({ therapist: therapists }).from(therapists)
@@ -60,6 +68,7 @@ export const therapistRouter = router({
           eq(therapists.storeId, input.storeId),
           eq(therapists.isPublic, true),
           eq(therapistAccounts.status, "active"),
+          ...excludeQaAccountEmails(therapistAccounts),
         ))
         .orderBy(desc(therapists.nominationCount));
       return rows.map(row => row.therapist);
@@ -88,6 +97,8 @@ export const therapistRouter = router({
           eq(therapistAccounts.status, "active"),
           eq(stores.isPublic, true),
           eq(storeAccounts.status, "active"),
+          ...excludeQaAccountEmails(therapistAccounts),
+          ...excludeQaAccountEmails(storeAccounts),
         ))
         .orderBy(desc(therapists.nominationCount))
         .limit(200);
@@ -96,7 +107,12 @@ export const therapistRouter = router({
       if (input.prefecture) {
         const storeRows = await db.select({ id: stores.id }).from(stores)
           .innerJoin(storeAccounts, eq(stores.accountId, storeAccounts.id))
-          .where(and(eq(stores.prefecture, input.prefecture), eq(stores.isPublic, true), eq(storeAccounts.status, "active")));
+          .where(and(
+            eq(stores.prefecture, input.prefecture),
+            eq(stores.isPublic, true),
+            eq(storeAccounts.status, "active"),
+            ...excludeQaAccountEmails(storeAccounts),
+          ));
         const storeIds = new Set(storeRows.map(s => s.id));
         results = results.filter(t => t.storeId != null && storeIds.has(t.storeId));
       }
@@ -174,6 +190,8 @@ export const therapistRouter = router({
           eq(therapistAccounts.status, "active"),
           eq(stores.isPublic, true),
           eq(storeAccounts.status, "active"),
+          ...excludeQaAccountEmails(therapistAccounts),
+          ...excludeQaAccountEmails(storeAccounts),
         ))
         .limit(1);
       if (!therapistRows[0]) return [];

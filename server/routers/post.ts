@@ -5,6 +5,7 @@ import { getDb } from "../db";
 import { getSession } from "../session";
 import { customerProfiles, favorites, postComments, postImages, posts, storeAccounts, stores, therapists, therapistAccounts } from "../../drizzle/schema";
 import { eq, and, desc, inArray, sql } from "drizzle-orm";
+import { excludeQaAccountEmails } from "../publicFilters";
 
 let postSchemaReady: Promise<void> | null = null;
 
@@ -69,6 +70,7 @@ async function filterPublicPostAuthors(db: any, postRows: any[]) {
         inArray(therapists.id, therapistIds),
         eq(therapists.isPublic, true),
         eq(therapistAccounts.status, "active"),
+        ...excludeQaAccountEmails(therapistAccounts),
       ));
     for (const row of activeRows) activeTherapistIds.add(row.id);
   }
@@ -80,6 +82,7 @@ async function filterPublicPostAuthors(db: any, postRows: any[]) {
         inArray(stores.id, storeIds),
         eq(stores.isPublic, true),
         eq(storeAccounts.status, "active"),
+        ...excludeQaAccountEmails(storeAccounts),
       ));
     for (const row of activeRows) activeStoreIds.add(row.id);
   }
