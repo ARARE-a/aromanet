@@ -5,7 +5,7 @@ import { getDb } from "../db";
 import { getSession } from "../session";
 import {
   reservations, reservationOptions, menus, menuOptions,
-  coupons, notifications, customerProfiles, therapists, stores, sales, therapistSalarySettings,
+  coupons, notifications, customerProfiles, storeAccounts, therapistAccounts, therapists, stores, sales, therapistSalarySettings,
 } from "../../drizzle/schema";
 import { eq, and, desc, sql } from "drizzle-orm";
 
@@ -31,10 +31,23 @@ export const reservationRouter = router({
       const menuRows = await db.select().from(menus).where(eq(menus.id, input.menuId)).limit(1);
       if (!menuRows[0]) throw new TRPCError({ code: "NOT_FOUND", message: "メニューが見つかりません" });
       const menu = menuRows[0];
+      if (!menu.isPublic) throw new TRPCError({ code: "NOT_FOUND", message: "メニューが公開されていません" });
       const resolvedStoreId = menu.storeId;
 
       if (input.storeId !== resolvedStoreId) {
         throw new TRPCError({ code: "BAD_REQUEST", message: "選択された店舗とメニューが一致しません" });
+      }
+
+      const activeStoreRows = await db.select({ id: stores.id }).from(stores)
+        .innerJoin(storeAccounts, eq(stores.accountId, storeAccounts.id))
+        .where(and(
+          eq(stores.id, resolvedStoreId),
+          eq(stores.isPublic, true),
+          eq(storeAccounts.status, "active"),
+        ))
+        .limit(1);
+      if (!activeStoreRows[0]) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "店舗が公開されていません" });
       }
 
       if (input.therapistId) {
@@ -42,7 +55,14 @@ export const reservationRouter = router({
           id: therapists.id,
           storeId: therapists.storeId,
           displayName: therapists.displayName,
-        }).from(therapists).where(eq(therapists.id, input.therapistId)).limit(1);
+        }).from(therapists)
+          .innerJoin(therapistAccounts, eq(therapists.accountId, therapistAccounts.id))
+          .where(and(
+            eq(therapists.id, input.therapistId),
+            eq(therapists.isPublic, true),
+            eq(therapistAccounts.status, "active"),
+          ))
+          .limit(1);
         if (!therapistRows[0]) {
           throw new TRPCError({ code: "NOT_FOUND", message: "セラピストが見つかりません" });
         }
@@ -69,7 +89,7 @@ export const reservationRouter = router({
       let optionTotal = 0;
       const optionDetails: { optionId: number; price: number }[] = [];
       for (const optId of input.optionIds) {
-        const optRows = await db.select().from(menuOptions).where(eq(menuOptions.id, optId)).limit(1);
+        const optRows = await db.select().from(menuOptions).where(and(eq(menuOptions.id, optId), eq(menuOptions.storeId, resolvedStoreId))).limit(1);
         if (optRows[0]) {
           optionTotal += optRows[0].price;
           optionDetails.push({ optionId: optId, price: optRows[0].price });
@@ -282,6 +302,13 @@ export const reservationRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       const rows = await db.select().from(reservations).where(eq(reservations.id, input.id)).limit(1);
-      return rows[0] ?? null;
+      const reservation = rows[0];
+      if (!reservation) return null;
+      const canRead =
+        (session.role === "store" && reservation.storeId === session.storeId) ||
+        (session.role === "therapist" && reservation.therapistId === session.therapistId) ||
+        (session.role === "customer" && reservation.customerId === session.accountId);
+      if (!canRead) throw new TRPCError({ code: "NOT_FOUND" });
+      return reservation;
     }),
 });
