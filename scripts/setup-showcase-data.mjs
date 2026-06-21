@@ -60,12 +60,40 @@ function svgDataUrl(title, colorA, colorB) {
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg.replace(/\s+/g, " ").trim())}`;
 }
 
+function showcasePostVisualDataUrl() {
+  const svg = `
+    <svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1350" viewBox="0 0 1080 1350">
+      <defs>
+        <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1">
+          <stop offset="0" stop-color="#005f5b"/>
+          <stop offset="0.58" stop-color="#7fbab0"/>
+          <stop offset="1" stop-color="#eadcae"/>
+        </linearGradient>
+        <radialGradient id="light" cx="50%" cy="50%" r="50%">
+          <stop offset="0" stop-color="rgba(255,255,255,.42)"/>
+          <stop offset="1" stop-color="rgba(255,255,255,0)"/>
+        </radialGradient>
+      </defs>
+      <rect width="1080" height="1350" fill="url(#bg)"/>
+      <circle cx="850" cy="210" r="220" fill="url(#light)"/>
+      <circle cx="170" cy="1080" r="280" fill="rgba(255,255,255,.14)"/>
+      <circle cx="890" cy="1120" r="160" fill="rgba(0,80,76,.16)"/>
+      <path d="M210 365 C390 260, 690 270, 870 365" fill="none" stroke="rgba(255,255,255,.28)" stroke-width="3"/>
+      <text x="540" y="560" text-anchor="middle" font-family="Georgia, serif" font-size="74" fill="#fff" letter-spacing="6">AromaNet</text>
+      <text x="540" y="640" text-anchor="middle" font-family="Arial, sans-serif" font-size="30" fill="rgba(255,255,255,.82)" letter-spacing="4">SHOWCASE</text>
+      <text x="540" y="980" text-anchor="middle" font-family="Arial, sans-serif" font-size="54" font-weight="700" fill="#fff">ON SHIFT</text>
+      <text x="540" y="1042" text-anchor="middle" font-family="Arial, sans-serif" font-size="26" fill="rgba(255,255,255,.78)">available from open slots</text>
+    </svg>
+  `;
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg.replace(/\s+/g, " ").trim())}`;
+}
+
 const assets = {
   storeCover: svgDataUrl("GINZA LUMINA", "#005f5b", "#d6b46c"),
   storeLogo: svgDataUrl("A", "#004f4b", "#86d7ce"),
   therapistProfile: svgDataUrl("Misaki", "#006861", "#f3c978"),
   therapistCover: svgDataUrl("Therapist", "#1f5d59", "#d7b66a"),
-  postImage: svgDataUrl("本日出勤", "#0a6b64", "#efe2bc"),
+  postImage: showcasePostVisualDataUrl(),
 };
 
 function getPassword() {

@@ -285,7 +285,7 @@ function PostCard({ post, index, hasStory, onOpenStory }: { post: any; index: nu
         {post.imageUrl ? (
           isVideoUrl(post.imageUrl)
             ? <video src={post.imageUrl} className="w-full h-full object-cover" controls playsInline />
-            : <img src={post.imageUrl} alt="" className="w-full h-full object-cover" />
+            : <img src={post.imageUrl} alt="" className={`w-full h-full ${isDataSvgUrl(post.imageUrl) ? "object-contain bg-[#0b5f59]" : "object-cover"}`} />
         ) : (
           <div className="w-full h-full flex items-center justify-center">
             <div className="text-center px-6">
@@ -332,14 +332,14 @@ function PostCard({ post, index, hasStory, onOpenStory }: { post: any; index: nu
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 bg-black/45 flex items-end"
+            className="fixed inset-0 z-[9998] bg-black/45 flex items-end"
             onClick={() => setCommentsOpen(false)}
           >
             <motion.div
               initial={{ y: 320 }}
               animate={{ y: 0 }}
               exit={{ y: 320 }}
-              className="w-full max-h-[78dvh] rounded-t-3xl bg-white overflow-hidden"
+              className="flex h-[min(78dvh,640px)] w-full flex-col overflow-hidden rounded-t-3xl bg-white"
               onClick={e => e.stopPropagation()}
             >
               <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
@@ -348,7 +348,7 @@ function PostCard({ post, index, hasStory, onOpenStory }: { post: any; index: nu
                   <X className="w-5 h-5" />
                 </button>
               </div>
-              <div className="max-h-[52dvh] overflow-y-auto px-4 py-3 space-y-3">
+              <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3 space-y-3">
                 {commentList.length === 0 ? (
                   <div className="py-8 text-center text-sm text-gray-500">まだコメントはありません</div>
                 ) : commentList.map((comment: any) => (
@@ -361,7 +361,7 @@ function PostCard({ post, index, hasStory, onOpenStory }: { post: any; index: nu
                   </div>
                 ))}
               </div>
-              <div className="flex items-end gap-2 border-t border-gray-100 p-3">
+              <div className="flex items-end gap-2 border-t border-gray-100 bg-white p-3 pb-[calc(12px+env(safe-area-inset-bottom))]">
                 <textarea
                   value={commentText}
                   onChange={e => setCommentText(e.target.value)}
@@ -433,4 +433,8 @@ function StoreFeedCard({ store: s, index }: { store: any; index: number }) {
 
 function isVideoUrl(url: string) {
   return /\.(mp4|webm|mov|m4v)(\?|$)/i.test(url);
+}
+
+function isDataSvgUrl(url: string) {
+  return url.startsWith("data:image/svg+xml");
 }

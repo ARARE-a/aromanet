@@ -116,12 +116,12 @@ export function StoryViewer({ authors, initialAuthorIndex = 0, onClose }: StoryV
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        className="fixed inset-0 z-50 bg-[#050b0e] flex items-center justify-center"
+        className="fixed inset-0 z-[9999] bg-[#050b0e] flex items-center justify-center"
         style={{ touchAction: "none" }}
       >
         {/* Story container */}
         <div className="relative w-full max-w-[430px] h-[100dvh] overflow-hidden bg-[#050b0e]">
-          <div className="absolute inset-x-0 top-[calc(env(safe-area-inset-top)+6px)] bottom-[calc(env(safe-area-inset-bottom)+54px)] overflow-hidden rounded-[10px] bg-black">
+          <div className="absolute inset-0 overflow-hidden bg-black">
             {/* Media */}
             <AnimatePresence mode="wait">
               <motion.div
