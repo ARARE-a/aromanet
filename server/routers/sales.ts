@@ -124,9 +124,19 @@ export const salesRouter = router({
           optionAmount: sql<number>`COALESCE(SUM(${sales.optionAmount}), 0)`,
           nominationCount: sql<number>`SUM(CASE WHEN ${sales.nominationFee} > 0 THEN 1 ELSE 0 END)`,
           count: sql<number>`COUNT(*)`,
-        }).from(sales).where(and(eq(sales.therapistId, t.id), gte(sales.date, start), lt(sales.date, end)));
+        }).from(sales).where(and(
+          eq(sales.storeId, session.storeId),
+          eq(sales.therapistId, t.id),
+          gte(sales.date, start),
+          lt(sales.date, end),
+        ));
         const s = salesRows[0];
-        const existing = await db.select().from(therapistPayrolls).where(and(eq(therapistPayrolls.therapistId, t.id), eq(therapistPayrolls.year, input.year), eq(therapistPayrolls.month, input.month))).limit(1);
+        const existing = await db.select().from(therapistPayrolls).where(and(
+          eq(therapistPayrolls.therapistId, t.id),
+          eq(therapistPayrolls.storeId, session.storeId),
+          eq(therapistPayrolls.year, input.year),
+          eq(therapistPayrolls.month, input.month),
+        )).limit(1);
         const existingPayroll = existing[0];
         const backAmount = Number(s?.totalBack ?? 0);
         const adjustmentAmount = existingPayroll?.adjustmentAmount ?? 0;

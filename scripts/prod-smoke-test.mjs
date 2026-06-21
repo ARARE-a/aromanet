@@ -328,6 +328,12 @@ try {
     await store.client.reservation.updateStatus.mutate({ id: ids.reservationId, status: "confirmed" });
     await store.client.reservation.updateStatus.mutate({ id: ids.reservationId, status: "in_service" });
     await store.client.reservation.updateStatus.mutate({ id: ids.reservationId, status: "completed" });
+    const autoStorePayrolls = await store.client.sales.getTherapistPayrolls.query({ year, month: monthNum });
+    assert(
+      autoStorePayrolls.some((row) => row.therapistId === ids.therapistId && Number(row.totalAmount ?? 0) >= 7000),
+      "store payroll list did not update automatically after reservation completion",
+      autoStorePayrolls,
+    );
     await store.client.sales.calculatePayroll.mutate({ year, month: monthNum });
     await store.client.affiliation.sendSalaryNotification.mutate({
       therapistId: ids.therapistId,

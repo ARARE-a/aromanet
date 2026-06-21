@@ -5,9 +5,67 @@ import { getDb } from "../db";
 import { getSession } from "../session";
 import {
   reservations, reservationOptions, menus, menuOptions,
-  coupons, notifications, customerProfiles, storeAccounts, therapistAccounts, therapists, stores, sales, therapistSalarySettings,
+  coupons, notifications, customerProfiles, storeAccounts, therapistAccounts, therapists, stores, sales, therapistSalarySettings, therapistPayrolls,
 } from "../../drizzle/schema";
-import { eq, and, desc, sql } from "drizzle-orm";
+import { eq, and, desc, gte, lt, sql } from "drizzle-orm";
+
+function getMonthBoundsFromDate(date: string) {
+  const [yearRaw, monthRaw] = date.split("-");
+  const year = Number(yearRaw);
+  const month = Number(monthRaw);
+  const start = `${yearRaw}-${monthRaw}-01`;
+  const next = new Date(Date.UTC(year, month, 1));
+  const end = next.toISOString().slice(0, 10);
+  return { year, month, start, end };
+}
+
+async function recalculateTherapistPayroll(db: any, storeId: number, therapistId: number | null, date: string) {
+  if (!therapistId) return;
+  const { year, month, start, end } = getMonthBoundsFromDate(date);
+  const salesRows = await db.select({
+    totalSales: sql<number>`COALESCE(SUM(${sales.totalAmount}), 0)`,
+    totalBack: sql<number>`COALESCE(SUM(${sales.therapistBack}), 0)`,
+    optionAmount: sql<number>`COALESCE(SUM(${sales.optionAmount}), 0)`,
+    nominationCount: sql<number>`SUM(CASE WHEN ${sales.nominationFee} > 0 THEN 1 ELSE 0 END)`,
+  }).from(sales).where(and(
+    eq(sales.storeId, storeId),
+    eq(sales.therapistId, therapistId),
+    gte(sales.date, start),
+    lt(sales.date, end),
+  ));
+  const totals = salesRows[0];
+  const existingRows = await db.select().from(therapistPayrolls).where(and(
+    eq(therapistPayrolls.therapistId, therapistId),
+    eq(therapistPayrolls.storeId, storeId),
+    eq(therapistPayrolls.year, year),
+    eq(therapistPayrolls.month, month),
+  )).limit(1);
+  const therapistRows = await db.select().from(therapists).where(eq(therapists.id, therapistId)).limit(1);
+  const existing = existingRows[0];
+  const backAmount = Number(totals?.totalBack ?? 0);
+  const adjustmentAmount = Number(existing?.adjustmentAmount ?? 0);
+  const payrollData = {
+    therapistId,
+    storeId,
+    year,
+    month,
+    nominationCount: Number(totals?.nominationCount ?? 0),
+    totalSales: Number(totals?.totalSales ?? 0),
+    backRate: String(therapistRows[0]?.backRate ?? existing?.backRate ?? "50.00"),
+    backAmount,
+    optionAmount: Number(totals?.optionAmount ?? 0),
+    adjustmentAmount,
+    adjustmentNote: existing?.adjustmentNote ?? null,
+    totalPayroll: backAmount + adjustmentAmount,
+    isPaid: existing?.isPaid ?? false,
+    paidAt: existing?.paidAt ?? null,
+  };
+  if (existing) {
+    await db.update(therapistPayrolls).set(payrollData).where(eq(therapistPayrolls.id, existing.id));
+  } else {
+    await db.insert(therapistPayrolls).values(payrollData);
+  }
+}
 
 export const reservationRouter = router({
   create: publicProcedure
@@ -279,7 +337,20 @@ export const reservationRouter = router({
               body: "口コミを投稿してください",
               relatedId: id,
             });
+          } else {
+            await db.update(sales).set({
+              storeId: r.storeId,
+              therapistId: r.therapistId,
+              date: r.date,
+              menuAmount: r.totalPrice - r.nominationFee - r.optionTotal + r.discountAmount,
+              nominationFee: r.nominationFee,
+              optionAmount: r.optionTotal,
+              discountAmount: r.discountAmount,
+              totalAmount: r.totalPrice,
+              therapistBack,
+            }).where(eq(sales.id, existingSales[0].id));
           }
+          await recalculateTherapistPayroll(db, r.storeId, r.therapistId, r.date);
         }
       }
       return { success: true };
