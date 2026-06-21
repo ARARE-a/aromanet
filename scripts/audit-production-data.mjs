@@ -4,6 +4,7 @@ const suspiciousEmailSql = [
   "email like '%@example.com'",
   "email like 'qa-%'",
   "email like 'probe-%'",
+  "email like 'smoke-%'",
   "email like 'test-%'",
   "email like 'demo-%'",
 ].join(" or ");

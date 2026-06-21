@@ -138,6 +138,9 @@ export default function StorePayroll() {
             >
               <button
                 className="w-full p-4 flex items-center gap-3 text-left"
+                type="button"
+                aria-expanded={isExpanded}
+                aria-label={`${payroll.therapistName ?? therapist?.displayName ?? "セラピスト"}の給与明細を${isExpanded ? "閉じる" : "開く"}`}
                 onClick={() => setExpandedId(isExpanded ? null : payroll.id)}
               >
                 <AromaAvatar name={payroll.therapistName} src={payroll.therapistImage ?? therapist?.profileImageUrl} size="md" />

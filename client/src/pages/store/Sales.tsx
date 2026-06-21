@@ -42,11 +42,21 @@ export default function StoreSales() {
     <AromaLayout title="売上管理" showBack backHref="/store/dashboard" showNav navItems={navItems}>
       {/* Month navigator */}
       <div className="px-4 py-3 flex items-center justify-between">
-        <button onClick={() => setMonth(subMonths(month, 1))} className="p-2 rounded-full hover:bg-muted transition-colors">
+        <button
+          type="button"
+          aria-label="前月の売上を見る"
+          onClick={() => setMonth(subMonths(month, 1))}
+          className="p-2 rounded-full hover:bg-muted transition-colors"
+        >
           <ChevronLeft className="w-5 h-5" />
         </button>
         <span className="font-semibold text-foreground">{format(month, "yyyy年M月", { locale: ja })}</span>
-        <button onClick={() => setMonth(addMonths(month, 1))} className="p-2 rounded-full hover:bg-muted transition-colors">
+        <button
+          type="button"
+          aria-label="翌月の売上を見る"
+          onClick={() => setMonth(addMonths(month, 1))}
+          className="p-2 rounded-full hover:bg-muted transition-colors"
+        >
           <ChevronRight className="w-5 h-5" />
         </button>
       </div>

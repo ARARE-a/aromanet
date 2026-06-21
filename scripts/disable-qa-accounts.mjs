@@ -3,7 +3,7 @@ import bcrypt from "bcryptjs";
 import mysql from "mysql2/promise";
 
 const apply = process.argv.includes("--apply");
-const patterns = ["qa-%@example.com", "probe-%@example.com"];
+const patterns = ["qa-%", "probe-%", "smoke-%"];
 
 function required(name) {
   const value = process.env[name];

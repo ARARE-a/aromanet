@@ -39,7 +39,12 @@ export default function StoreMenus() {
                 <div className="text-xs text-muted-foreground">{m.durationMinutes}分 · ¥{(m.price ?? 0).toLocaleString()}</div>
                 {m.description && <div className="text-xs text-muted-foreground mt-1">{m.description}</div>}
               </div>
-              <button onClick={() => deleteMut.mutate({ id: m.id })} className="p-1 text-red-400 hover:text-red-600 transition-colors">
+              <button
+                type="button"
+                aria-label={`${m.name}を削除`}
+                onClick={() => deleteMut.mutate({ id: m.id })}
+                className="p-1 text-red-400 hover:text-red-600 transition-colors"
+              >
                 <Trash2 className="w-4 h-4" />
               </button>
             </div>

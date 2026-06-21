@@ -35,7 +35,12 @@ export default function StoreReviews() {
                   </div>
                 </div>
               </div>
-              <button onClick={() => hideMut.mutate({ reviewId: r.id, hide: !r.isHidden })} className="p-1.5 rounded-lg hover:bg-muted transition-colors">
+              <button
+                type="button"
+                aria-label={r.isHidden ? "口コミを再表示" : "口コミを非表示"}
+                onClick={() => hideMut.mutate({ reviewId: r.id, hide: !r.isHidden })}
+                className="p-1.5 rounded-lg hover:bg-muted transition-colors"
+              >
                 <EyeOff className="w-4 h-4 text-muted-foreground" />
               </button>
             </div>
