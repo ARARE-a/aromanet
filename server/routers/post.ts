@@ -57,11 +57,16 @@ async function ensureFavoritePostTarget(db: any) {
   }
 }
 
-async function filterPublicPostAuthors(db: any, postRows: any[]) {
+function canSeeQaPublicContent(session?: Awaited<ReturnType<typeof getSession>>) {
+  return Boolean(session?.email?.startsWith("qa-smoke-"));
+}
+
+async function filterPublicPostAuthors(db: any, postRows: any[], session?: Awaited<ReturnType<typeof getSession>>) {
   const therapistIds = Array.from(new Set(postRows.map(post => post.therapistId).filter(Boolean))) as number[];
   const storeIds = Array.from(new Set(postRows.map(post => post.storeId).filter(Boolean))) as number[];
   const activeTherapistIds = new Set<number>();
   const activeStoreIds = new Set<number>();
+  const qaVisibilityConditions = canSeeQaPublicContent(session) ? [] : excludeQaAccountEmails(therapistAccounts);
 
   if (therapistIds.length) {
     const activeRows = await db.select({ id: therapists.id }).from(therapists)
@@ -70,19 +75,20 @@ async function filterPublicPostAuthors(db: any, postRows: any[]) {
         inArray(therapists.id, therapistIds),
         eq(therapists.isPublic, true),
         eq(therapistAccounts.status, "active"),
-        ...excludeQaAccountEmails(therapistAccounts),
+        ...qaVisibilityConditions,
       ));
     for (const row of activeRows) activeTherapistIds.add(row.id);
   }
 
   if (storeIds.length) {
+    const storeQaVisibilityConditions = canSeeQaPublicContent(session) ? [] : excludeQaAccountEmails(storeAccounts);
     const activeRows = await db.select({ id: stores.id }).from(stores)
       .innerJoin(storeAccounts, eq(stores.accountId, storeAccounts.id))
       .where(and(
         inArray(stores.id, storeIds),
         eq(stores.isPublic, true),
         eq(storeAccounts.status, "active"),
-        ...excludeQaAccountEmails(storeAccounts),
+        ...storeQaVisibilityConditions,
       ));
     for (const row of activeRows) activeStoreIds.add(row.id);
   }
@@ -152,7 +158,7 @@ export const postRouter = router({
       if (input.storeId) conditions.push(eq(posts.storeId, input.storeId));
       if (input.therapistId) conditions.push(eq(posts.therapistId, input.therapistId));
       const postRows = await db.select().from(posts).where(and(...conditions)).orderBy(desc(posts.createdAt)).limit(input.limit).offset(input.offset);
-      const visiblePosts = await filterPublicPostAuthors(db, postRows);
+      const visiblePosts = await filterPublicPostAuthors(db, postRows, session);
       return Promise.all(visiblePosts.map((post: any) => decoratePost(db, post, session?.role === "customer" ? session.accountId : undefined)));
     }),
 
@@ -165,7 +171,7 @@ export const postRouter = router({
       await ensurePostInteractionSchema(db);
       if (session?.role === "customer") await ensureFavoritePostTarget(db);
       const postRows = await db.select().from(posts).where(and(eq(posts.id, input.id), eq(posts.isPublic, true))).limit(1);
-      const visiblePosts = await filterPublicPostAuthors(db, postRows);
+      const visiblePosts = await filterPublicPostAuthors(db, postRows, session);
       if (!visiblePosts[0]) throw new TRPCError({ code: "NOT_FOUND" });
       return decoratePost(db, visiblePosts[0], session?.role === "customer" ? session.accountId : undefined);
     }),
@@ -215,12 +221,13 @@ export const postRouter = router({
 
   getComments: publicProcedure
     .input(z.object({ postId: z.number() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
+      const session = await getSession(ctx.req);
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       await ensurePostInteractionSchema(db);
       const postRows = await db.select().from(posts).where(and(eq(posts.id, input.postId), eq(posts.isPublic, true))).limit(1);
-      const visiblePosts = await filterPublicPostAuthors(db, postRows);
+      const visiblePosts = await filterPublicPostAuthors(db, postRows, session);
       if (!visiblePosts[0]) throw new TRPCError({ code: "NOT_FOUND" });
       return db.select({
         id: postComments.id,
@@ -247,7 +254,7 @@ export const postRouter = router({
       await ensurePostInteractionSchema(db);
       await ensureFavoritePostTarget(db);
       const postRows = await db.select().from(posts).where(and(eq(posts.id, input.postId), eq(posts.isPublic, true))).limit(1);
-      const visiblePosts = await filterPublicPostAuthors(db, postRows);
+      const visiblePosts = await filterPublicPostAuthors(db, postRows, session);
       if (!visiblePosts[0]) throw new TRPCError({ code: "NOT_FOUND" });
       await db.insert(postComments).values({ postId: input.postId, customerId: session.accountId, comment: input.comment.trim() });
       return { success: true };
