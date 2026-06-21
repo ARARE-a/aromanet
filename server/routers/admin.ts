@@ -14,6 +14,31 @@ import { eq, and, desc, inArray, like, or, sql } from "drizzle-orm";
 const SMOKE_MARKERS = ["本番動作確認", "動作確認"] as const;
 let ageVerificationColumnsReady = false;
 
+function isDuplicateColumnError(error: any): boolean {
+  const seen = new Set<any>();
+  const stack = [error];
+  while (stack.length > 0) {
+    const current = stack.pop();
+    if (!current || seen.has(current)) continue;
+    seen.add(current);
+    const message = String(current?.message ?? "");
+    const code = String(current?.code ?? "");
+    const errno = String(current?.errno ?? "");
+    if (
+      code === "ER_DUP_FIELDNAME" ||
+      errno === "1060" ||
+      message.includes("Duplicate column") ||
+      message.includes("Duplicate column name") ||
+      message.includes("ER_DUP_FIELDNAME")
+    ) {
+      return true;
+    }
+    if (current?.cause) stack.push(current.cause);
+    if (current?.error) stack.push(current.error);
+  }
+  return false;
+}
+
 function compactIds(ids: Array<number | null | undefined>) {
   return Array.from(new Set(ids.filter((id): id is number => typeof id === "number")));
 }
@@ -127,9 +152,7 @@ async function ensureAgeVerificationDocumentColumns(db: any) {
     try {
       await db.execute(sql.raw(statement));
     } catch (error: any) {
-      const message = String(error?.message ?? "");
-      const code = String(error?.code ?? "");
-      if (!message.includes("Duplicate column") && code !== "ER_DUP_FIELDNAME") {
+      if (!isDuplicateColumnError(error)) {
         throw error;
       }
     }
