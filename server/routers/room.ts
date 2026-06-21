@@ -1,7 +1,7 @@
 import { TRPCError } from "@trpc/server";
 import { and, desc, eq } from "drizzle-orm";
 import { z } from "zod";
-import { rooms, reservations, sales } from "../../drizzle/schema";
+import { rooms, reservations, sales, storeAccounts, stores } from "../../drizzle/schema";
 import { getDb } from "../db";
 import { getSession } from "../session";
 import { publicProcedure, router } from "../_core/trpc";
@@ -13,6 +13,11 @@ export const roomRouter = router({
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const storeRows = await db.select({ id: stores.id }).from(stores)
+        .innerJoin(storeAccounts, eq(stores.accountId, storeAccounts.id))
+        .where(and(eq(stores.id, input.storeId), eq(stores.isPublic, true), eq(storeAccounts.status, "active")))
+        .limit(1);
+      if (!storeRows[0]) return [];
       return db.select().from(rooms).where(eq(rooms.storeId, input.storeId)).orderBy(rooms.name);
     }),
 
@@ -87,6 +92,11 @@ export const roomRouter = router({
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const storeRows = await db.select({ id: stores.id }).from(stores)
+        .innerJoin(storeAccounts, eq(stores.accountId, storeAccounts.id))
+        .where(and(eq(stores.id, input.storeId), eq(stores.isPublic, true), eq(storeAccounts.status, "active")))
+        .limit(1);
+      if (!storeRows[0]) return [];
       const storeRooms = await db.select().from(rooms).where(eq(rooms.storeId, input.storeId));
       // Get reservations for that date
       const dateStart = new Date(input.date + "T00:00:00");

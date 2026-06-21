@@ -165,16 +165,20 @@ export const salesRouter = router({
       if (!session || session.role !== "store") throw new TRPCError({ code: "UNAUTHORIZED" });
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      if (!session.storeId) throw new TRPCError({ code: "NOT_FOUND" });
       const { id, ...data } = input;
       const updateData: any = { ...data };
+      const rows = await db.select().from(therapistPayrolls)
+        .where(and(eq(therapistPayrolls.id, id), eq(therapistPayrolls.storeId, session.storeId)))
+        .limit(1);
+      const payroll = rows[0];
+      if (!payroll) throw new TRPCError({ code: "NOT_FOUND" });
       if (data.adjustmentAmount !== undefined) {
-        const rows = await db.select().from(therapistPayrolls).where(eq(therapistPayrolls.id, id)).limit(1);
-        if (rows[0]) {
-          updateData.totalPayroll = rows[0].backAmount + data.adjustmentAmount;
-        }
+        updateData.totalPayroll = payroll.backAmount + data.adjustmentAmount;
       }
       if (data.isPaid) updateData.paidAt = new Date();
-      await db.update(therapistPayrolls).set(updateData).where(eq(therapistPayrolls.id, id));
+      await db.update(therapistPayrolls).set(updateData)
+        .where(and(eq(therapistPayrolls.id, id), eq(therapistPayrolls.storeId, session.storeId)));
       return { success: true };
     }),
 
@@ -185,7 +189,13 @@ export const salesRouter = router({
       if (!session || session.role !== "store") throw new TRPCError({ code: "UNAUTHORIZED" });
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      await db.update(therapists).set({ backRate: String(input.backRate) }).where(eq(therapists.id, input.therapistId));
+      if (!session.storeId) throw new TRPCError({ code: "NOT_FOUND" });
+      const rows = await db.select({ id: therapists.id }).from(therapists)
+        .where(and(eq(therapists.id, input.therapistId), eq(therapists.storeId, session.storeId)))
+        .limit(1);
+      if (!rows[0]) throw new TRPCError({ code: "NOT_FOUND" });
+      await db.update(therapists).set({ backRate: String(input.backRate) })
+        .where(and(eq(therapists.id, input.therapistId), eq(therapists.storeId, session.storeId)));
       return { success: true };
     }),
 });

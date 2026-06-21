@@ -57,10 +57,14 @@ export const reservationRouter = router({
           displayName: therapists.displayName,
         }).from(therapists)
           .innerJoin(therapistAccounts, eq(therapists.accountId, therapistAccounts.id))
+          .innerJoin(stores, eq(therapists.storeId, stores.id))
+          .innerJoin(storeAccounts, eq(stores.accountId, storeAccounts.id))
           .where(and(
             eq(therapists.id, input.therapistId),
             eq(therapists.isPublic, true),
             eq(therapistAccounts.status, "active"),
+            eq(stores.isPublic, true),
+            eq(storeAccounts.status, "active"),
           ))
           .limit(1);
         if (!therapistRows[0]) {
