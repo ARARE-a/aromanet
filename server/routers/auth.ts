@@ -17,6 +17,7 @@ import bcrypt from "bcryptjs";
 import { SignJWT, jwtVerify, type JWTPayload } from "jose";
 import { ensureTherapistInviteLinksTable, getInviteInvalidReason } from "../therapistInvites";
 import { getJwtSecretKey } from "../jwtSecret";
+import { getSession as getAromaSession } from "../session";
 
 const SESSION_COOKIE = "aromanet_session";
 
@@ -54,13 +55,7 @@ function clearSessionCookie(res: any) {
 }
 
 async function readSession(req: any) {
-  const token = req.cookies?.[SESSION_COOKIE];
-  if (!token) return null;
-  try {
-    return await verifyToken(token);
-  } catch {
-    return null;
-  }
+  return getAromaSession(req);
 }
 
 async function logAudit(db: any, role: string, accountId: number, action: string, detail?: string, req?: any) {
@@ -78,13 +73,7 @@ async function logAudit(db: any, role: string, accountId: number, action: string
 export const authRouter = router({
   // Get current session info
   getSession: publicProcedure.query(async ({ ctx }) => {
-    const token = ctx.req.cookies?.[SESSION_COOKIE];
-    if (!token) return null;
-    try {
-      return await verifyToken(token);
-    } catch {
-      return null;
-    }
+    return getAromaSession(ctx.req);
   }),
 
   // Store: register
@@ -317,9 +306,8 @@ export const authRouter = router({
   changePassword: publicProcedure
     .input(z.object({ currentPassword: z.string(), newPassword: z.string().min(8) }))
     .mutation(async ({ input, ctx }) => {
-      const token = ctx.req.cookies?.[SESSION_COOKIE];
-      if (!token) throw new TRPCError({ code: "UNAUTHORIZED" });
-      const session = await verifyToken(token);
+      const session = await readSession(ctx.req);
+      if (!session) throw new TRPCError({ code: "UNAUTHORIZED" });
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       let currentHash: string | null = null;
@@ -358,9 +346,8 @@ export const authRouter = router({
   setCrashPassword: publicProcedure
     .input(z.object({ crashPassword: z.string().min(8) }))
     .mutation(async ({ input, ctx }) => {
-      const token = ctx.req.cookies?.[SESSION_COOKIE];
-      if (!token) throw new TRPCError({ code: "UNAUTHORIZED" });
-      const session = await verifyToken(token);
+      const session = await readSession(ctx.req);
+      if (!session) throw new TRPCError({ code: "UNAUTHORIZED" });
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       let passwordHash: string | null = null;
