@@ -6,7 +6,7 @@ import { ENV } from "./_core/env";
 import { getDb } from "./db";
 import { sql } from "drizzle-orm";
 
-const DEFAULT_MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
+const DEFAULT_MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 const DB_TABLE_READY = { value: false };
 
 function getForgeConfig() {
@@ -123,8 +123,14 @@ export async function storagePut(
   data: Buffer | Uint8Array | string,
   contentType = "application/octet-stream",
 ): Promise<{ key: string; url: string }> {
+  const raw = typeof data === "string" ? Buffer.from(data) : Buffer.from(data);
+  const maxBytes = getMaxUploadBytes();
+  if (raw.byteLength > maxBytes) {
+    throw new Error(`File is too large. Maximum upload size is ${Math.floor(maxBytes / 1024 / 1024)}MB.`);
+  }
+
   if (!hasForgeConfig()) {
-    return databaseStoragePut(relKey, data, contentType);
+    return databaseStoragePut(relKey, raw, contentType);
   }
 
   const { forgeUrl, forgeKey } = getForgeConfig();
@@ -148,9 +154,7 @@ export async function storagePut(
 
   // 2. PUT file directly to S3
   const blob =
-    typeof data === "string"
-      ? new Blob([data], { type: contentType })
-      : new Blob([data as any], { type: contentType });
+    new Blob([raw as any], { type: contentType });
 
   const uploadResp = await fetch(s3Url, {
     method: "PUT",

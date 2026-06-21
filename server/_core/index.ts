@@ -13,6 +13,7 @@ import { serveStatic, setupVite } from "./vite";
 import { storagePut } from "../storage";
 import { getDb } from "../db";
 import { ensureRuntimeSchema } from "../runtimeMigrations";
+import { getSession } from "../session";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -39,24 +40,46 @@ type ParsedUpload = {
   fileName: string;
 };
 
-const UPLOAD_BODY_LIMIT = process.env.UPLOAD_BODY_LIMIT || "50mb";
+const UPLOAD_BODY_LIMIT = process.env.UPLOAD_BODY_LIMIT || "10mb";
+const ALLOWED_UPLOAD_TYPES = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/gif",
+  "image/webp",
+  "image/heic",
+  "image/heif",
+  "video/mp4",
+  "video/quicktime",
+  "video/webm",
+]);
 
 function isAllowedUploadType(mimeType: string) {
-  return mimeType.startsWith("image/") || mimeType.startsWith("video/") || mimeType === "application/pdf";
+  return ALLOWED_UPLOAD_TYPES.has(mimeType.toLowerCase());
 }
 
-function extensionForUpload(fileName: string, mimeType: string) {
-  const fromName = fileName.split(".").pop()?.toLowerCase().replace(/[^a-z0-9]/g, "");
-  if (fromName && fromName.length <= 8) return fromName;
+function extensionForUpload(mimeType: string) {
   if (mimeType.includes("png")) return "png";
   if (mimeType.includes("gif")) return "gif";
   if (mimeType.includes("webp")) return "webp";
   if (mimeType.includes("heic")) return "heic";
   if (mimeType.includes("heif")) return "heif";
+  if (mimeType.includes("webm")) return "webm";
   if (mimeType.includes("mp4")) return "mp4";
   if (mimeType.includes("quicktime")) return "mov";
-  if (mimeType.includes("pdf")) return "pdf";
   return "jpg";
+}
+
+function hasExpectedMagicBytes(buffer: Buffer, mimeType: string) {
+  if (buffer.length < 4) return false;
+  const hex = buffer.subarray(0, 12).toString("hex");
+  if (mimeType === "image/jpeg") return hex.startsWith("ffd8ff");
+  if (mimeType === "image/png") return hex.startsWith("89504e470d0a1a0a");
+  if (mimeType === "image/gif") return buffer.subarray(0, 6).toString("ascii") === "GIF87a" || buffer.subarray(0, 6).toString("ascii") === "GIF89a";
+  if (mimeType === "image/webp") return buffer.subarray(0, 4).toString("ascii") === "RIFF" && buffer.subarray(8, 12).toString("ascii") === "WEBP";
+  if (mimeType === "image/heic" || mimeType === "image/heif") return buffer.subarray(4, 8).toString("ascii") === "ftyp";
+  if (mimeType === "video/mp4" || mimeType === "video/quicktime") return buffer.subarray(4, 8).toString("ascii") === "ftyp";
+  if (mimeType === "video/webm") return hex.startsWith("1a45dfa3");
+  return false;
 }
 
 function multipartBoundary(contentType: string) {
@@ -148,6 +171,12 @@ async function startServer() {
   // File upload endpoint
   app.post("/api/upload", express.raw({ type: "*/*", limit: UPLOAD_BODY_LIMIT }), async (req, res) => {
     try {
+      const session = await getSession(req);
+      if (!session) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+      }
+
       const contentType = String(req.headers["content-type"] || "application/octet-stream");
       const body = Buffer.isBuffer(req.body) ? req.body : Buffer.from(req.body ?? "");
       const parsed = contentType.includes("multipart/form-data")
@@ -164,7 +193,12 @@ async function startServer() {
         return;
       }
 
-      const ext = extensionForUpload(parsed.fileName, parsed.mimeType);
+      if (!hasExpectedMagicBytes(parsed.buffer, parsed.mimeType.toLowerCase())) {
+        res.status(415).json({ error: "File content does not match the declared type" });
+        return;
+      }
+
+      const ext = extensionForUpload(parsed.mimeType.toLowerCase());
       const key = `uploads/${Date.now()}.${ext}`;
       const { url, key: storedKey } = await storagePut(key, parsed.buffer, parsed.mimeType);
       res.json({ url, key: storedKey });
