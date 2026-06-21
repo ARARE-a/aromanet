@@ -2,11 +2,19 @@ import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { Link, useLocation } from "wouter";
 import { motion } from "framer-motion";
-import { ExternalLink, Eye, Heart, Image, MessageCircle, Star } from "lucide-react";
+import { ExternalLink, Eye, Heart, Image, MessageCircle, PlayCircle, Star } from "lucide-react";
 import { AromaAvatar, AromaLayout } from "@/components/AromaLayout";
 import { Button } from "@/components/ui/button";
 import { useSession } from "@/contexts/SessionContext";
 import { trpc } from "@/lib/trpc";
+
+const VIDEO_EXTENSIONS = [".mp4", ".mov", ".webm", ".m4v"];
+
+function isVideoUrl(url?: string | null) {
+  if (!url) return false;
+  const path = url.split("?")[0]?.toLowerCase() ?? "";
+  return VIDEO_EXTENSIONS.some(ext => path.endsWith(ext));
+}
 
 export default function TherapistPublicProfile() {
   const [, navigate] = useLocation();
@@ -204,9 +212,18 @@ function PostGrid({ posts }: { posts: any[] }) {
   return (
     <div className="grid grid-cols-3 gap-1">
       {posts.map((post: any) => (
-        <motion.div key={post.id} whileTap={{ scale: 0.95 }} className="aspect-square overflow-hidden rounded-lg bg-gradient-to-br from-teal-100 to-teal-200">
+        <motion.div key={post.id} whileTap={{ scale: 0.95 }} className="relative aspect-square overflow-hidden rounded-lg bg-gradient-to-br from-teal-100 to-teal-200">
           {post.imageUrl ? (
-            <img src={post.imageUrl} alt="" className="h-full w-full object-cover" />
+            isVideoUrl(post.imageUrl) ? (
+              <>
+                <video src={post.imageUrl} className="h-full w-full object-cover" muted playsInline preload="metadata" />
+                <div className="absolute inset-0 flex items-center justify-center bg-black/15">
+                  <PlayCircle className="h-8 w-8 text-white drop-shadow" />
+                </div>
+              </>
+            ) : (
+              <img src={post.imageUrl} alt="" className="h-full w-full object-cover" />
+            )
           ) : (
             <div className="flex h-full items-center justify-center p-2 text-center">
               <p className="line-clamp-3 text-xs text-teal-700">{post.content}</p>
