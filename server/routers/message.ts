@@ -4,6 +4,7 @@ import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import { getSession } from "../session";
 import {
+  ageVerifications,
   customerAccounts,
   customerProfiles,
   messageThreads,
@@ -15,7 +16,7 @@ import {
   therapistAccounts,
   therapists,
 } from "../../drizzle/schema";
-import { eq, and, desc, sql } from "drizzle-orm";
+import { eq, and, desc, or, sql } from "drizzle-orm";
 import { ensureRuntimeSchema } from "../runtimeMigrations";
 
 const BANNED_WORDS = ["LINE", "ライン", "連絡先", "個人連絡", "個人情報", "電話番号"];
@@ -52,12 +53,32 @@ function deleteFlagForRole(role: "store" | "therapist" | "customer") {
 }
 
 async function requireActiveCustomer(db: any, customerId: number) {
-  const rows = await db.select({ id: customerAccounts.id })
+  const rows = await db.select({
+      id: customerAccounts.id,
+      ageVerified: customerAccounts.ageVerified,
+      status: customerAccounts.status,
+    })
     .from(customerAccounts)
     .where(and(eq(customerAccounts.id, customerId), eq(customerAccounts.status, "active")))
     .limit(1);
   if (!rows[0]) throw new TRPCError({ code: "NOT_FOUND" });
   return rows[0];
+}
+
+async function requireCustomerMessagingAllowed(db: any, customerId: number) {
+  const customer = await requireActiveCustomer(db, customerId);
+  if (customer.ageVerified) return;
+
+  const verificationRows = await db.select({ id: ageVerifications.id })
+    .from(ageVerifications)
+    .where(and(
+      eq(ageVerifications.customerId, customerId),
+      or(eq(ageVerifications.status, "pending"), eq(ageVerifications.status, "approved")),
+    ))
+    .limit(1);
+  if (!verificationRows[0]) {
+    throw new TRPCError({ code: "FORBIDDEN", message: "年齢確認の提出後にメッセージを利用できます" });
+  }
 }
 
 async function requireActiveStore(db: any, storeId: number, publicOnly = false) {
@@ -103,7 +124,7 @@ async function buildThreadData(db: any, input: any, session: any) {
   if (input.threadType === "store_customer") {
     if (session.role === "customer") {
       if (!input.storeId) throw new TRPCError({ code: "BAD_REQUEST" });
-      await requireActiveCustomer(db, session.accountId);
+      await requireCustomerMessagingAllowed(db, session.accountId);
       await requireActiveStore(db, input.storeId, true);
       return { threadType: input.threadType, storeId: input.storeId, customerId: session.accountId };
     }
@@ -119,7 +140,7 @@ async function buildThreadData(db: any, input: any, session: any) {
   if (input.threadType === "therapist_customer") {
     if (session.role === "customer") {
       if (!input.therapistId) throw new TRPCError({ code: "BAD_REQUEST" });
-      await requireActiveCustomer(db, session.accountId);
+      await requireCustomerMessagingAllowed(db, session.accountId);
       await requireActiveTherapist(db, input.therapistId, true);
       return { threadType: input.threadType, therapistId: input.therapistId, customerId: session.accountId };
     }
@@ -318,6 +339,7 @@ export const messageRouter = router({
       const thread = threadRows[0];
       if (!canAccessThread(session, thread)) throw new TRPCError({ code: "NOT_FOUND" });
       await requireUsableThreadParticipants(db, thread);
+      if (session.role === "customer") await requireCustomerMessagingAllowed(db, session.accountId);
       if (thread.isBlocked) throw new TRPCError({ code: "FORBIDDEN", message: "このスレッドはブロックされています" });
       if (input.content && containsBannedWord(input.content)) throw new TRPCError({ code: "BAD_REQUEST", message: "禁止ワードが含まれています" });
       await markThreadRead(db, input.threadId, thread, session.role);
