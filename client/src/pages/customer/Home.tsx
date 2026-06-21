@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { Link, useLocation } from "wouter";
 import { AnimatePresence, motion } from "framer-motion";
 import {
@@ -285,7 +286,7 @@ function PostCard({ post, index, hasStory, onOpenStory }: { post: any; index: nu
         {post.imageUrl ? (
           isVideoUrl(post.imageUrl)
             ? <video src={post.imageUrl} className="w-full h-full object-cover" controls playsInline />
-            : <img src={post.imageUrl} alt="" className={`w-full h-full ${isDataSvgUrl(post.imageUrl) ? "object-contain bg-[#0b5f59]" : "object-cover"}`} />
+            : <img src={post.imageUrl} alt="" className="w-full h-full object-cover" />
         ) : (
           <div className="w-full h-full flex items-center justify-center">
             <div className="text-center px-6">
@@ -326,8 +327,9 @@ function PostCard({ post, index, hasStory, onOpenStory }: { post: any; index: nu
         )}
       </div>
 
-      <AnimatePresence>
-        {commentsOpen && (
+      {typeof document !== "undefined" && createPortal(
+        <AnimatePresence>
+          {commentsOpen && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -380,8 +382,10 @@ function PostCard({ post, index, hasStory, onOpenStory }: { post: any; index: nu
               </div>
             </motion.div>
           </motion.div>
-        )}
-      </AnimatePresence>
+          )}
+        </AnimatePresence>,
+        document.body,
+      )}
     </motion.article>
   );
 }
@@ -433,8 +437,4 @@ function StoreFeedCard({ store: s, index }: { store: any; index: number }) {
 
 function isVideoUrl(url: string) {
   return /\.(mp4|webm|mov|m4v)(\?|$)/i.test(url);
-}
-
-function isDataSvgUrl(url: string) {
-  return url.startsWith("data:image/svg+xml");
 }

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { ChevronLeft, ChevronRight, MoreHorizontal, X } from "lucide-react";
 
@@ -110,7 +111,9 @@ export function StoryViewer({ authors, initialAuthorIndex = 0, onClose }: StoryV
     action();
   };
 
-  return (
+  if (typeof document === "undefined") return null;
+
+  return createPortal(
     <AnimatePresence>
       <motion.div
         initial={{ opacity: 0 }}
@@ -266,6 +269,7 @@ export function StoryViewer({ authors, initialAuthorIndex = 0, onClose }: StoryV
           )}
         </div>
       </motion.div>
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body,
   );
 }

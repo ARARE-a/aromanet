@@ -62,7 +62,7 @@ function svgDataUrl(title, colorA, colorB) {
 
 function showcasePostVisualDataUrl() {
   const svg = `
-    <svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1350" viewBox="0 0 1080 1350">
+    <svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1080" viewBox="0 0 1080 1080">
       <defs>
         <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1">
           <stop offset="0" stop-color="#005f5b"/>
@@ -74,15 +74,43 @@ function showcasePostVisualDataUrl() {
           <stop offset="1" stop-color="rgba(255,255,255,0)"/>
         </radialGradient>
       </defs>
-      <rect width="1080" height="1350" fill="url(#bg)"/>
+      <rect width="1080" height="1080" fill="url(#bg)"/>
       <circle cx="850" cy="210" r="220" fill="url(#light)"/>
-      <circle cx="170" cy="1080" r="280" fill="rgba(255,255,255,.14)"/>
-      <circle cx="890" cy="1120" r="160" fill="rgba(0,80,76,.16)"/>
-      <path d="M210 365 C390 260, 690 270, 870 365" fill="none" stroke="rgba(255,255,255,.28)" stroke-width="3"/>
-      <text x="540" y="560" text-anchor="middle" font-family="Georgia, serif" font-size="74" fill="#fff" letter-spacing="6">AromaNet</text>
-      <text x="540" y="640" text-anchor="middle" font-family="Arial, sans-serif" font-size="30" fill="rgba(255,255,255,.82)" letter-spacing="4">SHOWCASE</text>
-      <text x="540" y="980" text-anchor="middle" font-family="Arial, sans-serif" font-size="54" font-weight="700" fill="#fff">ON SHIFT</text>
-      <text x="540" y="1042" text-anchor="middle" font-family="Arial, sans-serif" font-size="26" fill="rgba(255,255,255,.78)">available from open slots</text>
+      <circle cx="150" cy="860" r="250" fill="rgba(255,255,255,.14)"/>
+      <circle cx="890" cy="880" r="150" fill="rgba(0,80,76,.16)"/>
+      <path d="M210 270 C390 178, 690 178, 870 270" fill="none" stroke="rgba(255,255,255,.28)" stroke-width="3"/>
+      <text x="540" y="445" text-anchor="middle" font-family="Georgia, serif" font-size="74" fill="#fff" letter-spacing="6">AromaNet</text>
+      <text x="540" y="520" text-anchor="middle" font-family="Arial, sans-serif" font-size="30" fill="rgba(255,255,255,.82)" letter-spacing="4">SHOWCASE</text>
+      <text x="540" y="770" text-anchor="middle" font-family="Arial, sans-serif" font-size="54" font-weight="700" fill="#fff">ON SHIFT</text>
+      <text x="540" y="828" text-anchor="middle" font-family="Arial, sans-serif" font-size="26" fill="rgba(255,255,255,.78)">available from open slots</text>
+    </svg>
+  `;
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg.replace(/\s+/g, " ").trim())}`;
+}
+
+function showcaseStoryVisualDataUrl() {
+  const svg = `
+    <svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1920" viewBox="0 0 1080 1920">
+      <defs>
+        <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1">
+          <stop offset="0" stop-color="#005f5b"/>
+          <stop offset="0.58" stop-color="#7fbab0"/>
+          <stop offset="1" stop-color="#eadcae"/>
+        </linearGradient>
+        <radialGradient id="light" cx="50%" cy="50%" r="50%">
+          <stop offset="0" stop-color="rgba(255,255,255,.42)"/>
+          <stop offset="1" stop-color="rgba(255,255,255,0)"/>
+        </radialGradient>
+      </defs>
+      <rect width="1080" height="1920" fill="url(#bg)"/>
+      <circle cx="880" cy="250" r="260" fill="url(#light)"/>
+      <circle cx="150" cy="1380" r="360" fill="rgba(255,255,255,.14)"/>
+      <circle cx="920" cy="1500" r="210" fill="rgba(0,80,76,.16)"/>
+      <path d="M150 560 C390 430, 690 430, 930 560" fill="none" stroke="rgba(255,255,255,.28)" stroke-width="4"/>
+      <text x="540" y="820" text-anchor="middle" font-family="Georgia, serif" font-size="88" fill="#fff" letter-spacing="7">AromaNet</text>
+      <text x="540" y="910" text-anchor="middle" font-family="Arial, sans-serif" font-size="34" fill="rgba(255,255,255,.82)" letter-spacing="5">SHOWCASE</text>
+      <text x="540" y="1300" text-anchor="middle" font-family="Arial, sans-serif" font-size="68" font-weight="700" fill="#fff">ON SHIFT</text>
+      <text x="540" y="1375" text-anchor="middle" font-family="Arial, sans-serif" font-size="30" fill="rgba(255,255,255,.78)">available from open slots</text>
     </svg>
   `;
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg.replace(/\s+/g, " ").trim())}`;
@@ -94,6 +122,7 @@ const assets = {
   therapistProfile: svgDataUrl("Misaki", "#006861", "#f3c978"),
   therapistCover: svgDataUrl("Therapist", "#1f5d59", "#d7b66a"),
   postImage: showcasePostVisualDataUrl(),
+  storyImage: showcaseStoryVisualDataUrl(),
 };
 
 function getPassword() {
@@ -398,7 +427,7 @@ async function ensureStory(conn, therapistId) {
   const result = await execute(
     conn,
     "insert into story_posts (therapistId, authorRole, mediaUrl, mediaType, caption, expiresAt) values (?, 'therapist', ?, 'image', ?, ?)",
-    [therapistId, assets.postImage, "本日出勤", expiresAt],
+    [therapistId, assets.storyImage, "本日出勤", expiresAt],
   );
   return result.insertId;
 }
