@@ -3,8 +3,34 @@ import { publicProcedure, router } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import { getSession } from "../session";
-import { reviews, reservations, stores, therapists } from "../../drizzle/schema";
+import { reviews, reservations, storeAccounts, stores, therapistAccounts, therapists } from "../../drizzle/schema";
 import { eq, and, desc, sql } from "drizzle-orm";
+
+async function requirePublicStore(db: any, storeId: number) {
+  const rows = await db.select({ id: stores.id })
+    .from(stores)
+    .innerJoin(storeAccounts, eq(stores.accountId, storeAccounts.id))
+    .where(and(eq(stores.id, storeId), eq(stores.isPublic, true), eq(storeAccounts.status, "active")))
+    .limit(1);
+  if (!rows[0]) throw new TRPCError({ code: "NOT_FOUND" });
+}
+
+async function requirePublicTherapist(db: any, therapistId: number) {
+  const rows = await db.select({ id: therapists.id })
+    .from(therapists)
+    .innerJoin(therapistAccounts, eq(therapists.accountId, therapistAccounts.id))
+    .innerJoin(stores, eq(therapists.storeId, stores.id))
+    .innerJoin(storeAccounts, eq(stores.accountId, storeAccounts.id))
+    .where(and(
+      eq(therapists.id, therapistId),
+      eq(therapists.isPublic, true),
+      eq(therapistAccounts.status, "active"),
+      eq(stores.isPublic, true),
+      eq(storeAccounts.status, "active"),
+    ))
+    .limit(1);
+  if (!rows[0]) throw new TRPCError({ code: "NOT_FOUND" });
+}
 
 export const reviewRouter = router({
   getStoreReviews: publicProcedure
@@ -12,6 +38,7 @@ export const reviewRouter = router({
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await requirePublicStore(db, input.storeId);
       return db.select().from(reviews).where(and(eq(reviews.storeId, input.storeId), eq(reviews.isHidden, false))).orderBy(desc(reviews.createdAt)).limit(input.limit);
     }),
 
@@ -20,6 +47,7 @@ export const reviewRouter = router({
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await requirePublicTherapist(db, input.therapistId);
       return db.select().from(reviews).where(and(eq(reviews.therapistId, input.therapistId), eq(reviews.isHidden, false))).orderBy(desc(reviews.createdAt)).limit(input.limit);
     }),
 
@@ -52,6 +80,11 @@ export const reviewRouter = router({
       if (!session || session.role !== "store") throw new TRPCError({ code: "UNAUTHORIZED" });
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      if (!session.storeId) throw new TRPCError({ code: "NOT_FOUND" });
+      const rows = await db.select({ id: reviews.id }).from(reviews)
+        .where(and(eq(reviews.id, input.reviewId), eq(reviews.storeId, session.storeId)))
+        .limit(1);
+      if (!rows[0]) throw new TRPCError({ code: "NOT_FOUND" });
       await db.update(reviews).set({ storeReply: input.reply }).where(eq(reviews.id, input.reviewId));
       return { success: true };
     }),
@@ -63,6 +96,11 @@ export const reviewRouter = router({
       if (!session || session.role !== "store") throw new TRPCError({ code: "UNAUTHORIZED" });
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      if (!session.storeId) throw new TRPCError({ code: "NOT_FOUND" });
+      const rows = await db.select({ id: reviews.id }).from(reviews)
+        .where(and(eq(reviews.id, input.reviewId), eq(reviews.storeId, session.storeId)))
+        .limit(1);
+      if (!rows[0]) throw new TRPCError({ code: "NOT_FOUND" });
       await db.update(reviews).set({ isHidden: input.hide }).where(eq(reviews.id, input.reviewId));
       return { success: true };
     }),

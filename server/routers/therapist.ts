@@ -7,6 +7,7 @@ import {
   therapists, therapistAccounts, stores, shifts, reservations,
   posts, postImages, customerMemos, follows, favorites,
   sales, therapistPayrolls, customerProfiles, menus, notifications,
+  storeAccounts,
 } from "../../drizzle/schema";
 import { eq, and, desc, gte, lt, sql, like } from "drizzle-orm";
 import { ensureRuntimeSchema } from "../runtimeMigrations";
@@ -29,10 +30,14 @@ export const therapistRouter = router({
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       const rows = await db.select({ therapist: therapists }).from(therapists)
         .innerJoin(therapistAccounts, eq(therapists.accountId, therapistAccounts.id))
+        .innerJoin(stores, eq(therapists.storeId, stores.id))
+        .innerJoin(storeAccounts, eq(stores.accountId, storeAccounts.id))
         .where(and(
           eq(therapists.id, input.therapistId),
           eq(therapists.isPublic, true),
           eq(therapistAccounts.status, "active"),
+          eq(stores.isPublic, true),
+          eq(storeAccounts.status, "active"),
         ))
         .limit(1);
       if (!rows[0]) throw new TRPCError({ code: "NOT_FOUND" });
@@ -44,6 +49,11 @@ export const therapistRouter = router({
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const storeRows = await db.select({ id: stores.id }).from(stores)
+        .innerJoin(storeAccounts, eq(stores.accountId, storeAccounts.id))
+        .where(and(eq(stores.id, input.storeId), eq(stores.isPublic, true), eq(storeAccounts.status, "active")))
+        .limit(1);
+      if (!storeRows[0]) return [];
       const rows = await db.select({ therapist: therapists }).from(therapists)
         .innerJoin(therapistAccounts, eq(therapists.accountId, therapistAccounts.id))
         .where(and(
@@ -71,13 +81,22 @@ export const therapistRouter = router({
       if (input.keyword) conditions.push(like(therapists.displayName, `%${input.keyword}%`));
       const rows = await db.select({ therapist: therapists }).from(therapists)
         .innerJoin(therapistAccounts, eq(therapists.accountId, therapistAccounts.id))
-        .where(and(...conditions, eq(therapistAccounts.status, "active")))
+        .innerJoin(stores, eq(therapists.storeId, stores.id))
+        .innerJoin(storeAccounts, eq(stores.accountId, storeAccounts.id))
+        .where(and(
+          ...conditions,
+          eq(therapistAccounts.status, "active"),
+          eq(stores.isPublic, true),
+          eq(storeAccounts.status, "active"),
+        ))
         .orderBy(desc(therapists.nominationCount))
         .limit(200);
       let results = rows.map(row => row.therapist);
       // Filter by prefecture via store
       if (input.prefecture) {
-        const storeRows = await db.select({ id: stores.id }).from(stores).where(eq(stores.prefecture, input.prefecture));
+        const storeRows = await db.select({ id: stores.id }).from(stores)
+          .innerJoin(storeAccounts, eq(stores.accountId, storeAccounts.id))
+          .where(and(eq(stores.prefecture, input.prefecture), eq(stores.isPublic, true), eq(storeAccounts.status, "active")));
         const storeIds = new Set(storeRows.map(s => s.id));
         results = results.filter(t => t.storeId != null && storeIds.has(t.storeId));
       }
@@ -145,6 +164,19 @@ export const therapistRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       await ensureRuntimeSchema();
+      const therapistRows = await db.select({ id: therapists.id }).from(therapists)
+        .innerJoin(therapistAccounts, eq(therapists.accountId, therapistAccounts.id))
+        .innerJoin(stores, eq(therapists.storeId, stores.id))
+        .innerJoin(storeAccounts, eq(stores.accountId, storeAccounts.id))
+        .where(and(
+          eq(therapists.id, input.therapistId),
+          eq(therapists.isPublic, true),
+          eq(therapistAccounts.status, "active"),
+          eq(stores.isPublic, true),
+          eq(storeAccounts.status, "active"),
+        ))
+        .limit(1);
+      if (!therapistRows[0]) return [];
       const { start, end } = getMonthBounds(input.month);
       return db.select().from(shifts).where(and(
         eq(shifts.therapistId, input.therapistId),
@@ -353,6 +385,10 @@ export const therapistRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       if (!session.therapistId) throw new TRPCError({ code: "NOT_FOUND" });
+      const relationRows = await db.select({ id: reservations.id }).from(reservations)
+        .where(and(eq(reservations.therapistId, session.therapistId), eq(reservations.customerId, input.customerId)))
+        .limit(1);
+      if (!relationRows[0]) throw new TRPCError({ code: "FORBIDDEN" });
       const existing = await db.select({ id: customerMemos.id }).from(customerMemos)
         .where(and(eq(customerMemos.therapistId, session.therapistId), eq(customerMemos.customerId, input.customerId)))
         .limit(1);

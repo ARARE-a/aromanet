@@ -157,7 +157,8 @@ export const storeRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       const { id, ...data } = input;
-      await db.update(menus).set(data).where(eq(menus.id, id));
+      if (!session.storeId) throw new TRPCError({ code: "NOT_FOUND" });
+      await db.update(menus).set(data).where(and(eq(menus.id, id), eq(menus.storeId, session.storeId)));
       return { success: true };
     }),
 
@@ -168,7 +169,8 @@ export const storeRouter = router({
       if (!session || session.role !== "store") throw new TRPCError({ code: "UNAUTHORIZED" });
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      await db.delete(menus).where(eq(menus.id, input.id));
+      if (!session.storeId) throw new TRPCError({ code: "NOT_FOUND" });
+      await db.delete(menus).where(and(eq(menus.id, input.id), eq(menus.storeId, session.storeId)));
       return { success: true };
     }),
 

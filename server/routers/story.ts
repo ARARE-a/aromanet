@@ -96,10 +96,14 @@ export const storyRouter = router({
       const now = new Date();
       const activeRows = await db.select({ id: therapists.id }).from(therapists)
         .innerJoin(therapistAccounts, eq(therapists.accountId, therapistAccounts.id))
+        .innerJoin(stores, eq(therapists.storeId, stores.id))
+        .innerJoin(storeAccounts, eq(stores.accountId, storeAccounts.id))
         .where(and(
           eq(therapists.id, input.therapistId),
           eq(therapists.isPublic, true),
           eq(therapistAccounts.status, "active"),
+          eq(stores.isPublic, true),
+          eq(storeAccounts.status, "active"),
         ))
         .limit(1);
       if (!activeRows[0]) return [];
@@ -142,12 +146,16 @@ export const storyRouter = router({
         .from(storyPosts)
         .innerJoin(therapists, eq(storyPosts.therapistId, therapists.id))
         .innerJoin(therapistAccounts, eq(therapists.accountId, therapistAccounts.id))
+        .innerJoin(stores, eq(therapists.storeId, stores.id))
+        .innerJoin(storeAccounts, eq(stores.accountId, storeAccounts.id))
         .where(
           and(
             inArray(storyPosts.therapistId, input.therapistIds),
             gt(storyPosts.expiresAt, now),
             eq(therapists.isPublic, true),
             eq(therapistAccounts.status, "active"),
+            eq(stores.isPublic, true),
+            eq(storeAccounts.status, "active"),
           )
         );
       return rows.map(r => r.therapistId).filter(Boolean) as number[];
@@ -183,10 +191,35 @@ export const storyRouter = router({
     .mutation(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      const rows = await db.select({ viewCount: storyPosts.viewCount }).from(storyPosts).where(eq(storyPosts.id, input.storyId)).limit(1);
-      if (rows[0]) {
-        await db.update(storyPosts).set({ viewCount: (rows[0].viewCount ?? 0) + 1 }).where(eq(storyPosts.id, input.storyId));
+      const now = new Date();
+      const rows = await db.select().from(storyPosts)
+        .where(and(eq(storyPosts.id, input.storyId), gt(storyPosts.expiresAt, now)))
+        .limit(1);
+      const story = rows[0];
+      if (!story) throw new TRPCError({ code: "NOT_FOUND" });
+      if (story.therapistId) {
+        const activeRows = await db.select({ id: therapists.id }).from(therapists)
+          .innerJoin(therapistAccounts, eq(therapists.accountId, therapistAccounts.id))
+          .innerJoin(stores, eq(therapists.storeId, stores.id))
+          .innerJoin(storeAccounts, eq(stores.accountId, storeAccounts.id))
+          .where(and(
+            eq(therapists.id, story.therapistId),
+            eq(therapists.isPublic, true),
+            eq(therapistAccounts.status, "active"),
+            eq(stores.isPublic, true),
+            eq(storeAccounts.status, "active"),
+          ))
+          .limit(1);
+        if (!activeRows[0]) throw new TRPCError({ code: "NOT_FOUND" });
       }
+      if (story.storeId) {
+        const activeRows = await db.select({ id: stores.id }).from(stores)
+          .innerJoin(storeAccounts, eq(stores.accountId, storeAccounts.id))
+          .where(and(eq(stores.id, story.storeId), eq(stores.isPublic, true), eq(storeAccounts.status, "active")))
+          .limit(1);
+        if (!activeRows[0]) throw new TRPCError({ code: "NOT_FOUND" });
+      }
+      await db.update(storyPosts).set({ viewCount: (story.viewCount ?? 0) + 1 }).where(eq(storyPosts.id, input.storyId));
       return { success: true };
     }),
 
