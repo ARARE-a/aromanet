@@ -5,7 +5,7 @@ import { getDb } from "../db";
 import { getSession } from "../session";
 import {
   reservations, reservationOptions, menus, menuOptions,
-  coupons, notifications, customerAccounts, customerProfiles, storeAccounts, therapistAccounts, therapists, stores, sales, therapistSalarySettings, therapistPayrolls, ageVerifications,
+  coupons, notifications, customerAccounts, customerProfiles, storeAccounts, therapistAccounts, therapists, stores, sales, therapistSalarySettings, therapistPayrolls, ageVerifications, shifts,
 } from "../../drizzle/schema";
 import { eq, and, desc, gte, lt, or, sql } from "drizzle-orm";
 
@@ -89,6 +89,37 @@ async function requireCustomerBookingAllowed(db: any, customerId: number) {
   }
 }
 
+async function requireTherapistAvailableForReservation(db: any, input: {
+  storeId: number;
+  therapistId: number;
+  date: string;
+  startTime: string;
+  endTime: string;
+}) {
+  const shiftRows = await db.select().from(shifts).where(and(
+    eq(shifts.storeId, input.storeId),
+    eq(shifts.therapistId, input.therapistId),
+    eq(shifts.date, input.date),
+    eq(shifts.approvalStatus, "approved"),
+    or(eq(shifts.status, "scheduled"), eq(shifts.status, "working")),
+  ));
+
+  const matchingShift = shiftRows.find((shift: any) => (
+    shift.startTime <= input.startTime &&
+    shift.endTime >= input.endTime
+  ));
+  if (!matchingShift) {
+    throw new TRPCError({ code: "CONFLICT", message: "選択したセラピストはこの日時に出勤予定がありません" });
+  }
+
+  const overlapsBreak = matchingShift.breakStart && matchingShift.breakEnd &&
+    input.startTime < matchingShift.breakEnd &&
+    input.endTime > matchingShift.breakStart;
+  if (overlapsBreak) {
+    throw new TRPCError({ code: "CONFLICT", message: "選択した時間は休憩時間と重なっています" });
+  }
+}
+
 export const reservationRouter = router({
   create: publicProcedure
     .input(z.object({
@@ -159,6 +190,16 @@ export const reservationRouter = router({
       const [h, m] = input.startTime.split(":").map(Number);
       const endMinutes = h * 60 + m + menu.durationMinutes;
       const endTime = `${String(Math.floor(endMinutes / 60)).padStart(2, "0")}:${String(endMinutes % 60).padStart(2, "0")}`;
+
+      if (input.therapistId) {
+        await requireTherapistAvailableForReservation(db, {
+          storeId: resolvedStoreId,
+          therapistId: input.therapistId,
+          date: input.date,
+          startTime: input.startTime,
+          endTime,
+        });
+      }
 
       const existing = await db.select().from(reservations).where(and(eq(reservations.storeId, resolvedStoreId), eq(reservations.date, input.date)));
       for (const r of existing) {

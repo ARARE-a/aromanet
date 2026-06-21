@@ -243,6 +243,22 @@ try {
       "age verification document submission did not persist",
       verificationStatus,
     );
+    let outsideShiftBlocked = false;
+    try {
+      await customer.client.reservation.create.mutate({
+        storeId: ids.storeId,
+        therapistId: ids.therapistId,
+        menuId: ids.menuId,
+        date: targetDate,
+        startTime: "09:00",
+        isNomination: true,
+        optionIds: [],
+        customerNote: "QA outside shift should fail",
+      });
+    } catch (error) {
+      outsideShiftBlocked = String(error?.message ?? "").includes("出勤予定");
+    }
+    assert(outsideShiftBlocked, "therapist nomination outside approved shift was not blocked");
     const reservation = await customer.client.reservation.create.mutate({
       storeId: ids.storeId,
       therapistId: ids.therapistId,
