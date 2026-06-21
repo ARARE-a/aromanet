@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { HTMLAttributes, ReactNode } from "react";
 import { Link } from "wouter";
-import { Lock, Phone, User } from "lucide-react";
+import { Lock, MessageSquareText, Phone, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -9,22 +9,56 @@ import { AromaLogo } from "@/components/AromaLayout";
 import { trpc } from "@/lib/trpc";
 import { getAuthErrorMessage } from "@/lib/errors";
 
+function normalizePhoneForUi(phone: string) {
+  return phone.replace(/\D/g, "");
+}
+
 export default function CustomerRegister() {
   const [phoneNumber, setPhoneNumber] = useState("");
   const [displayName, setDisplayName] = useState("");
+  const [verificationCode, setVerificationCode] = useState("");
+  const [smsSentTo, setSmsSentTo] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
+
+  const sendSmsMut = trpc.aroAuth.startCustomerPhoneVerification.useMutation({
+    onSuccess: (res) => {
+      setSmsSentTo(res.phoneNumber);
+      setError(null);
+    },
+    onError: (e) => setError(getAuthErrorMessage(e)),
+  });
 
   const regMut = trpc.aroAuth.customerRegister.useMutation({
     onSuccess: () => { window.location.href = "/home"; },
     onError: (e) => setError(getAuthErrorMessage(e)),
   });
 
+  const handleSendSms = () => {
+    setError(null);
+    const normalizedPhone = normalizePhoneForUi(phoneNumber);
+    if (normalizedPhone.length < 10) {
+      setError("電話番号を入力してください。");
+      return;
+    }
+    setVerificationCode("");
+    sendSmsMut.mutate({ phoneNumber: phoneNumber.trim() });
+  };
+
   const handleSubmit = () => {
     setError(null);
-    if (!phoneNumber || !displayName || !password || !confirmPassword) {
+    const normalizedPhone = normalizePhoneForUi(phoneNumber);
+    if (!normalizedPhone || !displayName || !password || !confirmPassword) {
       setError("すべての項目を入力してください。");
+      return;
+    }
+    if (!smsSentTo || smsSentTo !== normalizedPhone) {
+      setError("先にSMS認証コードを送信してください。");
+      return;
+    }
+    if (!verificationCode.trim()) {
+      setError("SMS認証コードを入力してください。");
       return;
     }
     if (password !== confirmPassword) {
@@ -38,6 +72,7 @@ export default function CustomerRegister() {
     regMut.mutate({
       displayName: displayName.trim(),
       phoneNumber: phoneNumber.trim(),
+      verificationCode: verificationCode.trim(),
       password,
     });
   };
@@ -50,7 +85,7 @@ export default function CustomerRegister() {
             <AromaLogo size="md" />
           </div>
           <h1 className="mt-4 text-xl font-semibold text-foreground">お客様新規登録</h1>
-          <p className="text-sm text-muted-foreground mt-1">登録後、そのままホーム画面に進みます</p>
+          <p className="text-sm text-muted-foreground mt-1">電話番号をSMS認証して登録します</p>
         </div>
 
         <div className="bg-card rounded-2xl shadow-sm border border-border p-6 space-y-4">
@@ -61,7 +96,40 @@ export default function CustomerRegister() {
 
           <div className="space-y-3">
             <Field label="ニックネーム" icon={<User className="w-4 h-4" />} value={displayName} onChange={setDisplayName} placeholder="例: 佐藤" />
-            <Field label="電話番号" type="tel" inputMode="tel" icon={<Phone className="w-4 h-4" />} value={phoneNumber} onChange={setPhoneNumber} placeholder="09012345678" />
+            <Field
+              label="電話番号"
+              type="tel"
+              inputMode="tel"
+              icon={<Phone className="w-4 h-4" />}
+              value={phoneNumber}
+              onChange={(value) => {
+                setPhoneNumber(value);
+                if (smsSentTo && smsSentTo !== normalizePhoneForUi(value)) {
+                  setSmsSentTo("");
+                  setVerificationCode("");
+                }
+              }}
+              placeholder="09012345678"
+            />
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full"
+              disabled={!phoneNumber || sendSmsMut.isPending}
+              onClick={handleSendSms}
+            >
+              {sendSmsMut.isPending ? "SMS送信中..." : smsSentTo ? "SMS認証コードを再送する" : "SMS認証コードを送る"}
+            </Button>
+            <Field
+              label="SMS認証コード"
+              type="text"
+              inputMode="numeric"
+              icon={<MessageSquareText className="w-4 h-4" />}
+              value={verificationCode}
+              onChange={setVerificationCode}
+              placeholder="6桁のコード"
+              onEnter={handleSubmit}
+            />
             <Field label="パスワード（8文字以上）" type="password" icon={<Lock className="w-4 h-4" />} value={password} onChange={setPassword} placeholder="8文字以上" />
             <Field
               label="パスワード確認"
@@ -78,10 +146,10 @@ export default function CustomerRegister() {
 
           <Button
             className="w-full"
-            disabled={!phoneNumber || !displayName || !password || !confirmPassword || regMut.isPending}
+            disabled={!phoneNumber || !displayName || !password || !confirmPassword || !verificationCode || regMut.isPending}
             onClick={handleSubmit}
           >
-            {regMut.isPending ? "登録中..." : "登録してホームへ"}
+            {regMut.isPending ? "登録中..." : "認証して登録する"}
           </Button>
         </div>
 

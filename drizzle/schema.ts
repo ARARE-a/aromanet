@@ -70,6 +70,8 @@ export const customerAccounts = mysqlTable("customer_accounts", {
   twoFactorEnabled: boolean("twoFactorEnabled").default(false).notNull(),
   ageVerified: boolean("ageVerified").default(false).notNull(),
   ageVerifiedAt: timestamp("ageVerifiedAt"),
+  phoneVerified: boolean("phoneVerified").default(false).notNull(),
+  phoneVerifiedAt: timestamp("phoneVerifiedAt"),
   status: mysqlEnum("status", ["active", "suspended", "deleted"]).default("active").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),

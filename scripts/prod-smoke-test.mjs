@@ -1,4 +1,6 @@
 import { createTRPCProxyClient, httpBatchLink } from "@trpc/client";
+import { createInterface } from "node:readline/promises";
+import { stdin as input, stdout as output } from "node:process";
 import superjson from "superjson";
 
 const DEFAULT_BASE_URL = "https://aromanet.club";
@@ -130,8 +132,21 @@ const emails = {
   customer: `qa-smoke-customer-${stamp}@example.com`,
 };
 const phones = {
-  customer: `090${String(stamp).slice(-8)}`,
+  customer: process.env.AROMANET_SMOKE_CUSTOMER_PHONE || `090${String(stamp).slice(-8)}`,
 };
+
+async function getSmokeSmsCode() {
+  if (process.env.AROMANET_SMOKE_SMS_CODE) return process.env.AROMANET_SMOKE_SMS_CODE.trim();
+  if (!process.env.AROMANET_SMOKE_CUSTOMER_PHONE) {
+    throw new Error("SMS認証後の本番スモークには、SMSを受信できる電話番号を AROMANET_SMOKE_CUSTOMER_PHONE に設定してください。");
+  }
+  const rl = createInterface({ input, output });
+  try {
+    return (await rl.question("SMSに届いた認証コードを入力してください: ")).trim();
+  } finally {
+    rl.close();
+  }
+}
 
 try {
   console.log(JSON.stringify({ baseUrl, targetDate, emails, phones }, null, 2));
@@ -225,8 +240,13 @@ try {
   });
 
   await step("顧客を登録し、予約が3アカウントに反映される", async () => {
+    await customer.client.aroAuth.startCustomerPhoneVerification.mutate({
+      phoneNumber: phones.customer,
+    });
+    const verificationCode = await getSmokeSmsCode();
     const res = await customer.client.aroAuth.customerRegister.mutate({
       phoneNumber: phones.customer,
+      verificationCode,
       password,
       displayName: `QA顧客${stamp}`,
     });

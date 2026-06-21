@@ -29,7 +29,16 @@ export default function StoreCustomers() {
             <AromaAvatar name={c.displayName} src={c.profileImageUrl} size="md" />
             <div className="flex-1">
               <div className="text-sm font-semibold text-foreground">{c.displayName}</div>
-              {c.phone && <div className="text-xs text-primary font-medium mt-0.5">{c.phone}</div>}
+              {c.phone && (
+                <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
+                  <span className="text-xs text-primary font-medium">{c.phone}</span>
+                  {c.phoneVerified && (
+                    <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+                      SMS認証済み
+                    </span>
+                  )}
+                </div>
+              )}
               <div className="flex items-center gap-2 mt-0.5">
                 <LevelBadge level={c.level ?? 1} />
                 <span className="text-xs text-muted-foreground">累計¥{(c.totalSpent ?? 0).toLocaleString()}</span>

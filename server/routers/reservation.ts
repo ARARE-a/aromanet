@@ -5,7 +5,7 @@ import { getDb } from "../db";
 import { getSession } from "../session";
 import {
   reservations, reservationOptions, menus, menuOptions,
-  coupons, notifications, customerProfiles, storeAccounts, therapistAccounts, therapists, stores, sales, therapistSalarySettings, therapistPayrolls, shifts,
+  coupons, notifications, customerAccounts, customerProfiles, storeAccounts, therapistAccounts, therapists, stores, sales, therapistSalarySettings, therapistPayrolls, shifts,
 } from "../../drizzle/schema";
 import { eq, and, desc, gte, lt, or, sql } from "drizzle-orm";
 
@@ -301,6 +301,7 @@ export const reservationRouter = router({
         updatedAt: reservations.updatedAt,
         customerName: sql<string>`COALESCE(${customerProfiles.displayName}, ${customerProfiles.nickname}, CONCAT('顧客#', ${reservations.customerId}))`,
         customerPhone: customerProfiles.phone,
+        customerPhoneVerified: customerAccounts.phoneVerified,
         customerImage: customerProfiles.profileImageUrl,
         therapistName: therapists.displayName,
         therapistImage: therapists.profileImageUrl,
@@ -310,6 +311,7 @@ export const reservationRouter = router({
         menuDuration: menus.durationMinutes,
       }).from(reservations)
         .leftJoin(customerProfiles, eq(reservations.customerId, customerProfiles.accountId))
+        .leftJoin(customerAccounts, eq(reservations.customerId, customerAccounts.id))
         .leftJoin(therapists, eq(reservations.therapistId, therapists.id))
         .leftJoin(stores, eq(reservations.storeId, stores.id))
         .leftJoin(menus, eq(reservations.menuId, menus.id))

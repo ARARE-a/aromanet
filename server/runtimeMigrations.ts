@@ -25,7 +25,9 @@ async function ignoreExistingColumn(promise: Promise<unknown>) {
       message.includes("ALTER TABLE messages ADD COLUMN deletedForCustomer") ||
       message.includes("ALTER TABLE messages ADD COLUMN deletedAt") ||
       message.includes("ALTER TABLE messages ADD COLUMN deletedByRole") ||
-      message.includes("ALTER TABLE messages ADD COLUMN deletedById");
+      message.includes("ALTER TABLE messages ADD COLUMN deletedById") ||
+      message.includes("ALTER TABLE customer_accounts ADD COLUMN phoneVerified") ||
+      message.includes("ALTER TABLE customer_accounts ADD COLUMN phoneVerifiedAt");
     if (!existingColumn) {
       throw error;
     }
@@ -49,6 +51,9 @@ export async function ensureRuntimeSchema() {
       await ignoreExistingColumn(db.execute(sql.raw("ALTER TABLE messages ADD COLUMN deletedAt timestamp NULL")));
       await ignoreExistingColumn(db.execute(sql.raw("ALTER TABLE messages ADD COLUMN deletedByRole varchar(20)")));
       await ignoreExistingColumn(db.execute(sql.raw("ALTER TABLE messages ADD COLUMN deletedById int")));
+
+      await ignoreExistingColumn(db.execute(sql.raw("ALTER TABLE customer_accounts ADD COLUMN phoneVerified boolean NOT NULL DEFAULT false")));
+      await ignoreExistingColumn(db.execute(sql.raw("ALTER TABLE customer_accounts ADD COLUMN phoneVerifiedAt timestamp NULL")));
     })().catch(error => {
       runtimeSchemaReady = null;
       throw error;

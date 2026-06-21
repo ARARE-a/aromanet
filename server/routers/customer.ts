@@ -101,6 +101,8 @@ export const customerRouter = router({
       db.select({
         ageVerified: customerAccounts.ageVerified,
         ageVerifiedAt: customerAccounts.ageVerifiedAt,
+        phoneVerified: customerAccounts.phoneVerified,
+        phoneVerifiedAt: customerAccounts.phoneVerifiedAt,
       }).from(customerAccounts).where(eq(customerAccounts.id, session.accountId)).limit(1),
       db.select({
         status: ageVerifications.status,
@@ -122,6 +124,8 @@ export const customerRouter = router({
       isVerified: Boolean(accountRows[0]?.ageVerified),
       ageVerified: Boolean(accountRows[0]?.ageVerified),
       ageVerifiedAt: accountRows[0]?.ageVerifiedAt ?? null,
+      phoneVerified: Boolean(accountRows[0]?.phoneVerified),
+      phoneVerifiedAt: accountRows[0]?.phoneVerifiedAt ?? null,
       verificationStatus: verificationRows[0]?.status ?? "not_submitted",
       reservationCount: Number(reservationCountRows[0]?.count ?? 0),
       favoriteCount: Number(favoriteCountRows[0]?.count ?? 0),

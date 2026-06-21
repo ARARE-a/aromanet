@@ -457,11 +457,13 @@ async function main() {
 
   try {
     await execute(conn, "ALTER TABLE favorites MODIFY COLUMN targetType enum('store','therapist','post') NOT NULL");
+    await execute(conn, "ALTER TABLE customer_accounts ADD COLUMN phoneVerified boolean NOT NULL DEFAULT false").catch(() => {});
+    await execute(conn, "ALTER TABLE customer_accounts ADD COLUMN phoneVerifiedAt timestamp NULL").catch(() => {});
     await conn.beginTransaction();
 
     const storeAccountId = await ensureAccount(conn, "store_accounts", accounts.store.email, passwordHash, "identityVerified = 1, identityVerifiedAt = current_timestamp()");
     const therapistAccountId = await ensureAccount(conn, "therapist_accounts", accounts.therapist.email, passwordHash, "identityVerified = 1, identityVerifiedAt = current_timestamp(), ageVerified = 1");
-    const customerAccountId = await ensureAccount(conn, "customer_accounts", accounts.customer.email, passwordHash, "ageVerified = 1, ageVerifiedAt = current_timestamp()");
+    const customerAccountId = await ensureAccount(conn, "customer_accounts", accounts.customer.email, passwordHash, "ageVerified = 1, ageVerifiedAt = current_timestamp(), phoneVerified = 1, phoneVerifiedAt = current_timestamp()");
 
     const storeId = await ensureStore(conn, storeAccountId);
     const therapistId = await ensureTherapist(conn, therapistAccountId, storeId);

@@ -159,7 +159,16 @@ export default function StoreReservations() {
               <div className="min-w-0">
                 <div className="text-sm font-medium text-foreground truncate">{r.customerName ?? "お客様"}</div>
                 <div className="text-xs text-muted-foreground truncate">担当: {r.therapistName ?? "未定"}</div>
-                {r.customerPhone && <div className="text-xs text-primary font-medium">{r.customerPhone}</div>}
+                {r.customerPhone && (
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="text-xs text-primary font-medium">{r.customerPhone}</span>
+                    {r.customerPhoneVerified && (
+                      <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+                        SMS認証済み
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
 

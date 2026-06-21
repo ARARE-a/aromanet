@@ -18,6 +18,7 @@ import { SignJWT, jwtVerify, type JWTPayload } from "jose";
 import { ensureTherapistInviteLinksTable, getInviteInvalidReason } from "../therapistInvites";
 import { getJwtSecretKey } from "../jwtSecret";
 import { getSession as getAromaSession } from "../session";
+import { ensureRuntimeSchema } from "../runtimeMigrations";
 
 const SESSION_COOKIE = "aromanet_session";
 const PHONE_EMAIL_DOMAIN = "phone.aromanet.local";
@@ -36,6 +37,64 @@ function customerPhoneEmail(phone: string) {
 
 function looksLikeEmail(value: string) {
   return value.includes("@");
+}
+
+function customerPhoneToE164(phone: string) {
+  const trimmed = phone.trim();
+  if (trimmed.startsWith("+")) return `+${trimmed.slice(1).replace(/\D/g, "")}`;
+  const normalized = normalizeCustomerPhone(trimmed);
+  if (normalized.startsWith("0")) return `+81${normalized.slice(1)}`;
+  if (normalized.startsWith("81")) return `+${normalized}`;
+  throw new TRPCError({ code: "BAD_REQUEST", message: "電話番号は09012345678の形式で入力してください" });
+}
+
+function getTwilioVerifyConfig() {
+  const accountSid = process.env.TWILIO_ACCOUNT_SID;
+  const authToken = process.env.TWILIO_AUTH_TOKEN;
+  const serviceSid = process.env.TWILIO_VERIFY_SERVICE_SID ?? process.env.VERIFY_SERVICE_SID;
+  if (!accountSid || !authToken || !serviceSid) {
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message: "SMS認証設定が未完了です。管理者に連絡してください。",
+    });
+  }
+  return { accountSid, authToken, serviceSid };
+}
+
+async function callTwilioVerify(path: string, body: Record<string, string>) {
+  const { accountSid, authToken, serviceSid } = getTwilioVerifyConfig();
+  const params = new URLSearchParams(body);
+  const res = await fetch(`https://verify.twilio.com/v2/Services/${serviceSid}/${path}`, {
+    method: "POST",
+    headers: {
+      Authorization: `Basic ${Buffer.from(`${accountSid}:${authToken}`).toString("base64")}`,
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body: params,
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const detail = typeof data?.message === "string" ? data.message : "";
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: detail ? `SMS認証に失敗しました: ${detail}` : "SMS認証に失敗しました。電話番号を確認してください。",
+    });
+  }
+  return data;
+}
+
+async function sendCustomerPhoneVerification(phone: string) {
+  const e164Phone = customerPhoneToE164(phone);
+  await callTwilioVerify("Verifications", { To: e164Phone, Channel: "sms" });
+}
+
+async function verifyCustomerPhoneCode(phone: string, code: string) {
+  const e164Phone = customerPhoneToE164(phone);
+  const result = await callTwilioVerify("VerificationCheck", {
+    To: e164Phone,
+    Code: code.trim(),
+  });
+  return result?.status === "approved";
 }
 
 async function signToken(payload: Record<string, unknown>): Promise<string> {
@@ -267,6 +326,31 @@ export const authRouter = router({
       return { success: true, role: "therapist", accountId: acc.id, therapistId };
     }),
 
+  // Customer: send phone verification SMS
+  startCustomerPhoneVerification: publicProcedure
+    .input(z.object({
+      phoneNumber: z.string().min(10),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const normalizedPhone = normalizeCustomerPhone(input.phoneNumber);
+      if (normalizedPhone.length < 10) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "電話番号を入力してください" });
+      }
+      const email = customerPhoneEmail(normalizedPhone);
+      const existing = await db.select({ account: customerAccounts })
+        .from(customerAccounts)
+        .leftJoin(customerProfiles, eq(customerProfiles.accountId, customerAccounts.id))
+        .where(or(eq(customerAccounts.email, email), eq(customerProfiles.phone, normalizedPhone)))
+        .limit(1);
+      if (existing.length > 0) {
+        throw new TRPCError({ code: "CONFLICT", message: "この電話番号は既に登録されています。ログインしてください。" });
+      }
+      await sendCustomerPhoneVerification(normalizedPhone);
+      return { success: true, phoneNumber: normalizedPhone };
+    }),
+
   // Customer: register
   customerRegister: publicProcedure
     .input(z.object({
@@ -274,11 +358,13 @@ export const authRouter = router({
       email: z.string().email().optional(),
       password: z.string().min(8),
       displayName: z.string().min(1),
+      verificationCode: z.string().min(4),
       ageConfirmed: z.boolean().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await ensureRuntimeSchema();
       const normalizedPhone = normalizeCustomerPhone(input.phoneNumber ?? "");
       if (normalizedPhone.length < 10) {
         throw new TRPCError({ code: "BAD_REQUEST", message: "電話番号を入力してください" });
@@ -295,17 +381,20 @@ export const authRouter = router({
         if (acc.status === "suspended" || acc.status === "deleted") {
           throw new TRPCError({ code: "FORBIDDEN", message: "このアカウントは利用停止中です" });
         }
-        const isSamePassword = await bcrypt.compare(input.password, acc.passwordHash);
-        if (!isSamePassword) {
-          throw new TRPCError({ code: "CONFLICT", message: "この電話番号は既に登録されています。ログインしてください" });
-        }
-        await setSessionCookie(ctx.res, { role: "customer", accountId: acc.id, email: acc.email });
-        await db.update(customerAccounts).set({ updatedAt: new Date() }).where(eq(customerAccounts.id, acc.id));
-        await logAudit(db, "customer", acc.id, "register_existing_login", acc.email, ctx.req);
-        return { success: true, role: "customer", accountId: acc.id };
+        throw new TRPCError({ code: "CONFLICT", message: "この電話番号は既に登録されています。ログインしてください。" });
+      }
+      const verified = await verifyCustomerPhoneCode(normalizedPhone, input.verificationCode);
+      if (!verified) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "SMS認証コードが正しくありません。" });
       }
       const passwordHash = await bcrypt.hash(input.password, 12);
-      const result = await db.insert(customerAccounts).values({ email, passwordHash, ageVerified: false });
+      const result = await db.insert(customerAccounts).values({
+        email,
+        passwordHash,
+        ageVerified: false,
+        phoneVerified: true,
+        phoneVerifiedAt: new Date(),
+      });
       const accountId = (result as any)[0].insertId as number;
       await db.insert(customerProfiles).values({ accountId, displayName, phone: normalizedPhone });
       await setSessionCookie(ctx.res, { role: "customer", accountId, email });

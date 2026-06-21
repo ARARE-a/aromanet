@@ -4,7 +4,7 @@ import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import { getSession } from "../session";
 import {
-  stores, storeAccounts, therapists, menus, menuOptions,
+  stores, storeAccounts, customerAccounts, therapists, menus, menuOptions,
   coupons, reservations, reviews, posts,
   notifications, ngCustomers, sales, shifts,
 } from "../../drizzle/schema";
@@ -255,15 +255,20 @@ export const storeRouter = router({
         displayName: customerProfiles.displayName,
         nickname: customerProfiles.nickname,
         phone: customerProfiles.phone,
+        phoneVerified: customerAccounts.phoneVerified,
         profileImageUrl: customerProfiles.profileImageUrl,
         memberLevel: customerProfiles.memberLevel,
         totalSpent: customerProfiles.totalSpent,
-      }).from(customerProfiles).where(eq(customerProfiles.accountId, row.customerId)).limit(1);
+      }).from(customerProfiles)
+        .leftJoin(customerAccounts, eq(customerProfiles.accountId, customerAccounts.id))
+        .where(eq(customerProfiles.accountId, row.customerId))
+        .limit(1);
       const cp = cpRows[0];
       result.push({
         ...row,
         displayName: cp?.displayName ?? cp?.nickname ?? `顧客#${row.customerId}`,
         phone: cp?.phone ?? null,
+        phoneVerified: Boolean(cp?.phoneVerified),
         profileImageUrl: cp?.profileImageUrl ?? null,
         level: cp?.memberLevel ?? 1,
         totalSpent: cp?.totalSpent ?? 0,
