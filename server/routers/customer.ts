@@ -6,6 +6,7 @@ import { getSession } from "../session";
 import {
   customerProfiles, reservations, reviews, follows, favorites, notifications,
   stores, therapists, menus, customerAccounts, ageVerifications,
+  storeAccounts, therapistAccounts, posts,
 } from "../../drizzle/schema";
 import { eq, and, desc, sql } from "drizzle-orm";
 
@@ -43,6 +44,50 @@ function ensureFavoritePostTarget(db: any) {
       });
   }
   return favoriteSchemaReady;
+}
+
+async function requirePublicStoreTarget(db: any, storeId: number) {
+  const rows = await db.select({ id: stores.id })
+    .from(stores)
+    .innerJoin(storeAccounts, eq(stores.accountId, storeAccounts.id))
+    .where(and(
+      eq(stores.id, storeId),
+      eq(stores.isPublic, true),
+      eq(storeAccounts.status, "active"),
+    ))
+    .limit(1);
+  if (!rows[0]) throw new TRPCError({ code: "NOT_FOUND" });
+}
+
+async function requirePublicTherapistTarget(db: any, therapistId: number) {
+  const rows = await db.select({ id: therapists.id })
+    .from(therapists)
+    .innerJoin(therapistAccounts, eq(therapists.accountId, therapistAccounts.id))
+    .where(and(
+      eq(therapists.id, therapistId),
+      eq(therapists.isPublic, true),
+      eq(therapistAccounts.status, "active"),
+    ))
+    .limit(1);
+  if (!rows[0]) throw new TRPCError({ code: "NOT_FOUND" });
+}
+
+async function requirePublicPostTarget(db: any, postId: number) {
+  const postRows = await db.select({
+    id: posts.id,
+    storeId: posts.storeId,
+    therapistId: posts.therapistId,
+  }).from(posts).where(and(eq(posts.id, postId), eq(posts.isPublic, true))).limit(1);
+  const post = postRows[0];
+  if (!post) throw new TRPCError({ code: "NOT_FOUND" });
+  if (post.storeId) await requirePublicStoreTarget(db, post.storeId);
+  if (post.therapistId) await requirePublicTherapistTarget(db, post.therapistId);
+}
+
+async function requireFavoriteOrFollowTarget(db: any, targetType: "store" | "therapist" | "post", targetId: number) {
+  if (targetType === "store") return requirePublicStoreTarget(db, targetId);
+  if (targetType === "therapist") return requirePublicTherapistTarget(db, targetId);
+  return requirePublicPostTarget(db, targetId);
 }
 
 export const customerRouter = router({
@@ -149,6 +194,7 @@ export const customerRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       if (input.targetType === "post") await ensureFavoritePostTarget(db);
+      await requireFavoriteOrFollowTarget(db, input.targetType, input.targetId);
       const existing = await db.select().from(favorites).where(and(eq(favorites.customerId, session.accountId), eq(favorites.targetType, input.targetType), eq(favorites.targetId, input.targetId))).limit(1);
       if (existing.length > 0) {
         await db.delete(favorites).where(eq(favorites.id, existing[0].id));
@@ -175,6 +221,7 @@ export const customerRouter = router({
       if (!session || session.role !== "customer") throw new TRPCError({ code: "UNAUTHORIZED" });
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await requireFavoriteOrFollowTarget(db, input.targetType, input.targetId);
       const existing = await db.select().from(follows).where(and(eq(follows.customerId, session.accountId), eq(follows.targetType, input.targetType), eq(follows.targetId, input.targetId))).limit(1);
       if (existing.length > 0) {
         await db.delete(follows).where(eq(follows.id, existing[0].id));

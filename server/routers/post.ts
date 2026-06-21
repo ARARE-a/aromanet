@@ -216,6 +216,9 @@ export const postRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       await ensurePostInteractionSchema(db);
+      const postRows = await db.select().from(posts).where(and(eq(posts.id, input.postId), eq(posts.isPublic, true))).limit(1);
+      const visiblePosts = await filterPublicPostAuthors(db, postRows);
+      if (!visiblePosts[0]) throw new TRPCError({ code: "NOT_FOUND" });
       return db.select({
         id: postComments.id,
         postId: postComments.postId,
@@ -240,8 +243,9 @@ export const postRouter = router({
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       await ensurePostInteractionSchema(db);
       await ensureFavoritePostTarget(db);
-      const postRows = await db.select({ id: posts.id }).from(posts).where(and(eq(posts.id, input.postId), eq(posts.isPublic, true))).limit(1);
-      if (!postRows[0]) throw new TRPCError({ code: "NOT_FOUND" });
+      const postRows = await db.select().from(posts).where(and(eq(posts.id, input.postId), eq(posts.isPublic, true))).limit(1);
+      const visiblePosts = await filterPublicPostAuthors(db, postRows);
+      if (!visiblePosts[0]) throw new TRPCError({ code: "NOT_FOUND" });
       await db.insert(postComments).values({ postId: input.postId, customerId: session.accountId, comment: input.comment.trim() });
       return { success: true };
     }),

@@ -3,7 +3,18 @@ import { publicProcedure, router } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import { getSession } from "../session";
-import { messageThreads, messages, reports, therapists, stores, customerProfiles } from "../../drizzle/schema";
+import {
+  customerAccounts,
+  customerProfiles,
+  messageThreads,
+  messages,
+  reports,
+  reservations,
+  storeAccounts,
+  stores,
+  therapistAccounts,
+  therapists,
+} from "../../drizzle/schema";
 import { eq, and, desc, sql } from "drizzle-orm";
 import { ensureRuntimeSchema } from "../runtimeMigrations";
 
@@ -38,6 +49,129 @@ function deleteFlagForRole(role: "store" | "therapist" | "customer") {
   if (role === "store") return "deletedForStore";
   if (role === "therapist") return "deletedForTherapist";
   return "deletedForCustomer";
+}
+
+async function requireActiveCustomer(db: any, customerId: number) {
+  const rows = await db.select({ id: customerAccounts.id })
+    .from(customerAccounts)
+    .where(and(eq(customerAccounts.id, customerId), eq(customerAccounts.status, "active")))
+    .limit(1);
+  if (!rows[0]) throw new TRPCError({ code: "NOT_FOUND" });
+  return rows[0];
+}
+
+async function requireActiveStore(db: any, storeId: number, publicOnly = false) {
+  const conditions: any[] = [
+    eq(stores.id, storeId),
+    eq(storeAccounts.status, "active"),
+  ];
+  if (publicOnly) conditions.push(eq(stores.isPublic, true));
+  const rows = await db.select({ id: stores.id })
+    .from(stores)
+    .innerJoin(storeAccounts, eq(stores.accountId, storeAccounts.id))
+    .where(and(...conditions))
+    .limit(1);
+  if (!rows[0]) throw new TRPCError({ code: "NOT_FOUND" });
+  return rows[0];
+}
+
+async function requireActiveTherapist(db: any, therapistId: number, publicOnly = false, storeId?: number) {
+  const conditions: any[] = [
+    eq(therapists.id, therapistId),
+    eq(therapistAccounts.status, "active"),
+  ];
+  if (publicOnly) conditions.push(eq(therapists.isPublic, true));
+  if (storeId) conditions.push(eq(therapists.storeId, storeId));
+  const rows = await db.select({ id: therapists.id, storeId: therapists.storeId })
+    .from(therapists)
+    .innerJoin(therapistAccounts, eq(therapists.accountId, therapistAccounts.id))
+    .where(and(...conditions))
+    .limit(1);
+  if (!rows[0]) throw new TRPCError({ code: "NOT_FOUND" });
+  return rows[0];
+}
+
+async function requireTherapistCustomerRelation(db: any, therapistId: number, customerId: number) {
+  const rows = await db.select({ id: reservations.id })
+    .from(reservations)
+    .where(and(eq(reservations.therapistId, therapistId), eq(reservations.customerId, customerId)))
+    .limit(1);
+  if (!rows[0]) throw new TRPCError({ code: "FORBIDDEN" });
+}
+
+async function buildThreadData(db: any, input: any, session: any) {
+  if (input.threadType === "store_customer") {
+    if (session.role === "customer") {
+      if (!input.storeId) throw new TRPCError({ code: "BAD_REQUEST" });
+      await requireActiveCustomer(db, session.accountId);
+      await requireActiveStore(db, input.storeId, true);
+      return { threadType: input.threadType, storeId: input.storeId, customerId: session.accountId };
+    }
+    if (session.role === "store") {
+      if (!input.customerId || !session.storeId) throw new TRPCError({ code: "BAD_REQUEST" });
+      await requireActiveStore(db, session.storeId);
+      await requireActiveCustomer(db, input.customerId);
+      return { threadType: input.threadType, storeId: session.storeId, customerId: input.customerId };
+    }
+    throw new TRPCError({ code: "FORBIDDEN" });
+  }
+
+  if (input.threadType === "therapist_customer") {
+    if (session.role === "customer") {
+      if (!input.therapistId) throw new TRPCError({ code: "BAD_REQUEST" });
+      await requireActiveCustomer(db, session.accountId);
+      await requireActiveTherapist(db, input.therapistId, true);
+      return { threadType: input.threadType, therapistId: input.therapistId, customerId: session.accountId };
+    }
+    if (session.role === "therapist") {
+      if (!input.customerId || !session.therapistId) throw new TRPCError({ code: "BAD_REQUEST" });
+      await requireActiveTherapist(db, session.therapistId);
+      await requireActiveCustomer(db, input.customerId);
+      await requireTherapistCustomerRelation(db, session.therapistId, input.customerId);
+      return { threadType: input.threadType, therapistId: session.therapistId, customerId: input.customerId };
+    }
+    throw new TRPCError({ code: "FORBIDDEN" });
+  }
+
+  if (input.threadType === "store_therapist") {
+    if (session.role === "store") {
+      if (!input.therapistId || !session.storeId) throw new TRPCError({ code: "BAD_REQUEST" });
+      await requireActiveStore(db, session.storeId);
+      await requireActiveTherapist(db, input.therapistId, false, session.storeId);
+      return { threadType: input.threadType, storeId: session.storeId, therapistId: input.therapistId };
+    }
+    if (session.role === "therapist") {
+      if (!session.therapistId) throw new TRPCError({ code: "BAD_REQUEST" });
+      const therapist = await requireActiveTherapist(db, session.therapistId);
+      if (!therapist.storeId) throw new TRPCError({ code: "FORBIDDEN" });
+      if (input.storeId && input.storeId !== therapist.storeId) throw new TRPCError({ code: "FORBIDDEN" });
+      await requireActiveStore(db, therapist.storeId);
+      return { threadType: input.threadType, storeId: therapist.storeId, therapistId: session.therapistId };
+    }
+    throw new TRPCError({ code: "FORBIDDEN" });
+  }
+
+  throw new TRPCError({ code: "BAD_REQUEST" });
+}
+
+async function requireUsableThreadParticipants(db: any, thread: any) {
+  if (thread.threadType === "store_customer") {
+    if (!thread.storeId || !thread.customerId) throw new TRPCError({ code: "NOT_FOUND" });
+    await requireActiveStore(db, thread.storeId);
+    await requireActiveCustomer(db, thread.customerId);
+    return;
+  }
+  if (thread.threadType === "therapist_customer") {
+    if (!thread.therapistId || !thread.customerId) throw new TRPCError({ code: "NOT_FOUND" });
+    await requireActiveTherapist(db, thread.therapistId);
+    await requireActiveCustomer(db, thread.customerId);
+    return;
+  }
+  if (thread.threadType === "store_therapist") {
+    if (!thread.storeId || !thread.therapistId) throw new TRPCError({ code: "NOT_FOUND" });
+    await requireActiveStore(db, thread.storeId);
+    await requireActiveTherapist(db, thread.therapistId, false, thread.storeId);
+  }
 }
 
 async function markThreadRead(db: any, threadId: number, thread: any, role: "store" | "therapist" | "customer") {
@@ -127,10 +261,7 @@ export const messageRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       await ensureRuntimeSchema();
-      const threadData = { ...input };
-      if (session.role === "store") threadData.storeId = session.storeId;
-      if (session.role === "therapist") threadData.therapistId = session.therapistId;
-      if (session.role === "customer") threadData.customerId = session.accountId;
+      const threadData = await buildThreadData(db, input, session);
       const conditions: any[] = [eq(messageThreads.threadType, threadData.threadType)];
       if (threadData.storeId) conditions.push(eq(messageThreads.storeId, threadData.storeId));
       if (threadData.therapistId) conditions.push(eq(messageThreads.therapistId, threadData.therapistId));
@@ -174,6 +305,7 @@ export const messageRouter = router({
       if (!threadRows[0]) throw new TRPCError({ code: "NOT_FOUND" });
       const thread = threadRows[0];
       if (!canAccessThread(session, thread)) throw new TRPCError({ code: "NOT_FOUND" });
+      await requireUsableThreadParticipants(db, thread);
       if (thread.isBlocked) throw new TRPCError({ code: "FORBIDDEN", message: "このスレッドはブロックされています" });
       if (input.content && containsBannedWord(input.content)) throw new TRPCError({ code: "BAD_REQUEST", message: "禁止ワードが含まれています" });
       await markThreadRead(db, input.threadId, thread, session.role);
@@ -237,6 +369,12 @@ export const messageRouter = router({
       if (!session) throw new TRPCError({ code: "UNAUTHORIZED" });
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const messageRows = await db.select().from(messages).where(eq(messages.id, input.messageId)).limit(1);
+      const message = messageRows[0];
+      if (!message) throw new TRPCError({ code: "NOT_FOUND" });
+      const threadRows = await db.select().from(messageThreads).where(eq(messageThreads.id, message.threadId)).limit(1);
+      const thread = threadRows[0];
+      if (!thread || !canAccessThread(session, thread)) throw new TRPCError({ code: "NOT_FOUND" });
       await db.update(messages).set({ isReported: true }).where(eq(messages.id, input.messageId));
       const reporterId = session.role === "store" ? session.storeId! : session.role === "therapist" ? session.therapistId! : session.accountId;
       await db.insert(reports).values({ reporterRole: session.role, reporterId, targetType: "message", targetId: input.messageId, reason: input.reason });
@@ -250,6 +388,8 @@ export const messageRouter = router({
       if (!session) throw new TRPCError({ code: "UNAUTHORIZED" });
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const threadRows = await db.select().from(messageThreads).where(eq(messageThreads.id, input.threadId)).limit(1);
+      if (!threadRows[0] || !canAccessThread(session, threadRows[0])) throw new TRPCError({ code: "NOT_FOUND" });
       await db.update(messageThreads).set({ isBlocked: true }).where(eq(messageThreads.id, input.threadId));
       return { success: true };
     }),
