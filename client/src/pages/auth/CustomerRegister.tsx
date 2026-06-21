@@ -33,7 +33,7 @@ export default function CustomerRegister() {
       setError("パスワードは8文字以上で入力してください");
       return;
     }
-    regMut.mutate({ displayName: displayName.trim(), email: email.trim(), password, ageConfirmed: true });
+    regMut.mutate({ displayName: displayName.trim(), email: email.trim().toLowerCase(), password, ageConfirmed: true });
   };
 
   return (

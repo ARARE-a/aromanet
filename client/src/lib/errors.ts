@@ -25,9 +25,20 @@ function parseValidationMessage(message: string): string | null {
 export function getAuthErrorMessage(error: ApiLikeError): string {
   const code = error.data?.code;
   const message = error.message ?? "";
+  const normalizedMessage = message.toLowerCase();
 
   const validationMessage = parseValidationMessage(message);
   if (validationMessage) return validationMessage;
+
+  if (
+    normalizedMessage === "load failed" ||
+    normalizedMessage.includes("failed to fetch") ||
+    normalizedMessage.includes("networkerror") ||
+    normalizedMessage.includes("network error") ||
+    normalizedMessage.includes("fetch failed")
+  ) {
+    return "通信に失敗しました。サーバー起動中または回線が不安定な可能性があります。少し待ってからもう一度お試しください。";
+  }
 
   if (code === "INTERNAL_SERVER_ERROR" || message === "INTERNAL_SERVER_ERROR") {
     return import.meta.env.DEV

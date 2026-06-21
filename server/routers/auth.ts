@@ -262,14 +262,29 @@ export const authRouter = router({
       if (!input.ageConfirmed) throw new TRPCError({ code: "BAD_REQUEST", message: "年齢確認が必要です" });
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      const existing = await db.select().from(customerAccounts).where(eq(customerAccounts.email, input.email)).limit(1);
-      if (existing.length > 0) throw new TRPCError({ code: "CONFLICT", message: "このメールアドレスは既に登録されています" });
+      const email = input.email.trim().toLowerCase();
+      const displayName = input.displayName.trim();
+      const existing = await db.select().from(customerAccounts).where(eq(customerAccounts.email, email)).limit(1);
+      if (existing.length > 0) {
+        const acc = existing[0];
+        if (acc.status === "suspended" || acc.status === "deleted") {
+          throw new TRPCError({ code: "FORBIDDEN", message: "このアカウントは利用停止中です" });
+        }
+        const isSamePassword = await bcrypt.compare(input.password, acc.passwordHash);
+        if (!isSamePassword) {
+          throw new TRPCError({ code: "CONFLICT", message: "このメールアドレスは既に登録されています。ログインしてください" });
+        }
+        setSessionCookie(ctx.res, { role: "customer", accountId: acc.id, email: acc.email });
+        await db.update(customerAccounts).set({ updatedAt: new Date() }).where(eq(customerAccounts.id, acc.id));
+        await logAudit(db, "customer", acc.id, "register_existing_login", acc.email, ctx.req);
+        return { success: true, role: "customer", accountId: acc.id };
+      }
       const passwordHash = await bcrypt.hash(input.password, 12);
-      const result = await db.insert(customerAccounts).values({ email: input.email, passwordHash, ageVerified: false });
+      const result = await db.insert(customerAccounts).values({ email, passwordHash, ageVerified: false });
       const accountId = (result as any)[0].insertId as number;
-      await db.insert(customerProfiles).values({ accountId, displayName: input.displayName });
-      setSessionCookie(ctx.res, { role: "customer", accountId, email: input.email });
-      await logAudit(db, "customer", accountId, "register", input.email, ctx.req);
+      await db.insert(customerProfiles).values({ accountId, displayName });
+      setSessionCookie(ctx.res, { role: "customer", accountId, email });
+      await logAudit(db, "customer", accountId, "register", email, ctx.req);
       return { success: true, role: "customer", accountId };
     }),
 
