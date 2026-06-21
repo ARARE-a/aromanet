@@ -59,13 +59,24 @@ export default function CustomerReservations() {
     if (!storeId && t?.storeId) setStoreId(t.storeId);
   }, [selectedTherapist, storeId]);
 
+  const handleReservationError = (error: { message?: string }) => {
+    const nextMessage = error.message || "予約に失敗しました。";
+    if (nextMessage.includes("年齢確認")) {
+      toast.error(nextMessage, {
+        action: { label: "本人確認", onClick: () => navigate("/my/verification") },
+      });
+      return;
+    }
+    toast.error(nextMessage);
+  };
+
   const createMut = trpc.reservation.create.useMutation({
     onSuccess: () => {
       toast.success("予約リクエストを送信しました。");
       setShowNew(false);
       refetch();
     },
-    onError: e => toast.error(e.message),
+    onError: handleReservationError,
   });
   const cancelMut = trpc.reservation.cancel.useMutation({
     onSuccess: () => {

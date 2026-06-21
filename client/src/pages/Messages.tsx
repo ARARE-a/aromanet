@@ -47,13 +47,23 @@ export default function Messages() {
       refetchOnWindowFocus: true,
     },
   );
+  const handleMessageError = (error: { message?: string }) => {
+    const nextMessage = error.message || "メッセージの操作に失敗しました。";
+    if (nextMessage.includes("年齢確認")) {
+      toast.error(nextMessage, {
+        action: { label: "本人確認", onClick: () => navigate("/my/verification") },
+      });
+      return;
+    }
+    toast.error(nextMessage);
+  };
 
   const getOrCreateThreadMut = trpc.message.getOrCreateThread.useMutation({
     onSuccess: (thread: any) => {
       setSelectedThread(thread.id);
       refetchThreads();
     },
-    onError: (e: any) => toast.error(e.message),
+    onError: handleMessageError,
   });
 
   useEffect(() => {
@@ -88,7 +98,7 @@ export default function Messages() {
       refetchMessages();
       refetchThreads();
     },
-    onError: (e: any) => toast.error(e.message),
+    onError: handleMessageError,
   });
 
   const reportMut = trpc.message.reportMessage.useMutation({
