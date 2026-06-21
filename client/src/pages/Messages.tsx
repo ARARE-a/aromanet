@@ -116,6 +116,13 @@ export default function Messages() {
   const threadList = (threads as any[]) ?? [];
   const messageList = (messages as any[]) ?? [];
   const currentThread = threadList.find((t: any) => t.id === selectedThread);
+  const readByReplyIds = new Set<number>();
+  let hasLaterIncomingMessage = false;
+  for (const msg of [...messageList].reverse()) {
+    const isMe = msg.senderRole === session?.role;
+    if (isMe && hasLaterIncomingMessage) readByReplyIds.add(msg.id);
+    if (!isMe) hasLaterIncomingMessage = true;
+  }
 
   const handleSend = () => {
     if (!message.trim() || !selectedThread) return;
@@ -151,6 +158,7 @@ export default function Messages() {
         <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3 pb-32">
           {messageList.map((msg: any) => {
             const isMe = msg.senderRole === session?.role;
+            const isRead = Boolean(msg.isRead || readByReplyIds.has(msg.id));
             return (
               <motion.div key={msg.id} initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} className={`flex ${isMe ? "justify-end" : "justify-start"} gap-2`}>
                 {!isMe && <AromaAvatar name={currentThread?.otherName} size="sm" />}
@@ -162,7 +170,7 @@ export default function Messages() {
                   <div className={`flex items-center gap-1 ${isMe ? "justify-end" : "justify-start"}`}>
                     <span className="text-[10px] text-muted-foreground px-1">
                       {msg.createdAt ? format(new Date(msg.createdAt), "HH:mm") : ""}
-                      {isMe && (msg.isRead ? " 既読" : " 未読")}
+                      {isMe && (isRead ? " 既読" : " 未読")}
                     </span>
                     <MessageMenu
                       isMe={isMe}
