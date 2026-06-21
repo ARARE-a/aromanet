@@ -1,9 +1,9 @@
 import { useEffect } from "react";
-import { useLocation, Link } from "wouter";
-import { Home, Search, Bookmark, MessageCircle, User, Settings, Heart, Star, ChevronRight, Shield, LogOut, Bell } from "lucide-react";
-import { AromaLayout, AromaAvatar, LevelBadge } from "@/components/AromaLayout";
-import { trpc } from "@/lib/trpc";
+import { Link, useLocation } from "wouter";
+import { Bell, Bookmark, Heart, Home, LogOut, MessageCircle, Search, Settings, Shield, Star, User, ChevronRight } from "lucide-react";
+import { AromaAvatar, AromaLayout, LevelBadge } from "@/components/AromaLayout";
 import { useSession } from "@/contexts/SessionContext";
+import { trpc } from "@/lib/trpc";
 
 const navItems = [
   { href: "/home", icon: <Home className="w-[26px] h-[26px]" strokeWidth={1.5} />, activeIcon: <Home className="w-[26px] h-[26px]" strokeWidth={2.5} fill="currentColor" />, label: "ホーム" },
@@ -50,13 +50,13 @@ export default function CustomerMyPage() {
       showNav
       navItems={navItems}
       title={p?.displayName ?? p?.nickname ?? "マイページ"}
-      headerRight={
+      headerRight={(
         <Link href="/my/edit-profile">
           <button className="p-1" aria-label="設定"><Settings className="w-[26px] h-[26px]" strokeWidth={1.5} /></button>
         </Link>
-      }
+      )}
     >
-      <div className="px-4 pt-4 pb-3">
+      <div className="px-4 pt-4 pb-3 bg-white">
         <div className="flex items-start gap-5">
           <Link href="/my/edit-profile">
             <div className="cursor-pointer">
@@ -64,24 +64,9 @@ export default function CustomerMyPage() {
             </div>
           </Link>
           <div className="flex-1 flex items-center justify-around pt-2">
-            <Link href="/my/reservations">
-              <div className="text-center rounded-xl px-2 py-1 active:bg-gray-50 cursor-pointer">
-                <div className="text-[17px] font-bold text-foreground">{p?.reservationCount ?? 0}</div>
-                <div className="text-[12px] text-gray-500">予約</div>
-              </div>
-            </Link>
-            <Link href="/my/favorites">
-              <div className="text-center rounded-xl px-2 py-1 active:bg-gray-50 cursor-pointer">
-                <div className="text-[17px] font-bold text-foreground">{p?.favoriteCount ?? 0}</div>
-                <div className="text-[12px] text-gray-500">お気に入り</div>
-              </div>
-            </Link>
-            <Link href="/my/level">
-              <div className="text-center rounded-xl px-2 py-1 active:bg-gray-50 cursor-pointer">
-                <div className="text-[17px] font-bold text-foreground">Lv.{currentLevel}</div>
-                <div className="text-[12px] text-gray-500">レベル</div>
-              </div>
-            </Link>
+            <SummaryLink href="/my/reservations" value={p?.reservationCount ?? 0} label="予約" />
+            <SummaryLink href="/my/favorites" value={p?.favoriteCount ?? 0} label="お気に入り" />
+            <SummaryLink href="/my/level" value={`Lv.${currentLevel}`} label="レベル" />
           </div>
         </div>
 
@@ -117,7 +102,7 @@ export default function CustomerMyPage() {
 
       <div className="h-px bg-gray-100" />
 
-      <div className="divide-y divide-gray-50">
+      <div className="divide-y divide-gray-50 bg-white">
         <MenuItem href="/my/reservations" icon={<Bookmark className="w-5 h-5 text-primary" />} label="予約履歴" />
         <MenuItem href="/my/favorites" icon={<Heart className="w-5 h-5 text-red-500" />} label="お気に入り" />
         <MenuItem href="/my/level" icon={<Star className="w-5 h-5 text-yellow-500" />} label="会員レベル・特典" />
@@ -126,18 +111,22 @@ export default function CustomerMyPage() {
         <MenuItem href="/my/verification" icon={<Shield className="w-5 h-5 text-green-600" />} label="本人確認" badge={!p?.isVerified ? "未確認" : undefined} />
       </div>
 
-      <div className="h-px bg-gray-100 my-2" />
-
-      <button
-        onClick={handleLogout}
-        className="w-full flex items-center gap-3 px-4 py-4 text-red-500 active:bg-red-50 transition-colors"
-      >
+      <button onClick={handleLogout} className="w-full flex items-center gap-3 px-4 py-4 text-red-500 active:bg-red-50 transition-colors bg-white mt-2">
         <LogOut className="w-5 h-5" />
         <span className="text-[14px] font-medium">ログアウト</span>
       </button>
-
-      <div className="h-8" />
     </AromaLayout>
+  );
+}
+
+function SummaryLink({ href, value, label }: { href: string; value: string | number; label: string }) {
+  return (
+    <Link href={href}>
+      <div className="text-center rounded-xl px-2 py-1 active:bg-gray-50 cursor-pointer">
+        <div className="text-[17px] font-bold text-foreground">{value}</div>
+        <div className="text-[12px] text-gray-500">{label}</div>
+      </div>
+    </Link>
   );
 }
 
@@ -145,13 +134,9 @@ function MenuItem({ href, icon, label, badge }: { href: string; icon: React.Reac
   return (
     <Link href={href}>
       <div className="flex items-center gap-3 px-4 py-3.5 active:bg-gray-50 transition-colors cursor-pointer">
-        <div className="w-8 h-8 rounded-full bg-gray-50 flex items-center justify-center flex-shrink-0">
-          {icon}
-        </div>
+        <div className="w-8 h-8 rounded-full bg-gray-50 flex items-center justify-center flex-shrink-0">{icon}</div>
         <span className="flex-1 text-[14px] text-foreground font-medium">{label}</span>
-        {badge && (
-          <span className="text-[11px] bg-red-100 text-red-600 px-2 py-0.5 rounded-full font-medium">{badge}</span>
-        )}
+        {badge && <span className="text-[11px] bg-red-100 text-red-600 px-2 py-0.5 rounded-full font-medium">{badge}</span>}
         <ChevronRight className="w-4 h-4 text-gray-300" />
       </div>
     </Link>

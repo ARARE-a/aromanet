@@ -92,13 +92,13 @@ export default function Messages() {
   });
 
   const reportMut = trpc.message.reportMessage.useMutation({
-    onSuccess: () => toast.success("通報しました"),
+    onSuccess: () => toast.success("通報しました。"),
     onError: (e: any) => toast.error(e.message),
   });
 
   const deleteMut = trpc.message.deleteMessage.useMutation({
     onSuccess: () => {
-      toast.success("メッセージを削除しました");
+      toast.success("メッセージを削除しました。");
       refetchMessages();
       refetchThreads();
     },
@@ -125,7 +125,7 @@ export default function Messages() {
   const reportLatestMessage = () => {
     const latest = [...messageList].reverse().find((m: any) => m.senderRole !== session?.role) ?? messageList[messageList.length - 1];
     if (!latest?.id) {
-      toast.error("通報できるメッセージがありません");
+      toast.error("通報できるメッセージがありません。");
       return;
     }
     reportMut.mutate({ messageId: latest.id, reason: "不適切なメッセージ" });
@@ -135,7 +135,7 @@ export default function Messages() {
     return (
       <div className="min-h-[100dvh] max-h-[100dvh] bg-background flex flex-col overflow-hidden">
         <header className="sticky top-0 z-40 glass border-b border-border/50 px-4 py-3 flex items-center gap-3">
-          <button onClick={() => setSelectedThread(null)} className="p-1 -ml-1 rounded-full hover:bg-muted transition-colors" aria-label="戻る">
+          <button onClick={() => setSelectedThread(null)} className="p-1 -ml-1 rounded-full active:bg-muted transition-colors" aria-label="戻る">
             <ChevronLeft className="w-5 h-5 text-charcoal" />
           </button>
           <AromaAvatar name={currentThread?.otherName} src={currentThread?.otherAvatar} size="sm" />
@@ -143,7 +143,7 @@ export default function Messages() {
             <div className="text-sm font-semibold text-foreground truncate">{currentThread?.otherName}</div>
             <div className="text-xs text-muted-foreground">{roleLabel(currentThread?.otherRole)}</div>
           </div>
-          <button onClick={reportLatestMessage} className="p-2 rounded-full hover:bg-muted transition-colors" aria-label="通報">
+          <button onClick={reportLatestMessage} className="p-2 rounded-full active:bg-muted transition-colors" aria-label="通報">
             <AlertTriangle className="w-4 h-4 text-muted-foreground" />
           </button>
         </header>
@@ -152,12 +152,7 @@ export default function Messages() {
           {messageList.map((msg: any) => {
             const isMe = msg.senderRole === session?.role;
             return (
-              <motion.div
-                key={msg.id}
-                initial={{ opacity: 0, y: 4 }}
-                animate={{ opacity: 1, y: 0 }}
-                className={`flex ${isMe ? "justify-end" : "justify-start"} gap-2`}
-              >
+              <motion.div key={msg.id} initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} className={`flex ${isMe ? "justify-end" : "justify-start"} gap-2`}>
                 {!isMe && <AromaAvatar name={currentThread?.otherName} size="sm" />}
                 <div className={`max-w-[75%] ${isMe ? "items-end" : "items-start"} flex flex-col gap-0.5`}>
                   <div className={`px-3 py-2 rounded-2xl text-sm whitespace-pre-wrap ${isMe ? "bg-primary text-white rounded-br-sm" : "bg-white shadow-luxury text-foreground rounded-bl-sm"}`}>
@@ -185,11 +180,7 @@ export default function Messages() {
         <div className="fixed bottom-16 left-0 right-0 px-4 pb-1" style={{ maxWidth: "430px", margin: "0 auto" }}>
           <div className="flex gap-1 overflow-x-auto scrollbar-none pb-1">
             {QUICK_REPLIES.map(q => (
-              <button
-                key={q}
-                onClick={() => setMessage(q)}
-                className="flex-shrink-0 text-xs px-2 py-1 rounded-full bg-white shadow-luxury text-muted-foreground hover:text-primary hover:border-primary border border-border/50 transition-colors"
-              >
+              <button key={q} onClick={() => setMessage(q)} className="flex-shrink-0 text-xs px-2 py-1 rounded-full bg-white shadow-luxury text-muted-foreground active:text-primary border border-border/50 transition-colors">
                 {q}
               </button>
             ))}
@@ -204,13 +195,7 @@ export default function Messages() {
             placeholder="メッセージを入力"
             className="flex-1 rounded-xl h-9"
           />
-          <Button
-            size="sm"
-            className="w-9 h-9 rounded-xl gradient-luxury text-white p-0 flex-shrink-0"
-            onClick={handleSend}
-            disabled={!message.trim() || sendMut.isPending}
-            aria-label="送信"
-          >
+          <Button size="sm" className="w-9 h-9 rounded-xl gradient-luxury text-white p-0 flex-shrink-0" onClick={handleSend} disabled={!message.trim() || sendMut.isPending} aria-label="送信">
             <Send className="w-4 h-4" />
           </Button>
         </div>
@@ -219,19 +204,16 @@ export default function Messages() {
   }
 
   return (
-    <AromaLayout title="メッセージ">
+    <AromaLayout title="メッセージ" showBack backHref={session?.role === "customer" ? "/home" : undefined}>
       <div className="px-4 py-3 space-y-2">
         {threadList.length === 0 ? (
           <div className="text-center py-16 text-muted-foreground">
             <MessageCircle className="w-12 h-12 mx-auto mb-3 opacity-30" />
-            <p className="text-sm">メッセージはありません</p>
+            <p className="text-sm">メッセージはまだありません</p>
           </div>
         ) : threadList.map((thread: any, i: number) => (
           <motion.div key={thread.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}>
-            <button
-              onClick={() => setSelectedThread(thread.id)}
-              className="w-full bg-white rounded-2xl p-4 shadow-luxury flex items-center gap-3 hover:shadow-md transition-shadow text-left"
-            >
+            <button onClick={() => setSelectedThread(thread.id)} className="w-full bg-white rounded-2xl p-4 shadow-luxury flex items-center gap-3 active:scale-[0.99] transition-transform text-left">
               <div className="relative">
                 <AromaAvatar name={thread.otherName} src={thread.otherAvatar} size="md" />
                 {thread.unreadCount > 0 && (
@@ -243,11 +225,9 @@ export default function Messages() {
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-sm font-semibold text-foreground truncate">{thread.otherName}</span>
-                  <span className="text-[10px] text-muted-foreground shrink-0">
-                    {thread.lastMessageAt ? format(new Date(thread.lastMessageAt), "MM/dd HH:mm") : ""}
-                  </span>
+                  <span className="text-[10px] text-muted-foreground shrink-0">{thread.lastMessageAt ? format(new Date(thread.lastMessageAt), "MM/dd HH:mm") : ""}</span>
                 </div>
-                <p className="text-xs text-muted-foreground truncate mt-0.5">{thread.lastMessage ?? "メッセージはありません"}</p>
+                <p className="text-xs text-muted-foreground truncate mt-0.5">{thread.lastMessage ?? "メッセージはまだありません"}</p>
               </div>
             </button>
           </motion.div>
@@ -261,7 +241,7 @@ function MessageMenu({ isMe, onDeleteMe, onDeleteEveryone }: { isMe: boolean; on
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <button className="w-6 h-6 rounded-full flex items-center justify-center text-muted-foreground hover:bg-muted" aria-label="メッセージメニュー">
+        <button className="w-6 h-6 rounded-full flex items-center justify-center text-muted-foreground active:bg-muted" aria-label="メッセージメニュー">
           <MoreVertical className="w-3.5 h-3.5" />
         </button>
       </DropdownMenuTrigger>
@@ -273,7 +253,7 @@ function MessageMenu({ isMe, onDeleteMe, onDeleteEveryone }: { isMe: boolean; on
         {isMe && (
           <DropdownMenuItem className="text-red-600 focus:text-red-600" onClick={onDeleteEveryone}>
             <Trash2 className="w-4 h-4 mr-2" />
-            全員の画面から削除
+            相手の画面からも削除
           </DropdownMenuItem>
         )}
       </DropdownMenuContent>

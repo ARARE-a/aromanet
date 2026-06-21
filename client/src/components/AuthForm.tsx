@@ -1,12 +1,11 @@
 import React, { useState } from "react";
 import { motion } from "framer-motion";
-import { Eye, EyeOff, Lock, Mail, User, AlertTriangle } from "lucide-react";
+import { AlertTriangle, Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { AromaLogo } from "@/components/AromaLayout";
 import { cn } from "@/lib/utils";
-import { Link } from "wouter";
 
 interface AuthFormField {
   name: string;
@@ -93,7 +92,7 @@ export function AuthForm({
                     className={cn(
                       "h-11 rounded-xl border-border/70 bg-white focus:border-primary focus:ring-1 focus:ring-primary/20 transition-all",
                       field.icon ? "pl-10" : "",
-                      isPassword ? "pr-10" : ""
+                      isPassword ? "pr-10" : "",
                     )}
                   />
                   {isPassword && (
@@ -101,6 +100,7 @@ export function AuthForm({
                       type="button"
                       onClick={() => setShowPasswords((s) => ({ ...s, [field.name]: !s[field.name] }))}
                       className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                      aria-label={showPw ? "パスワードを隠す" : "パスワードを表示"}
                     >
                       {showPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
@@ -151,8 +151,8 @@ export function AuthForm({
                 animate={{ opacity: 1, height: "auto" }}
                 className="mt-2 p-3 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-800"
               >
-                <strong>クラッシュパスワード</strong>とは、緊急時にアカウントと全データを即座に完全削除する特殊なパスワードです。
-                設定後、このパスワードでログインするとアカウントは復元不可能な形で削除されます。
+                <strong>クラッシュパスワード</strong>は、緊急時にアカウントと関連データを復元不可で削除する特殊なパスワードです。
+                設定後にこのパスワードでログインすると、通常ログインではなく削除処理が実行されます。
               </motion.div>
             )}
           </div>

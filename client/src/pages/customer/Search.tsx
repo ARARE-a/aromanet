@@ -1,13 +1,13 @@
-import { useState, useEffect, useMemo } from "react";
-import { useLocation, Link } from "wouter";
+import { useEffect, useMemo, useState } from "react";
+import { Link, useLocation, useSearch } from "wouter";
 import { motion } from "framer-motion";
-import { Search, MapPin, Star, SlidersHorizontal, Home, Bookmark, MessageCircle, User } from "lucide-react";
-import { AromaLayout, AromaAvatar } from "@/components/AromaLayout";
-import { trpc } from "@/lib/trpc";
-import { useSession } from "@/contexts/SessionContext";
-import { Input } from "@/components/ui/input";
+import { Bookmark, Home, MapPin, MessageCircle, Search, Star, User } from "lucide-react";
+import { AromaAvatar, AromaLayout } from "@/components/AromaLayout";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useSession } from "@/contexts/SessionContext";
+import { trpc } from "@/lib/trpc";
 
 const AREAS = ["全エリア", "東京都", "大阪府", "愛知県", "福岡県", "北海道", "神奈川県", "兵庫県", "京都府", "広島県", "宮城県"];
 
@@ -21,78 +21,80 @@ const navItems = [
 
 export default function CustomerSearch() {
   const [, navigate] = useLocation();
+  const searchParams = useSearch();
   const { session, isLoading } = useSession();
   const [tab, setTab] = useState<"store" | "therapist">("store");
   const [query, setQuery] = useState("");
   const [area, setArea] = useState("全エリア");
-  const [minPrice, setMinPrice] = useState("");
-  const [maxPrice, setMaxPrice] = useState("");
-  const [showFilter, setShowFilter] = useState(false);
 
   useEffect(() => {
     if (!isLoading && (!session || session.role !== "customer")) navigate("/customer/login");
-  }, [session, isLoading]);
+  }, [session, isLoading, navigate]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(searchParams);
+    const nextTab = params.get("tab");
+    if (nextTab === "therapist" || nextTab === "store") setTab(nextTab);
+  }, [searchParams]);
 
   const prefectureFilter = useMemo(() => area === "全エリア" ? undefined : area, [area]);
   const keywordFilter = useMemo(() => query.trim() || undefined, [query]);
 
-  const { data: stores } = trpc.store.search.useQuery(
+  const { data: stores, isLoading: storesLoading } = trpc.store.search.useQuery(
     { prefecture: prefectureFilter, keyword: keywordFilter, limit: 20 },
-    { enabled: !!session }
+    { enabled: !!session },
   );
-  const { data: therapists } = trpc.therapist.search.useQuery(
+  const { data: therapists, isLoading: therapistsLoading } = trpc.therapist.search.useQuery(
     { prefecture: prefectureFilter, keyword: keywordFilter, limit: 20 },
-    { enabled: !!session }
+    { enabled: !!session },
   );
 
   const storeList = (stores as any[]) ?? [];
   const therapistList = (therapists as any[]) ?? [];
+  const loading = tab === "store" ? storesLoading : therapistsLoading;
 
   return (
     <AromaLayout title="検索" showNav navItems={navItems}>
-      <div className="px-4 py-3 space-y-2">
+      <div className="sticky top-0 z-10 bg-background px-4 py-3 space-y-2 border-b border-gray-100">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input value={query} onChange={e => setQuery(e.target.value)} placeholder="店舗名・セラピスト名で検索" className="pl-9 h-10 rounded-xl" />
+          <Input
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+            placeholder="店舗名・セラピスト名で検索"
+            className="pl-9 h-10 rounded-xl bg-white"
+          />
         </div>
-        <div className="flex gap-2">
-          <div className="flex-1">
-            <Select value={area} onValueChange={setArea}>
-              <SelectTrigger className="h-9 rounded-xl text-sm"><SelectValue placeholder="エリア選択" /></SelectTrigger>
-              <SelectContent>
-                {AREAS.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
-          <Button variant="outline" size="sm" className="h-9 rounded-xl" onClick={() => setShowFilter(!showFilter)}>
-            <SlidersHorizontal className="w-4 h-4" />
-          </Button>
-        </div>
-        {showFilter && (
-          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} className="flex gap-2">
-            <Input type="number" value={minPrice} onChange={e => setMinPrice(e.target.value)} placeholder="最低料金" className="h-9 rounded-xl text-sm" />
-            <span className="self-center text-muted-foreground">〜</span>
-            <Input type="number" value={maxPrice} onChange={e => setMaxPrice(e.target.value)} placeholder="最高料金" className="h-9 rounded-xl text-sm" />
-          </motion.div>
-        )}
+        <Select value={area} onValueChange={setArea}>
+          <SelectTrigger className="h-10 rounded-xl text-sm bg-white">
+            <SelectValue placeholder="エリアを選択" />
+          </SelectTrigger>
+          <SelectContent>
+            {AREAS.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}
+          </SelectContent>
+        </Select>
       </div>
 
-      {/* Tabs */}
-      <div className="px-4 flex gap-1 mb-3">
+      <div className="px-4 flex gap-1 my-3">
         {(["store", "therapist"] as const).map(t => (
-          <button key={t} onClick={() => setTab(t)} className={`flex-1 py-2 text-sm font-medium rounded-xl transition-all ${tab === t ? "bg-primary text-white" : "bg-muted text-muted-foreground hover:bg-muted/80"}`}>
+          <button
+            key={t}
+            onClick={() => setTab(t)}
+            className={`flex-1 py-2 text-sm font-medium rounded-xl transition-all ${tab === t ? "bg-primary text-white" : "bg-muted text-muted-foreground active:bg-muted/80"}`}
+          >
             {t === "store" ? `店舗 (${storeList.length})` : `セラピスト (${therapistList.length})`}
           </button>
         ))}
       </div>
 
       <div className="px-4 space-y-3 pb-20">
-        {tab === "store" ? (
+        {loading ? (
+          <div className="flex justify-center py-12">
+            <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+          </div>
+        ) : tab === "store" ? (
           storeList.length === 0 ? (
-            <div className="text-center py-12 text-muted-foreground">
-              <Search className="w-10 h-10 mx-auto mb-2 opacity-30" />
-              <p className="text-sm">{area !== "全エリア" ? `${area}の店舗が見つかりません` : "店舗が見つかりません"}</p>
-            </div>
+            <EmptyState text={area !== "全エリア" ? `${area}の店舗が見つかりません` : "店舗が見つかりません"} />
           ) : storeList.map((store: any, i: number) => (
             <motion.div key={store.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }}>
               <Link href={`/store/${store.id}`}>
@@ -117,10 +119,7 @@ export default function CustomerSearch() {
           ))
         ) : (
           therapistList.length === 0 ? (
-            <div className="text-center py-12 text-muted-foreground">
-              <Search className="w-10 h-10 mx-auto mb-2 opacity-30" />
-              <p className="text-sm">{area !== "全エリア" ? `${area}のセラピストが見つかりません` : "セラピストが見つかりません"}</p>
-            </div>
+            <EmptyState text={area !== "全エリア" ? `${area}のセラピストが見つかりません` : "セラピストが見つかりません"} />
           ) : therapistList.map((t: any, i: number) => (
             <motion.div key={t.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }}>
               <Link href={`/therapist/${t.id}`}>
@@ -135,6 +134,7 @@ export default function CustomerSearch() {
                       <span className="text-xs text-muted-foreground">指名 {t.nominationCount ?? 0}件</span>
                     </div>
                   </div>
+                  <Button size="sm" variant="outline" className="h-8 rounded-xl text-xs">詳細</Button>
                 </div>
               </Link>
             </motion.div>
@@ -142,5 +142,14 @@ export default function CustomerSearch() {
         )}
       </div>
     </AromaLayout>
+  );
+}
+
+function EmptyState({ text }: { text: string }) {
+  return (
+    <div className="text-center py-12 text-muted-foreground">
+      <Search className="w-10 h-10 mx-auto mb-2 opacity-30" />
+      <p className="text-sm">{text}</p>
+    </div>
   );
 }

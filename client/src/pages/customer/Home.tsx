@@ -1,64 +1,40 @@
-import { useState, useEffect, useMemo } from "react";
-import { useLocation, Link } from "wouter";
-import { motion, AnimatePresence } from "framer-motion";
+import { useEffect, useMemo, useState } from "react";
+import { Link, useLocation } from "wouter";
+import { AnimatePresence, motion } from "framer-motion";
 import {
-  Search,
   Bell,
-  Heart,
-  MapPin,
-  Star,
-  MessageCircle,
-  User,
-  Home,
   Bookmark,
-  Plus,
+  Heart,
+  Home,
+  MapPin,
+  MessageCircle,
   MoreHorizontal,
+  Plus,
+  Search,
   Send,
+  Star,
+  User,
   X,
 } from "lucide-react";
-import { AromaLayout, AromaAvatar, StoryAvatar } from "@/components/AromaLayout";
+import { toast } from "sonner";
+import { AromaAvatar, AromaLayout, StoryAvatar } from "@/components/AromaLayout";
 import { StoryRing } from "@/components/StoryRing";
 import { StoryViewer, type StoryAuthor } from "@/components/StoryViewer";
-import { trpc } from "@/lib/trpc";
 import { useSession } from "@/contexts/SessionContext";
-import { toast } from "sonner";
+import { trpc } from "@/lib/trpc";
 
 const navItems = [
-  {
-    href: "/home",
-    icon: <Home className="w-[26px] h-[26px]" strokeWidth={1.5} />,
-    activeIcon: <Home className="w-[26px] h-[26px]" strokeWidth={2.5} fill="currentColor" />,
-    label: "ホーム",
-  },
-  {
-    href: "/search",
-    icon: <Search className="w-[26px] h-[26px]" strokeWidth={1.5} />,
-    activeIcon: <Search className="w-[26px] h-[26px]" strokeWidth={2.5} />,
-    label: "検索",
-  },
-  {
-    href: "/my/reservations",
-    icon: <Bookmark className="w-[26px] h-[26px]" strokeWidth={1.5} />,
-    activeIcon: <Bookmark className="w-[26px] h-[26px]" strokeWidth={2.5} fill="currentColor" />,
-    label: "予約",
-  },
-  {
-    href: "/messages",
-    icon: <MessageCircle className="w-[26px] h-[26px]" strokeWidth={1.5} />,
-    activeIcon: <MessageCircle className="w-[26px] h-[26px]" strokeWidth={2.5} fill="currentColor" />,
-    label: "DM",
-  },
-  {
-    href: "/my/page",
-    icon: <User className="w-[26px] h-[26px]" strokeWidth={1.5} />,
-    activeIcon: <User className="w-[26px] h-[26px]" strokeWidth={2.5} fill="currentColor" />,
-    label: "マイページ",
-  },
+  { href: "/home", icon: <Home className="w-[26px] h-[26px]" strokeWidth={1.5} />, activeIcon: <Home className="w-[26px] h-[26px]" strokeWidth={2.5} fill="currentColor" />, label: "ホーム" },
+  { href: "/search", icon: <Search className="w-[26px] h-[26px]" strokeWidth={1.5} />, activeIcon: <Search className="w-[26px] h-[26px]" strokeWidth={2.5} />, label: "検索" },
+  { href: "/my/reservations", icon: <Bookmark className="w-[26px] h-[26px]" strokeWidth={1.5} />, activeIcon: <Bookmark className="w-[26px] h-[26px]" strokeWidth={2.5} fill="currentColor" />, label: "予約" },
+  { href: "/messages", icon: <MessageCircle className="w-[26px] h-[26px]" strokeWidth={1.5} />, activeIcon: <MessageCircle className="w-[26px] h-[26px]" strokeWidth={2.5} fill="currentColor" />, label: "DM" },
+  { href: "/my/page", icon: <User className="w-[26px] h-[26px]" strokeWidth={1.5} />, activeIcon: <User className="w-[26px] h-[26px]" strokeWidth={2.5} fill="currentColor" />, label: "マイページ" },
 ];
 
 export default function CustomerHome() {
   const [, navigate] = useLocation();
   const { session, isLoading } = useSession();
+  const [viewerAuthors, setViewerAuthors] = useState<StoryAuthor[] | null>(null);
 
   useEffect(() => {
     if (!isLoading && (!session || session.role !== "customer")) navigate("/customer/login");
@@ -68,7 +44,6 @@ export default function CustomerHome() {
   const { data: stores } = trpc.store.search.useQuery({ limit: 8 }, { enabled: !!session });
   const { data: therapists } = trpc.therapist.search.useQuery({ limit: 10 }, { enabled: !!session });
   const { data: posts } = trpc.post.getFeed.useQuery({ limit: 12 }, { enabled: !!session });
-  const [viewerAuthors, setViewerAuthors] = useState<StoryAuthor[] | null>(null);
 
   const therapistList = (therapists as any[]) ?? [];
   const therapistIds = useMemo(() => therapistList.map((t: any) => t.id), [therapistList]);
@@ -77,18 +52,17 @@ export default function CustomerHome() {
     { enabled: therapistIds.length > 0 },
   );
   const activeSet = useMemo(() => new Set(activeTherapistIds ?? []), [activeTherapistIds]);
-
   const p = profile as any;
   const storeList = (stores as any[]) ?? [];
   const postList = (posts as any[]) ?? [];
 
-  const handleOpenStory = async (t: any) => {
-    if (!activeSet.has(t.id)) return;
-    const res = await fetch(`/api/trpc/story.getByTherapistId?input=${encodeURIComponent(JSON.stringify({ json: { therapistId: t.id } }))}`);
+  const handleOpenStory = async (therapist: any) => {
+    if (!activeSet.has(therapist.id)) return;
+    const res = await fetch(`/api/trpc/story.getByTherapistId?input=${encodeURIComponent(JSON.stringify({ json: { therapistId: therapist.id } }))}`);
     const json = await res.json();
     const stories = json?.result?.data?.json ?? [];
     if (stories.length > 0) {
-      setViewerAuthors([{ id: t.id, name: t.displayName, avatarUrl: t.profileImageUrl, role: "therapist", stories }]);
+      setViewerAuthors([{ id: therapist.id, name: therapist.displayName, avatarUrl: therapist.profileImageUrl, role: "therapist", stories }]);
     }
   };
 
@@ -105,7 +79,7 @@ export default function CustomerHome() {
       showNav
       navItems={navItems}
       titleLogo
-      headerRight={
+      headerRight={(
         <div className="flex items-center gap-3">
           <Link href="/my/notifications">
             <button className="relative p-1" aria-label="通知">
@@ -118,19 +92,21 @@ export default function CustomerHome() {
             </button>
           </Link>
         </div>
-      }
+      )}
     >
       <div className="border-b border-gray-100">
         <div className="flex gap-4 px-4 py-3 overflow-x-auto scrollbar-none">
-          <div className="flex flex-col items-center gap-1 flex-shrink-0">
-            <div className="relative">
-              <AromaAvatar name={p?.displayName} src={p?.profileImageUrl} size="lg" />
-              <div className="absolute bottom-0 right-0 w-5 h-5 bg-primary rounded-full flex items-center justify-center border-2 border-white">
-                <Plus className="w-3 h-3 text-white" strokeWidth={3} />
+          <Link href="/my/page">
+            <div className="flex flex-col items-center gap-1 flex-shrink-0">
+              <div className="relative">
+                <AromaAvatar name={p?.displayName} src={p?.profileImageUrl} size="lg" />
+                <div className="absolute bottom-0 right-0 w-5 h-5 bg-primary rounded-full flex items-center justify-center border-2 border-white">
+                  <Plus className="w-3 h-3 text-white" strokeWidth={3} />
+                </div>
               </div>
+              <span className="text-[11px] text-gray-500 truncate w-16 text-center">あなた</span>
             </div>
-            <span className="text-[11px] text-gray-500 truncate w-16 text-center">あなた</span>
-          </div>
+          </Link>
 
           {therapistList.map((t: any) => {
             const hasStory = activeSet.has(t.id);
@@ -206,9 +182,7 @@ export default function CustomerHome() {
         )}
       </div>
 
-      {viewerAuthors && (
-        <StoryViewer authors={viewerAuthors} onClose={() => setViewerAuthors(null)} />
-      )}
+      {viewerAuthors && <StoryViewer authors={viewerAuthors} onClose={() => setViewerAuthors(null)} />}
     </AromaLayout>
   );
 }
@@ -239,7 +213,7 @@ function PostCard({ post, index, hasStory, onOpenStory }: { post: any; index: nu
     },
     onError: () => {
       setSaved(prev => !prev);
-      toast.error("保存に失敗しました");
+      toast.error("保存に失敗しました。");
     },
   });
 
@@ -275,29 +249,31 @@ function PostCard({ post, index, hasStory, onOpenStory }: { post: any; index: nu
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ delay: index * 0.03 }}
-      className="border-b border-gray-100"
+      className="border-b border-gray-100 bg-white"
     >
       <div className="flex items-center gap-2.5 px-4 py-2.5">
-        <button onClick={handleStoryOrProfile} className="active:scale-95 transition-transform">
+        <button onClick={handleStoryOrProfile} className="active:scale-95 transition-transform" aria-label="ストーリーまたはプロフィールを開く">
           <StoryAvatar name={post.therapistName} src={post.therapistImage} size="sm" hasStory={hasStory} />
         </button>
         <div className="flex-1 min-w-0">
-          <div className="text-[13px] font-semibold text-foreground truncate">{post.therapistName}</div>
-          {post.storeName && <div className="text-[11px] text-gray-500 truncate">{post.storeName}</div>}
+          <button onClick={() => navigate(`/therapist/${post.therapistId}`)} className="block max-w-full text-left">
+            <div className="text-[13px] font-semibold text-foreground truncate">{post.therapistName}</div>
+            {post.storeName && <div className="text-[11px] text-gray-500 truncate">{post.storeName}</div>}
+          </button>
         </div>
         <div className="relative">
           <button className="p-1 text-gray-500 active:scale-95" onClick={() => setMenuOpen(prev => !prev)} aria-label="投稿メニュー">
             <MoreHorizontal className="w-5 h-5" />
           </button>
           {menuOpen && (
-            <div className="absolute right-0 top-8 z-20 w-40 rounded-xl border border-gray-100 bg-white py-1 shadow-luxury">
-              <button onClick={handleToggleSave} className="w-full px-3 py-2 text-left text-xs text-foreground active:bg-gray-50">
+            <div className="absolute right-0 top-8 z-20 w-44 rounded-xl border border-gray-100 bg-white py-1 shadow-luxury">
+              <button onClick={handleToggleSave} className="w-full px-3 py-2.5 text-left text-xs text-foreground active:bg-gray-50">
                 {saved ? "保存を解除" : "投稿を保存"}
               </button>
-              <button onClick={() => navigate(`/therapist/${post.therapistId}`)} className="w-full px-3 py-2 text-left text-xs text-foreground active:bg-gray-50">
+              <button onClick={() => navigate(`/therapist/${post.therapistId}`)} className="w-full px-3 py-2.5 text-left text-xs text-foreground active:bg-gray-50">
                 プロフィールを見る
               </button>
-              <button onClick={() => { setMenuOpen(false); toast.success("通報を受け付けました"); }} className="w-full px-3 py-2 text-left text-xs text-red-500 active:bg-red-50">
+              <button onClick={() => { setMenuOpen(false); toast.success("通報を受け付けました。"); }} className="w-full px-3 py-2.5 text-left text-xs text-red-500 active:bg-red-50">
                 通報
               </button>
             </div>
@@ -416,7 +392,7 @@ function StoreFeedCard({ store: s, index }: { store: any; index: number }) {
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ delay: index * 0.04 }}
-      className="border-b border-gray-100"
+      className="border-b border-gray-100 bg-white"
     >
       <div className="flex items-center gap-2.5 px-4 py-2.5">
         <Link href={`/store/${s.id}`}>

@@ -1,17 +1,17 @@
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Link, useLocation, useSearch } from "wouter";
 import { motion } from "framer-motion";
-import { Calendar, Plus, ChevronRight } from "lucide-react";
-import { AromaLayout, StatusBadge } from "@/components/AromaLayout";
-import { trpc } from "@/lib/trpc";
-import { useSession } from "@/contexts/SessionContext";
-import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Calendar, Plus } from "lucide-react";
 import { toast } from "sonner";
+import { AromaLayout, StatusBadge } from "@/components/AromaLayout";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import { useSession } from "@/contexts/SessionContext";
+import { trpc } from "@/lib/trpc";
 
 export default function CustomerReservations() {
   const [, navigate] = useLocation();
@@ -28,7 +28,7 @@ export default function CustomerReservations() {
 
   useEffect(() => {
     if (!isLoading && (!session || session.role !== "customer")) navigate("/customer/login");
-  }, [session, isLoading]);
+  }, [session, isLoading, navigate]);
 
   useEffect(() => {
     const params = new URLSearchParams(search);
@@ -46,12 +46,13 @@ export default function CustomerReservations() {
 
   const { data: reservations, refetch } = trpc.customer.getReservations.useQuery(undefined, { enabled: !!session });
   const { data: stores } = trpc.store.search.useQuery({ limit: 50 }, { enabled: showNew });
-  const { data: therapists } = trpc.therapist.getByStore.useQuery({ storeId: storeId! }, { enabled: showNew && !!storeId });
-  const { data: menus } = trpc.store.getPublicMenus.useQuery({ storeId: storeId! }, { enabled: showNew && !!storeId });
   const { data: selectedTherapist } = trpc.therapist.getById.useQuery(
     { therapistId: therapistId! },
-    { enabled: showNew && !!therapistId && !storeId }
+    { enabled: showNew && !!therapistId },
   );
+  const resolvedStoreId = storeId ?? ((selectedTherapist as any)?.storeId ?? null);
+  const { data: therapists } = trpc.therapist.getByStore.useQuery({ storeId: resolvedStoreId! }, { enabled: showNew && !!resolvedStoreId });
+  const { data: menus } = trpc.store.getPublicMenus.useQuery({ storeId: resolvedStoreId! }, { enabled: showNew && !!resolvedStoreId });
 
   useEffect(() => {
     const t = selectedTherapist as any;
@@ -59,11 +60,18 @@ export default function CustomerReservations() {
   }, [selectedTherapist, storeId]);
 
   const createMut = trpc.reservation.create.useMutation({
-    onSuccess: () => { toast.success("予約リクエストを送信しました"); setShowNew(false); refetch(); },
+    onSuccess: () => {
+      toast.success("予約リクエストを送信しました。");
+      setShowNew(false);
+      refetch();
+    },
     onError: e => toast.error(e.message),
   });
   const cancelMut = trpc.reservation.cancel.useMutation({
-    onSuccess: () => { toast.success("予約をキャンセルしました"); refetch(); },
+    onSuccess: () => {
+      toast.success("予約をキャンセルしました。");
+      refetch();
+    },
     onError: e => toast.error(e.message),
   });
 
@@ -71,52 +79,61 @@ export default function CustomerReservations() {
   const storeList = (stores as any[]) ?? [];
   const therapistList = (therapists as any[]) ?? [];
   const menuList = (menus as any[]) ?? [];
-  const selectedMenu = menuList.find((m: any) => m.id === menuId);
 
   const handleCreate = () => {
-    if (!storeId || !menuId || !date || !startTime) { toast.error("必須項目を入力してください"); return; }
-    createMut.mutate({ storeId, therapistId: therapistId ?? undefined, menuId, date, startTime, isNomination: !!therapistId, customerNote: notes });
+    if (!storeId || !menuId || !date || !startTime) {
+      toast.error("店舗、メニュー、日時を入力してください。");
+      return;
+    }
+    createMut.mutate({
+      storeId,
+      therapistId: therapistId ?? undefined,
+      menuId,
+      date,
+      startTime,
+      isNomination: !!therapistId,
+      customerNote: notes,
+    });
   };
 
   return (
-    <AromaLayout title="予約管理">
+    <AromaLayout title="予約管理" showBack backHref="/home">
       <div className="px-4 py-3">
-        <Button className="w-full h-10 rounded-xl gradient-luxury text-white" onClick={() => setShowNew(true)}>
+        <Button className="w-full h-11 rounded-xl gradient-luxury text-white" onClick={() => {
+          setShowNew(true);
+          setDate(prev => prev || new Date().toISOString().slice(0, 10));
+        }}>
           <Plus className="w-4 h-4 mr-2" />新規予約
         </Button>
       </div>
 
-      <div className="px-4 space-y-3">
+      <div className="px-4 space-y-3 pb-24">
         {list.length === 0 ? (
           <div className="text-center py-12 text-muted-foreground">
             <Calendar className="w-10 h-10 mx-auto mb-2 opacity-30" />
-            <p className="text-sm">予約履歴がありません</p>
+            <p className="text-sm">予約履歴はまだありません</p>
           </div>
         ) : list.map((r: any, i: number) => (
-          <motion.div key={r.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}
-            className="bg-white rounded-2xl p-4 shadow-luxury">
-            <div className="flex items-start justify-between mb-2">
-              <div>
+          <motion.div
+            key={r.id}
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: i * 0.05 }}
+            className="bg-white rounded-2xl p-4 shadow-luxury"
+          >
+            <div className="flex items-start justify-between gap-3 mb-2">
+              <div className="min-w-0">
                 <div className="text-sm font-semibold text-foreground">{r.date} {r.startTime}</div>
-                <div className="text-xs text-muted-foreground">{r.storeName} · {r.menuName}</div>
-                {r.therapistName && <div className="text-xs text-muted-foreground">担当: {r.therapistName}</div>}
+                <div className="text-xs text-muted-foreground truncate">{r.storeName} / {r.menuName}</div>
+                {r.therapistName && <div className="text-xs text-muted-foreground truncate">指名: {r.therapistName}</div>}
               </div>
               <StatusBadge status={r.status} />
             </div>
             {expandedId === r.id && (
               <div className="mb-3 rounded-xl bg-muted/40 p-3 text-xs text-muted-foreground space-y-2">
-                <div className="flex justify-between gap-3">
-                  <span>店舗</span>
-                  {r.storeId ? <Link href={`/store/${r.storeId}`} className="text-primary font-medium">{r.storeName}</Link> : <span>{r.storeName ?? "-"}</span>}
-                </div>
-                <div className="flex justify-between gap-3">
-                  <span>担当</span>
-                  {r.therapistId ? <Link href={`/therapist/${r.therapistId}`} className="text-primary font-medium">{r.therapistName ?? "未定"}</Link> : <span>{r.therapistName ?? "未定"}</span>}
-                </div>
-                <div className="flex justify-between gap-3">
-                  <span>コース</span>
-                  <span className="text-foreground">{r.menuName ?? "-"} {r.menuDuration ? `(${r.menuDuration}分)` : ""}</span>
-                </div>
+                <DetailRow label="店舗" value={r.storeName ?? "-"} href={r.storeId ? `/store/${r.storeId}` : undefined} />
+                <DetailRow label="セラピスト" value={r.therapistName ?? "指名なし"} href={r.therapistId ? `/therapist/${r.therapistId}` : undefined} />
+                <DetailRow label="コース" value={`${r.menuName ?? "-"} ${r.menuDuration ? `(${r.menuDuration}分)` : ""}`} />
                 {r.customerNote && (
                   <div>
                     <span>備考</span>
@@ -128,13 +145,16 @@ export default function CustomerReservations() {
             <div className="flex items-center justify-between">
               <span className="text-sm font-bold text-foreground">¥{(r.totalAmount ?? 0).toLocaleString()}</span>
               <div className="flex gap-2">
-                <Button variant="outline" size="sm" className="h-7 text-xs rounded-lg"
-                  onClick={() => setExpandedId(expandedId === r.id ? null : r.id)}>
+                <Button variant="outline" size="sm" className="h-8 text-xs rounded-lg" onClick={() => setExpandedId(expandedId === r.id ? null : r.id)}>
                   {expandedId === r.id ? "閉じる" : "詳細"}
                 </Button>
                 {["pending", "confirmed"].includes(r.status) && (
-                  <Button variant="outline" size="sm" className="h-7 text-xs rounded-lg text-red-500 border-red-200 hover:bg-red-50"
-                    onClick={() => cancelMut.mutate({ id: r.id, reason: "顧客キャンセル" })}>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-8 text-xs rounded-lg text-red-500 border-red-200 hover:bg-red-50"
+                    onClick={() => cancelMut.mutate({ id: r.id, reason: "顧客キャンセル" })}
+                  >
                     キャンセル
                   </Button>
                 )}
@@ -144,9 +164,8 @@ export default function CustomerReservations() {
         ))}
       </div>
 
-      {/* New reservation dialog */}
       <Dialog open={showNew} onOpenChange={setShowNew}>
-        <DialogContent className="max-w-sm rounded-2xl max-h-[80vh] overflow-y-auto">
+        <DialogContent className="max-w-sm rounded-2xl max-h-[86dvh] overflow-y-auto">
           <DialogHeader><DialogTitle>新規予約</DialogTitle></DialogHeader>
           <div className="space-y-3">
             <div>
@@ -172,7 +191,7 @@ export default function CustomerReservations() {
                   <Label>メニューを選択</Label>
                   <Select value={menuId ? String(menuId) : ""} onValueChange={v => setMenuId(parseInt(v))}>
                     <SelectTrigger className="mt-1 rounded-xl"><SelectValue placeholder="メニューを選択" /></SelectTrigger>
-                    <SelectContent>{menuList.map((m: any) => <SelectItem key={m.id} value={String(m.id)}>{m.name} ({m.durationMinutes ?? m.duration}分) ¥{(m.price ?? 0).toLocaleString()}</SelectItem>)}</SelectContent>
+                    <SelectContent>{menuList.map((m: any) => <SelectItem key={m.id} value={String(m.id)}>{m.name} ({m.durationMinutes ?? m.duration}分 ¥{(m.price ?? 0).toLocaleString()})</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
               </>
@@ -187,12 +206,23 @@ export default function CustomerReservations() {
             </div>
             <div>
               <Label>備考（任意）</Label>
-              <Textarea value={notes} onChange={e => setNotes(e.target.value)} className="mt-1 rounded-xl" rows={2} placeholder="ご要望など" />
+              <Textarea value={notes} onChange={e => setNotes(e.target.value)} className="mt-1 rounded-xl" rows={2} placeholder="希望や質問があれば入力" />
             </div>
-            <Button className="w-full h-11 rounded-xl gradient-luxury text-white" onClick={handleCreate} disabled={createMut.isPending}>予約リクエストを送る</Button>
+            <Button className="w-full h-11 rounded-xl gradient-luxury text-white" onClick={handleCreate} disabled={createMut.isPending}>
+              予約リクエストを送る
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
     </AromaLayout>
+  );
+}
+
+function DetailRow({ label, value, href }: { label: string; value: string; href?: string }) {
+  return (
+    <div className="flex justify-between gap-3">
+      <span>{label}</span>
+      {href ? <Link href={href} className="text-primary font-medium text-right">{value}</Link> : <span className="text-foreground text-right">{value}</span>}
+    </div>
   );
 }
