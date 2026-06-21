@@ -15,6 +15,7 @@
     "prod:disable-demo-accounts": "node scripts/disable-demo-accounts.mjs",
     "prod:disable-qa-accounts": "node scripts/disable-qa-accounts.mjs",
     "prod:audit-data": "node scripts/audit-production-data.mjs",
+    "prod:fix-audit-risks": "node scripts/fix-production-audit-risks.mjs",
     "prod:cleanup-smoke": "node scripts/cleanup-smoke-data.mjs",
     "prod:smoke": "node scripts/prod-smoke-test.mjs"
   },
