@@ -105,6 +105,20 @@ async function uploadTinyPng(cookie) {
   return json.url;
 }
 
+async function expectUnauthenticatedUploadRejected() {
+  const png = Buffer.from(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=",
+    "base64",
+  );
+  const res = await fetch(`${baseUrl}/api/upload`, {
+    method: "POST",
+    headers: { "content-type": "image/png" },
+    body: png,
+  });
+  const json = await res.json().catch(() => ({}));
+  assert(res.status === 401, "unauthenticated upload was not rejected", { status: res.status, body: json });
+}
+
 const store = makeClient("store");
 const therapist = makeClient("therapist");
 const customer = makeClient("customer");
@@ -118,6 +132,8 @@ const emails = {
 
 try {
   console.log(JSON.stringify({ baseUrl, targetDate, emails }, null, 2));
+
+  await step("未ログインのアップロードが拒否される", expectUnauthenticatedUploadRejected);
 
   await step("店舗を新規登録する", async () => {
     const res = await store.client.aroAuth.storeRegister.mutate({

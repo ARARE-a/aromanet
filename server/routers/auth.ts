@@ -93,7 +93,7 @@ export const authRouter = router({
       const accountId = (result as any)[0].insertId as number;
       const storeResult = await db.insert(stores).values({ accountId, name: input.storeName });
       const storeId = (storeResult as any)[0].insertId as number;
-      const token = setSessionCookie(ctx.res, { role: "store", accountId, storeId, email: input.email });
+      await setSessionCookie(ctx.res, { role: "store", accountId, storeId, email: input.email });
       await logAudit(db, "store", accountId, "register", input.email, ctx.req);
       return { success: true, role: "store", accountId, storeId };
     }),
@@ -125,7 +125,7 @@ export const authRouter = router({
 
       const storeRows = await db.select().from(stores).where(eq(stores.accountId, acc.id)).limit(1);
       const storeId = storeRows[0]?.id;
-      setSessionCookie(ctx.res, { role: "store", accountId: acc.id, storeId, email: acc.email });
+      await setSessionCookie(ctx.res, { role: "store", accountId: acc.id, storeId, email: acc.email });
       await db.update(storeAccounts).set({ updatedAt: new Date() }).where(eq(storeAccounts.id, acc.id));
       await logAudit(db, "store", acc.id, "login", acc.email, ctx.req);
       return { success: true, role: "store", accountId: acc.id, storeId };
@@ -213,7 +213,7 @@ export const authRouter = router({
       }
 
       if (!(currentSession?.role === "store" && currentSession.storeId && !inviteId)) {
-        setSessionCookie(ctx.res, { role: "therapist", accountId, therapistId, email: input.email });
+        await setSessionCookie(ctx.res, { role: "therapist", accountId, therapistId, email: input.email });
       }
       await logAudit(db, "therapist", accountId, "register", input.email, ctx.req);
       return { success: true, role: "therapist", accountId, therapistId, storeId: linkedStoreId, addedByStore: !inviteId && currentSession?.role === "store" };
@@ -244,7 +244,7 @@ export const authRouter = router({
 
       const tRows = await db.select().from(therapists).where(eq(therapists.accountId, acc.id)).limit(1);
       const therapistId = tRows[0]?.id;
-      setSessionCookie(ctx.res, { role: "therapist", accountId: acc.id, therapistId, email: acc.email });
+      await setSessionCookie(ctx.res, { role: "therapist", accountId: acc.id, therapistId, email: acc.email });
       await db.update(therapistAccounts).set({ updatedAt: new Date() }).where(eq(therapistAccounts.id, acc.id));
       await logAudit(db, "therapist", acc.id, "login", acc.email, ctx.req);
       return { success: true, role: "therapist", accountId: acc.id, therapistId };
@@ -274,7 +274,7 @@ export const authRouter = router({
         if (!isSamePassword) {
           throw new TRPCError({ code: "CONFLICT", message: "このメールアドレスは既に登録されています。ログインしてください" });
         }
-        setSessionCookie(ctx.res, { role: "customer", accountId: acc.id, email: acc.email });
+        await setSessionCookie(ctx.res, { role: "customer", accountId: acc.id, email: acc.email });
         await db.update(customerAccounts).set({ updatedAt: new Date() }).where(eq(customerAccounts.id, acc.id));
         await logAudit(db, "customer", acc.id, "register_existing_login", acc.email, ctx.req);
         return { success: true, role: "customer", accountId: acc.id };
@@ -283,7 +283,7 @@ export const authRouter = router({
       const result = await db.insert(customerAccounts).values({ email, passwordHash, ageVerified: false });
       const accountId = (result as any)[0].insertId as number;
       await db.insert(customerProfiles).values({ accountId, displayName });
-      setSessionCookie(ctx.res, { role: "customer", accountId, email });
+      await setSessionCookie(ctx.res, { role: "customer", accountId, email });
       await logAudit(db, "customer", accountId, "register", email, ctx.req);
       return { success: true, role: "customer", accountId };
     }),
@@ -311,7 +311,7 @@ export const authRouter = router({
       if (!isValid) throw new TRPCError({ code: "UNAUTHORIZED", message: "メールアドレスまたはパスワードが違います" });
       if (acc.status === "suspended" || acc.status === "deleted") throw new TRPCError({ code: "FORBIDDEN", message: "このアカウントは利用停止中です" });
 
-      setSessionCookie(ctx.res, { role: "customer", accountId: acc.id, email: acc.email });
+      await setSessionCookie(ctx.res, { role: "customer", accountId: acc.id, email: acc.email });
       await db.update(customerAccounts).set({ updatedAt: new Date() }).where(eq(customerAccounts.id, acc.id));
       await logAudit(db, "customer", acc.id, "login", acc.email, ctx.req);
       return { success: true, role: "customer", accountId: acc.id };
