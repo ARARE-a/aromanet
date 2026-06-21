@@ -12,6 +12,7 @@ import {
 import { eq, and, desc, inArray, like, or, sql } from "drizzle-orm";
 
 const SMOKE_MARKERS = ["本番動作確認", "動作確認"] as const;
+let ageVerificationColumnsReady = false;
 
 function compactIds(ids: Array<number | null | undefined>) {
   return Array.from(new Set(ids.filter((id): id is number => typeof id === "number")));
@@ -111,6 +112,30 @@ async function deleteByIds(db: any, table: any, column: any, ids: number[]) {
   if (ids.length === 0) return 0;
   await db.delete(table).where(inArray(column, ids));
   return ids.length;
+}
+
+async function ensureAgeVerificationDocumentColumns(db: any) {
+  if (ageVerificationColumnsReady) return;
+
+  const statements = [
+    "ALTER TABLE `age_verifications` ADD COLUMN `documentType` varchar(50)",
+    "ALTER TABLE `age_verifications` ADD COLUMN `documentImageUrl` text",
+    "ALTER TABLE `age_verifications` ADD COLUMN `adminNote` text",
+  ];
+
+  for (const statement of statements) {
+    try {
+      await db.execute(sql.raw(statement));
+    } catch (error: any) {
+      const message = String(error?.message ?? "");
+      const code = String(error?.code ?? "");
+      if (!message.includes("Duplicate column") && code !== "ER_DUP_FIELDNAME") {
+        throw error;
+      }
+    }
+  }
+
+  ageVerificationColumnsReady = true;
 }
 
 export const adminRouter = router({
@@ -233,13 +258,26 @@ export const adminRouter = router({
     }),
 
   submitAgeVerification: publicProcedure
-    .input(z.object({ method: z.string() }))
+    .input(z.object({
+      method: z.string().default("document_upload"),
+      documentType: z.string().min(1),
+      documentImageUrl: z.string().min(1).refine(
+        value => value.startsWith("/") || URL.canParse(value),
+        "Invalid document image URL",
+      ),
+    }))
     .mutation(async ({ input, ctx }) => {
       const session = await getSession(ctx.req);
       if (!session || session.role !== "customer") throw new TRPCError({ code: "UNAUTHORIZED" });
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      await db.insert(ageVerifications).values({ customerId: session.accountId, method: input.method });
+      await ensureAgeVerificationDocumentColumns(db);
+      await db.insert(ageVerifications).values({
+        customerId: session.accountId,
+        method: input.method,
+        documentType: input.documentType,
+        documentImageUrl: input.documentImageUrl,
+      });
       return { success: true };
     }),
 
@@ -252,6 +290,7 @@ export const adminRouter = router({
       const rows = await db.select().from(identityVerifications).where(and(eq(identityVerifications.role, session.role), eq(identityVerifications.accountId, session.accountId))).orderBy(desc(identityVerifications.submittedAt)).limit(1);
       return rows[0] ?? null;
     } else {
+      await ensureAgeVerificationDocumentColumns(db);
       const rows = await db.select().from(ageVerifications).where(eq(ageVerifications.customerId, session.accountId)).orderBy(desc(ageVerifications.createdAt)).limit(1);
       return rows[0] ?? null;
     }
@@ -315,8 +354,10 @@ export const adminRouter = router({
       if (!request) throw new TRPCError({ code: "NOT_FOUND" });
 
       const approved = input.status === "approved";
+      await ensureAgeVerificationDocumentColumns(db);
       await db.update(ageVerifications).set({
         status: input.status,
+        adminNote: input.adminNote,
         verifiedAt: approved ? new Date() : null,
       }).where(eq(ageVerifications.id, input.id));
       await db.update(customerAccounts).set({

@@ -214,6 +214,19 @@ try {
     });
     ids.customerAccountId = res.accountId;
     assert(res.success && ids.customerAccountId, "customer register failed", res);
+    const ageDocumentImageUrl = await uploadTinyPng(customer.getCookie());
+    ids.ageDocumentImageUrl = ageDocumentImageUrl;
+    await customer.client.admin.submitAgeVerification.mutate({
+      method: "document_upload",
+      documentType: "driver_license",
+      documentImageUrl: ageDocumentImageUrl,
+    });
+    const verificationStatus = await customer.client.admin.getVerificationStatus.query();
+    assert(
+      verificationStatus?.status === "pending" && verificationStatus?.documentImageUrl === ageDocumentImageUrl,
+      "age verification document submission did not persist",
+      verificationStatus,
+    );
     const reservation = await customer.client.reservation.create.mutate({
       storeId: ids.storeId,
       therapistId: ids.therapistId,

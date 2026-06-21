@@ -504,7 +504,10 @@ export const ageVerifications = mysqlTable("age_verifications", {
   id: int("id").autoincrement().primaryKey(),
   customerId: int("customerId").notNull().references(() => customerAccounts.id),
   method: varchar("method", { length: 50 }),
+  documentType: varchar("documentType", { length: 50 }),
+  documentImageUrl: text("documentImageUrl"),
   status: mysqlEnum("status", ["pending", "approved", "rejected"]).default("pending").notNull(),
+  adminNote: text("adminNote"),
   verifiedAt: timestamp("verifiedAt"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
