@@ -9,7 +9,7 @@ import {
   sales, therapistPayrolls, customerProfiles, menus, notifications,
   storeAccounts,
 } from "../../drizzle/schema";
-import { eq, and, desc, gte, lt, sql, like } from "drizzle-orm";
+import { eq, and, desc, gte, lt, lte, sql, like } from "drizzle-orm";
 import { ensureRuntimeSchema } from "../runtimeMigrations";
 import { excludeQaAccountEmails } from "../publicFilters";
 
@@ -300,7 +300,7 @@ export const therapistRouter = router({
       if (!session.therapistId) return [];
       const conditions: any[] = [eq(reservations.therapistId, session.therapistId)];
       if (input.date) conditions.push(eq(reservations.date, input.date));
-      return db.select({
+      const rows = await db.select({
         id: reservations.id,
         storeId: reservations.storeId,
         therapistId: reservations.therapistId,
@@ -325,7 +325,53 @@ export const therapistRouter = router({
         .leftJoin(menus, eq(reservations.menuId, menus.id))
         .where(and(...conditions))
         .orderBy(desc(reservations.date), reservations.startTime);
+      await db.update(notifications)
+        .set({ isRead: true })
+        .where(and(
+          eq(notifications.recipientRole, "therapist"),
+          eq(notifications.recipientId, session.therapistId),
+          eq(notifications.type, "new_reservation"),
+          eq(notifications.isRead, false),
+        ));
+      return rows;
     }),
+
+  getUrgentReservationAlerts: publicProcedure.query(async ({ ctx }) => {
+    const session = await getSession(ctx.req);
+    if (!session || session.role !== "therapist") throw new TRPCError({ code: "UNAUTHORIZED" });
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    if (!session.therapistId) return [];
+    const cutoff = new Date(Date.now() - 10 * 60 * 1000);
+
+    return db.select({
+      notificationId: notifications.id,
+      reservationId: reservations.id,
+      title: notifications.title,
+      body: notifications.body,
+      createdAt: notifications.createdAt,
+      date: reservations.date,
+      startTime: reservations.startTime,
+      endTime: reservations.endTime,
+      status: reservations.status,
+      customerName: sql<string>`COALESCE(${customerProfiles.displayName}, ${customerProfiles.nickname}, CONCAT('顧客#', ${reservations.customerId}))`,
+      storeName: stores.name,
+      menuName: menus.name,
+    }).from(notifications)
+      .leftJoin(reservations, eq(notifications.relatedId, reservations.id))
+      .leftJoin(customerProfiles, eq(reservations.customerId, customerProfiles.accountId))
+      .leftJoin(stores, eq(reservations.storeId, stores.id))
+      .leftJoin(menus, eq(reservations.menuId, menus.id))
+      .where(and(
+        eq(notifications.recipientRole, "therapist"),
+        eq(notifications.recipientId, session.therapistId),
+        eq(notifications.type, "new_reservation"),
+        eq(notifications.isRead, false),
+        lte(notifications.createdAt, cutoff),
+      ))
+      .orderBy(desc(notifications.createdAt))
+      .limit(5);
+  }),
 
   getCustomerMemos: publicProcedure.query(async ({ ctx }) => {
     const session = await getSession(ctx.req);

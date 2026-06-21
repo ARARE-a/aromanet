@@ -3,6 +3,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/NotFound";
 import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
+import { TherapistReservationAlarm } from "./components/TherapistReservationAlarm";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { SessionProvider } from "./contexts/SessionContext";
 
@@ -133,6 +134,7 @@ function App() {
         <SessionProvider>
           <TooltipProvider>
             <Toaster richColors position="top-center" />
+            <TherapistReservationAlarm />
             <Router />
           </TooltipProvider>
         </SessionProvider>

@@ -16,7 +16,7 @@ export default function StoreCustomers() {
   useEffect(() => { if (!isLoading && (!session || session.role !== "store")) navigate("/store/login"); }, [session, isLoading]);
   const { data: customers, refetch } = trpc.store.getCustomers.useQuery(undefined, { enabled: !!session });
   const addNgMut = trpc.store.addNgCustomer.useMutation({ onSuccess: () => { toast.success("NGリストに追加しました"); refetch(); }, onError: e => toast.error(e.message) });
-  const list = ((customers as any[]) ?? []).filter((c: any) => !search || c.displayName?.includes(search));
+  const list = ((customers as any[]) ?? []).filter((c: any) => !search || c.displayName?.includes(search) || c.phone?.includes(search));
   return (
     <AromaLayout title="顧客管理" showBack backHref="/store/dashboard">
       <div className="px-4 py-3">
@@ -29,6 +29,7 @@ export default function StoreCustomers() {
             <AromaAvatar name={c.displayName} src={c.profileImageUrl} size="md" />
             <div className="flex-1">
               <div className="text-sm font-semibold text-foreground">{c.displayName}</div>
+              {c.phone && <div className="text-xs text-primary font-medium mt-0.5">{c.phone}</div>}
               <div className="flex items-center gap-2 mt-0.5">
                 <LevelBadge level={c.level ?? 1} />
                 <span className="text-xs text-muted-foreground">累計¥{(c.totalSpent ?? 0).toLocaleString()}</span>

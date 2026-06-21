@@ -159,6 +159,7 @@ export default function StoreReservations() {
               <div className="min-w-0">
                 <div className="text-sm font-medium text-foreground truncate">{r.customerName ?? "お客様"}</div>
                 <div className="text-xs text-muted-foreground truncate">担当: {r.therapistName ?? "未定"}</div>
+                {r.customerPhone && <div className="text-xs text-primary font-medium">{r.customerPhone}</div>}
               </div>
             </div>
 

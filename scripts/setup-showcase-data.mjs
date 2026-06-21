@@ -244,7 +244,7 @@ async function ensureTherapist(conn, accountId, storeId) {
 
 async function ensureCustomer(conn, accountId) {
   const existing = await getOne(conn, "select id from customer_profiles where accountId = ? limit 1", [accountId]);
-  const values = [accounts.customer.name, "さとう", "090-0000-0000", 82000, 3, 820];
+  const values = [accounts.customer.name, "さとう", "09000000000", 82000, 3, 820];
   if (existing) {
     await execute(
       conn,

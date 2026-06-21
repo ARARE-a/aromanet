@@ -14,6 +14,7 @@ interface AuthFormField {
   placeholder?: string;
   icon?: React.ReactNode;
   required?: boolean;
+  inputMode?: React.HTMLAttributes<HTMLInputElement>["inputMode"];
 }
 
 interface AuthFormProps {
@@ -87,6 +88,7 @@ export function AuthForm({
                     type={isPassword ? (showPw ? "text" : "password") : field.type}
                     placeholder={field.placeholder}
                     required={field.required !== false}
+                    inputMode={field.inputMode}
                     value={values[field.name] ?? ""}
                     onChange={(e) => setValues((v) => ({ ...v, [field.name]: e.target.value }))}
                     className={cn(

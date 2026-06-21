@@ -46,9 +46,9 @@ export function getAuthErrorMessage(error: ApiLikeError): string {
       : "サーバーで問題が発生しました。時間をおいて再度お試しください。";
   }
 
-  if (code === "UNAUTHORIZED") return message || "メールアドレスまたはパスワードが違います";
+  if (code === "UNAUTHORIZED") return message || "電話番号またはパスワードが違います";
   if (code === "FORBIDDEN") return message || "このアカウントは利用できません";
-  if (code === "CONFLICT") return message || "このメールアドレスは既に登録されています";
+  if (code === "CONFLICT") return message || "この電話番号は既に登録されています";
   if (code === "BAD_REQUEST") return message || "入力内容を確認してください";
 
   return message || "エラーが発生しました。もう一度お試しください。";

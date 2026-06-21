@@ -129,9 +129,12 @@ const emails = {
   therapist: `qa-smoke-therapist-${stamp}@example.com`,
   customer: `qa-smoke-customer-${stamp}@example.com`,
 };
+const phones = {
+  customer: `090${String(stamp).slice(-8)}`,
+};
 
 try {
-  console.log(JSON.stringify({ baseUrl, targetDate, emails }, null, 2));
+  console.log(JSON.stringify({ baseUrl, targetDate, emails, phones }, null, 2));
 
   await step("未ログインのアップロードが拒否される", expectUnauthenticatedUploadRejected);
 
@@ -223,26 +226,12 @@ try {
 
   await step("顧客を登録し、予約が3アカウントに反映される", async () => {
     const res = await customer.client.aroAuth.customerRegister.mutate({
-      email: emails.customer,
+      phoneNumber: phones.customer,
       password,
       displayName: `QA顧客${stamp}`,
-      ageConfirmed: true,
     });
     ids.customerAccountId = res.accountId;
     assert(res.success && ids.customerAccountId, "customer register failed", res);
-    const ageDocumentImageUrl = await uploadTinyPng(customer.getCookie());
-    ids.ageDocumentImageUrl = ageDocumentImageUrl;
-    await customer.client.admin.submitAgeVerification.mutate({
-      method: "document_upload",
-      documentType: "driver_license",
-      documentImageUrl: ageDocumentImageUrl,
-    });
-    const verificationStatus = await customer.client.admin.getVerificationStatus.query();
-    assert(
-      verificationStatus?.status === "pending" && verificationStatus?.documentImageUrl === ageDocumentImageUrl,
-      "age verification document submission did not persist",
-      verificationStatus,
-    );
     let outsideShiftBlocked = false;
     try {
       await customer.client.reservation.create.mutate({

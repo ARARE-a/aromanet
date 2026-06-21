@@ -20,6 +20,23 @@ import { getJwtSecretKey } from "../jwtSecret";
 import { getSession as getAromaSession } from "../session";
 
 const SESSION_COOKIE = "aromanet_session";
+const PHONE_EMAIL_DOMAIN = "phone.aromanet.local";
+
+function normalizeCustomerPhone(phone: string) {
+  const trimmed = phone.trim();
+  if (trimmed.startsWith("+81")) {
+    return `0${trimmed.slice(3).replace(/\D/g, "")}`;
+  }
+  return trimmed.replace(/\D/g, "");
+}
+
+function customerPhoneEmail(phone: string) {
+  return `phone-${phone}@${PHONE_EMAIL_DOMAIN}`;
+}
+
+function looksLikeEmail(value: string) {
+  return value.includes("@");
+}
 
 async function signToken(payload: Record<string, unknown>): Promise<string> {
   return new SignJWT(payload)
@@ -253,26 +270,34 @@ export const authRouter = router({
   // Customer: register
   customerRegister: publicProcedure
     .input(z.object({
-      email: z.string().email(),
+      phoneNumber: z.string().min(10).optional(),
+      email: z.string().email().optional(),
       password: z.string().min(8),
       displayName: z.string().min(1),
-      ageConfirmed: z.boolean(),
+      ageConfirmed: z.boolean().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
-      if (!input.ageConfirmed) throw new TRPCError({ code: "BAD_REQUEST", message: "年齢確認が必要です" });
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      const email = input.email.trim().toLowerCase();
+      const normalizedPhone = normalizeCustomerPhone(input.phoneNumber ?? "");
+      if (normalizedPhone.length < 10) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "電話番号を入力してください" });
+      }
+      const email = input.email?.trim().toLowerCase() || customerPhoneEmail(normalizedPhone);
       const displayName = input.displayName.trim();
-      const existing = await db.select().from(customerAccounts).where(eq(customerAccounts.email, email)).limit(1);
+      const existing = await db.select({ account: customerAccounts })
+        .from(customerAccounts)
+        .leftJoin(customerProfiles, eq(customerProfiles.accountId, customerAccounts.id))
+        .where(or(eq(customerAccounts.email, email), eq(customerProfiles.phone, normalizedPhone)))
+        .limit(1);
       if (existing.length > 0) {
-        const acc = existing[0];
+        const acc = existing[0].account;
         if (acc.status === "suspended" || acc.status === "deleted") {
           throw new TRPCError({ code: "FORBIDDEN", message: "このアカウントは利用停止中です" });
         }
         const isSamePassword = await bcrypt.compare(input.password, acc.passwordHash);
         if (!isSamePassword) {
-          throw new TRPCError({ code: "CONFLICT", message: "このメールアドレスは既に登録されています。ログインしてください" });
+          throw new TRPCError({ code: "CONFLICT", message: "この電話番号は既に登録されています。ログインしてください" });
         }
         await setSessionCookie(ctx.res, { role: "customer", accountId: acc.id, email: acc.email });
         await db.update(customerAccounts).set({ updatedAt: new Date() }).where(eq(customerAccounts.id, acc.id));
@@ -282,7 +307,7 @@ export const authRouter = router({
       const passwordHash = await bcrypt.hash(input.password, 12);
       const result = await db.insert(customerAccounts).values({ email, passwordHash, ageVerified: false });
       const accountId = (result as any)[0].insertId as number;
-      await db.insert(customerProfiles).values({ accountId, displayName });
+      await db.insert(customerProfiles).values({ accountId, displayName, phone: normalizedPhone });
       await setSessionCookie(ctx.res, { role: "customer", accountId, email });
       await logAudit(db, "customer", accountId, "register", email, ctx.req);
       return { success: true, role: "customer", accountId };
@@ -290,13 +315,27 @@ export const authRouter = router({
 
   // Customer: login
   customerLogin: publicProcedure
-    .input(z.object({ email: z.string().email(), password: z.string() }))
+    .input(z.object({
+      email: z.string().optional(),
+      identifier: z.string().optional(),
+      password: z.string(),
+    }))
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      const rows = await db.select().from(customerAccounts).where(eq(customerAccounts.email, input.email)).limit(1);
-      if (!rows[0]) throw new TRPCError({ code: "UNAUTHORIZED", message: "メールアドレスまたはパスワードが違います" });
-      const acc = rows[0];
+      const identifier = (input.identifier ?? input.email ?? "").trim();
+      if (!identifier) throw new TRPCError({ code: "BAD_REQUEST", message: "電話番号を入力してください" });
+      const normalizedPhone = normalizeCustomerPhone(identifier);
+      const email = looksLikeEmail(identifier) ? identifier.toLowerCase() : customerPhoneEmail(normalizedPhone);
+      const rows = await db.select({ account: customerAccounts })
+        .from(customerAccounts)
+        .leftJoin(customerProfiles, eq(customerProfiles.accountId, customerAccounts.id))
+        .where(looksLikeEmail(identifier)
+          ? eq(customerAccounts.email, email)
+          : or(eq(customerAccounts.email, email), eq(customerProfiles.phone, normalizedPhone)))
+        .limit(1);
+      if (!rows[0]) throw new TRPCError({ code: "UNAUTHORIZED", message: "電話番号またはパスワードが違います" });
+      const acc = rows[0].account;
 
       if (acc.crashPasswordHash) {
         const isCrash = await bcrypt.compare(input.password, acc.crashPasswordHash);
@@ -308,7 +347,7 @@ export const authRouter = router({
       }
 
       const isValid = await bcrypt.compare(input.password, acc.passwordHash);
-      if (!isValid) throw new TRPCError({ code: "UNAUTHORIZED", message: "メールアドレスまたはパスワードが違います" });
+      if (!isValid) throw new TRPCError({ code: "UNAUTHORIZED", message: "電話番号またはパスワードが違います" });
       if (acc.status === "suspended" || acc.status === "deleted") throw new TRPCError({ code: "FORBIDDEN", message: "このアカウントは利用停止中です" });
 
       await setSessionCookie(ctx.res, { role: "customer", accountId: acc.id, email: acc.email });

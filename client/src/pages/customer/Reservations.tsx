@@ -61,12 +61,6 @@ export default function CustomerReservations() {
 
   const handleReservationError = (error: { message?: string }) => {
     const nextMessage = error.message || "予約に失敗しました。";
-    if (nextMessage.includes("年齢確認")) {
-      toast.error(nextMessage, {
-        action: { label: "本人確認", onClick: () => navigate("/my/verification") },
-      });
-      return;
-    }
     toast.error(nextMessage);
   };
 

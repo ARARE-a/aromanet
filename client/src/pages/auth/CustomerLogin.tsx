@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
-import { Lock, Mail } from "lucide-react";
+import { Lock, Phone } from "lucide-react";
 import { AuthForm } from "@/components/AuthForm";
 import { trpc } from "@/lib/trpc";
 import { getAuthErrorMessage } from "@/lib/errors";
@@ -25,13 +25,13 @@ export default function CustomerLogin() {
       title="お客様ログイン"
       subtitle="Customer Login"
       fields={[
-        { name: "email", label: "メールアドレス", type: "email", placeholder: "customer@example.com", icon: <Mail className="w-4 h-4" /> },
+        { name: "identifier", label: "電話番号", type: "tel", inputMode: "tel", placeholder: "09012345678", icon: <Phone className="w-4 h-4" /> },
         { name: "password", label: "パスワード", type: "password", placeholder: "パスワード", icon: <Lock className="w-4 h-4" /> },
       ]}
       submitLabel="ログイン"
       onSubmit={async (d) => {
         setError(null);
-        await loginMut.mutateAsync({ email: d.email.trim(), password: d.password });
+        await loginMut.mutateAsync({ identifier: d.identifier.trim(), password: d.password });
       }}
       isLoading={loginMut.isPending}
       error={error}

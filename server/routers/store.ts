@@ -254,6 +254,7 @@ export const storeRouter = router({
       const cpRows = await db.select({
         displayName: customerProfiles.displayName,
         nickname: customerProfiles.nickname,
+        phone: customerProfiles.phone,
         profileImageUrl: customerProfiles.profileImageUrl,
         memberLevel: customerProfiles.memberLevel,
         totalSpent: customerProfiles.totalSpent,
@@ -262,6 +263,7 @@ export const storeRouter = router({
       result.push({
         ...row,
         displayName: cp?.displayName ?? cp?.nickname ?? `顧客#${row.customerId}`,
+        phone: cp?.phone ?? null,
         profileImageUrl: cp?.profileImageUrl ?? null,
         level: cp?.memberLevel ?? 1,
         totalSpent: cp?.totalSpent ?? 0,

@@ -12,6 +12,7 @@ export default function AccountNotFound() {
   const [, navigate] = useLocation();
   const role = new URLSearchParams(window.location.search).get("role") ?? "";
   const loginPath = loginPaths[role] ?? "/";
+  const identifierLabel = role === "customer" ? "電話番号" : "メールアドレス";
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center px-6">
@@ -25,7 +26,7 @@ export default function AccountNotFound() {
           <p className="text-sm leading-7 text-muted-foreground">
             入力された情報に一致するアカウントは見つかりませんでした。
             <br />
-            メールアドレスまたはパスワードをご確認ください。
+            {identifierLabel}またはパスワードをご確認ください。
           </p>
         </div>
 

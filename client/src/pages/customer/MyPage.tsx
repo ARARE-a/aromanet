@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { Link, useLocation } from "wouter";
-import { Bell, Bookmark, Heart, Home, LogOut, MessageCircle, Search, Settings, Shield, Star, User, ChevronRight } from "lucide-react";
+import { Bell, Bookmark, Heart, Home, LogOut, MessageCircle, Search, Settings, Star, User, ChevronRight } from "lucide-react";
 import { AromaAvatar, AromaLayout, LevelBadge } from "@/components/AromaLayout";
 import { useSession } from "@/contexts/SessionContext";
 import { trpc } from "@/lib/trpc";
@@ -108,7 +108,6 @@ export default function CustomerMyPage() {
         <MenuItem href="/my/level" icon={<Star className="w-5 h-5 text-yellow-500" />} label="会員レベル・特典" />
         <MenuItem href="/messages" icon={<MessageCircle className="w-5 h-5 text-blue-500" />} label="メッセージ" />
         <MenuItem href="/my/notifications" icon={<Bell className="w-5 h-5 text-orange-500" />} label="通知" />
-        <MenuItem href="/my/verification" icon={<Shield className="w-5 h-5 text-green-600" />} label="本人確認" badge={!p?.isVerified ? "未確認" : undefined} />
       </div>
 
       <button onClick={handleLogout} className="w-full flex items-center gap-3 px-4 py-4 text-red-500 active:bg-red-50 transition-colors bg-white mt-2">

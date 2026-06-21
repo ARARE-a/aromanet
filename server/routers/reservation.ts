@@ -5,7 +5,7 @@ import { getDb } from "../db";
 import { getSession } from "../session";
 import {
   reservations, reservationOptions, menus, menuOptions,
-  coupons, notifications, customerAccounts, customerProfiles, storeAccounts, therapistAccounts, therapists, stores, sales, therapistSalarySettings, therapistPayrolls, ageVerifications, shifts,
+  coupons, notifications, customerProfiles, storeAccounts, therapistAccounts, therapists, stores, sales, therapistSalarySettings, therapistPayrolls, shifts,
 } from "../../drizzle/schema";
 import { eq, and, desc, gte, lt, or, sql } from "drizzle-orm";
 
@@ -67,28 +67,6 @@ async function recalculateTherapistPayroll(db: any, storeId: number, therapistId
   }
 }
 
-async function requireCustomerBookingAllowed(db: any, customerId: number) {
-  const customerRows = await db.select({
-    id: customerAccounts.id,
-    ageVerified: customerAccounts.ageVerified,
-    status: customerAccounts.status,
-  }).from(customerAccounts).where(eq(customerAccounts.id, customerId)).limit(1);
-  const customer = customerRows[0];
-  if (!customer || customer.status !== "active") throw new TRPCError({ code: "UNAUTHORIZED" });
-  if (customer.ageVerified) return;
-
-  const verificationRows = await db.select({ id: ageVerifications.id })
-    .from(ageVerifications)
-    .where(and(
-      eq(ageVerifications.customerId, customerId),
-      or(eq(ageVerifications.status, "pending"), eq(ageVerifications.status, "approved")),
-    ))
-    .limit(1);
-  if (!verificationRows[0]) {
-    throw new TRPCError({ code: "FORBIDDEN", message: "年齢確認の提出後に予約できます" });
-  }
-}
-
 async function requireTherapistAvailableForReservation(db: any, input: {
   storeId: number;
   therapistId: number;
@@ -138,7 +116,6 @@ export const reservationRouter = router({
       if (!session || session.role !== "customer") throw new TRPCError({ code: "UNAUTHORIZED" });
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      await requireCustomerBookingAllowed(db, session.accountId);
 
       const menuRows = await db.select().from(menus).where(eq(menus.id, input.menuId)).limit(1);
       if (!menuRows[0]) throw new TRPCError({ code: "NOT_FOUND", message: "メニューが見つかりません" });
@@ -323,6 +300,7 @@ export const reservationRouter = router({
         createdAt: reservations.createdAt,
         updatedAt: reservations.updatedAt,
         customerName: sql<string>`COALESCE(${customerProfiles.displayName}, ${customerProfiles.nickname}, CONCAT('顧客#', ${reservations.customerId}))`,
+        customerPhone: customerProfiles.phone,
         customerImage: customerProfiles.profileImageUrl,
         therapistName: therapists.displayName,
         therapistImage: therapists.profileImageUrl,
