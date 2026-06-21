@@ -8,6 +8,7 @@ import {
   ChevronRight,
   ChevronUp,
   FileText,
+  RefreshCw,
   Send,
   Settings,
 } from "lucide-react";
@@ -80,6 +81,15 @@ export default function StorePayroll() {
     onError: e => toast.error(e.message),
   });
 
+  const calculatePayrollMut = trpc.sales.calculatePayroll.useMutation({
+    onSuccess: () => {
+      toast.success("給与を再計算しました");
+      utils.sales.getTherapistPayrolls.invalidate({ year, month: monthNum });
+      refetch();
+    },
+    onError: e => toast.error(e.message),
+  });
+
   const openSalarySettings = (therapist: any, payroll?: any) => {
     setSelectedTherapist(therapist);
     setSalaryForm({
@@ -103,6 +113,16 @@ export default function StorePayroll() {
       </div>
 
       <div className="px-4 py-3 flex gap-2">
+        <Button
+          size="sm"
+          variant="outline"
+          className="flex-1 h-9 rounded-xl"
+          onClick={() => calculatePayrollMut.mutate({ year, month: monthNum })}
+          disabled={calculatePayrollMut.isPending}
+        >
+          <RefreshCw className={`w-3.5 h-3.5 mr-1 ${calculatePayrollMut.isPending ? "animate-spin" : ""}`} />
+          給与を再計算
+        </Button>
         <Button size="sm" variant="outline" className="flex-1 h-9 rounded-xl" onClick={() => setShowNotify(true)}>
           <Send className="w-3.5 h-3.5 mr-1" />
           女子給を通知
