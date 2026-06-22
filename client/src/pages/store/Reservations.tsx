@@ -7,6 +7,7 @@ import { ja } from "date-fns/locale";
 import { toast } from "sonner";
 import { AromaAvatar, AromaLayout, StatusBadge } from "@/components/AromaLayout";
 import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { trpc } from "@/lib/trpc";
 import { useSession } from "@/contexts/SessionContext";
 
@@ -57,6 +58,8 @@ export default function StoreReservations() {
   const { session, isLoading } = useSession();
   const [date, setDate] = useState(new Date());
   const [statusFilter, setStatusFilter] = useState("pending");
+  const [assigningReservationId, setAssigningReservationId] = useState<number | null>(null);
+  const [selectedTherapistId, setSelectedTherapistId] = useState("");
 
   useEffect(() => {
     if (!isLoading && (!session || session.role !== "store")) navigate("/store/login");
@@ -71,6 +74,7 @@ export default function StoreReservations() {
         : { date: dateStr, status: statusFilter, limit: 100 },
     { enabled: !!session, refetchOnWindowFocus: true, refetchInterval: 15000 },
   );
+  const { data: therapists } = trpc.store.getTherapists.useQuery(undefined, { enabled: !!session });
 
   const updateStatus = trpc.reservation.updateStatus.useMutation({
     onSuccess: () => {
@@ -79,8 +83,18 @@ export default function StoreReservations() {
     },
     onError: e => toast.error(e.message),
   });
+  const assignTherapist = trpc.reservation.assignTherapist.useMutation({
+    onSuccess: () => {
+      toast.success("担当セラピストを割り当てました");
+      setAssigningReservationId(null);
+      setSelectedTherapistId("");
+      refetch();
+    },
+    onError: e => toast.error(e.message),
+  });
 
   const list = (reservations as any[]) ?? [];
+  const therapistList = (therapists as any[]) ?? [];
   const heading =
     statusFilter === "pending" ? "確認待ち一覧" :
       statusFilter === "all" ? "予約一覧" :
@@ -174,6 +188,58 @@ export default function StoreReservations() {
 
             {r.notes && (
               <div className="text-xs text-muted-foreground bg-muted/50 rounded-lg p-2 mb-3 whitespace-pre-wrap">{r.notes}</div>
+            )}
+
+            {!r.therapistId && !["completed", "cancelled", "no_show"].includes(r.status) && (
+              <div className="mb-3 rounded-xl border border-primary/15 bg-primary/5 p-3">
+                {assigningReservationId === r.id ? (
+                  <div className="space-y-2">
+                    <Select value={selectedTherapistId} onValueChange={setSelectedTherapistId}>
+                      <SelectTrigger className="h-9 rounded-lg bg-white text-xs">
+                        <SelectValue placeholder="担当セラピストを選択" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {therapistList.map((t: any) => (
+                          <SelectItem key={t.id} value={String(t.id)}>{t.displayName}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        className="h-8 flex-1 rounded-lg bg-primary text-xs text-white hover:bg-primary/90"
+                        disabled={!selectedTherapistId || assignTherapist.isPending}
+                        onClick={() => assignTherapist.mutate({ id: r.id, therapistId: Number(selectedTherapistId) })}
+                      >
+                        割り当てる
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-8 rounded-lg text-xs"
+                        onClick={() => {
+                          setAssigningReservationId(null);
+                          setSelectedTherapistId("");
+                        }}
+                      >
+                        閉じる
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-8 w-full rounded-lg border-primary/30 text-xs font-semibold text-primary"
+                    onClick={() => {
+                      setAssigningReservationId(r.id);
+                      setSelectedTherapistId("");
+                    }}
+                  >
+                    担当を割り当て
+                  </Button>
+                )}
+              </div>
             )}
 
             <div className="flex gap-2 flex-wrap">

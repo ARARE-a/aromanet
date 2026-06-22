@@ -261,6 +261,82 @@ export const reservationRouter = router({
       return { success: true, reservationId };
     }),
 
+  assignTherapist: publicProcedure
+    .input(z.object({
+      id: z.number(),
+      therapistId: z.number(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const session = await getSession(ctx.req);
+      if (!session || session.role !== "store" || !session.storeId) throw new TRPCError({ code: "UNAUTHORIZED" });
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      const targetRows = await db.select().from(reservations).where(eq(reservations.id, input.id)).limit(1);
+      const target = targetRows[0];
+      if (!target || target.storeId !== session.storeId) throw new TRPCError({ code: "NOT_FOUND" });
+      if (["completed", "cancelled", "no_show"].includes(target.status)) {
+        throw new TRPCError({ code: "CONFLICT", message: "完了またはキャンセル済みの予約には担当を割り当てできません" });
+      }
+
+      const therapistRows = await db.select({ id: therapists.id, storeId: therapists.storeId, displayName: therapists.displayName })
+        .from(therapists)
+        .innerJoin(therapistAccounts, eq(therapists.accountId, therapistAccounts.id))
+        .where(and(
+          eq(therapists.id, input.therapistId),
+          eq(therapists.storeId, session.storeId),
+          eq(therapists.isPublic, true),
+          eq(therapistAccounts.status, "active"),
+        ))
+        .limit(1);
+      const therapist = therapistRows[0];
+      if (!therapist) throw new TRPCError({ code: "NOT_FOUND", message: "割り当て可能なセラピストが見つかりません" });
+
+      await requireTherapistAvailableForReservation(db, {
+        storeId: session.storeId,
+        therapistId: input.therapistId,
+        date: target.date,
+        startTime: target.startTime,
+        endTime: target.endTime,
+      });
+
+      const existing = await db.select().from(reservations).where(and(
+        eq(reservations.storeId, session.storeId),
+        eq(reservations.therapistId, input.therapistId),
+        eq(reservations.date, target.date),
+      ));
+      for (const r of existing) {
+        if (r.id === target.id || r.status === "cancelled" || r.status === "no_show") continue;
+        if (r.startTime < target.endTime && r.endTime > target.startTime) {
+          throw new TRPCError({ code: "CONFLICT", message: "選択したセラピストはこの時間帯に別の予約があります" });
+        }
+      }
+
+      await db.update(reservations).set({
+        therapistId: input.therapistId,
+        updatedAt: new Date(),
+      }).where(eq(reservations.id, target.id));
+
+      await db.insert(notifications).values({
+        recipientRole: "therapist",
+        recipientId: input.therapistId,
+        type: "reservation_assigned",
+        title: "予約の担当に割り当てられました",
+        body: `${target.date} ${target.startTime}〜${target.endTime}`,
+        relatedId: target.id,
+      });
+      await db.insert(notifications).values({
+        recipientRole: "customer",
+        recipientId: target.customerId,
+        type: "reservation_assigned",
+        title: "予約の担当セラピストが決まりました",
+        body: therapist.displayName,
+        relatedId: target.id,
+      });
+
+      return { success: true };
+    }),
+
   getStoreReservations: publicProcedure
     .input(z.object({
       date: z.string().optional(),

@@ -285,6 +285,31 @@ try {
     assert(therapistReservations.some((row) => row.id === ids.reservationId), "therapist cannot see customer reservation", therapistReservations);
     const customerReservations = await customer.client.customer.getReservations.query();
     assert(customerReservations.some((row) => row.id === ids.reservationId), "customer cannot see own reservation", customerReservations);
+
+    const freeReservation = await customer.client.reservation.create.mutate({
+      storeId: ids.storeId,
+      menuId: ids.menuId,
+      date: targetDate,
+      startTime: "13:30",
+      isNomination: false,
+      optionIds: [],
+      customerNote: "QA free booking assignment",
+    });
+    ids.freeReservationId = freeReservation.reservationId;
+    const beforeAssign = await therapist.client.therapist.getReservations.query({ date: targetDate });
+    assert(!beforeAssign.some((row) => row.id === ids.freeReservationId), "unassigned free booking appeared on therapist reservations", beforeAssign);
+    await store.client.reservation.assignTherapist.mutate({
+      id: ids.freeReservationId,
+      therapistId: ids.therapistId,
+    });
+    const afterAssignStore = await store.client.reservation.getStoreReservations.query({ status: "pending", limit: 100 });
+    const assignedStoreRow = afterAssignStore.find((row) => row.id === ids.freeReservationId);
+    assert(assignedStoreRow?.therapistId === ids.therapistId, "store cannot assign therapist to free booking", assignedStoreRow);
+    const afterAssignTherapist = await therapist.client.therapist.getReservations.query({ date: targetDate });
+    assert(afterAssignTherapist.some((row) => row.id === ids.freeReservationId), "assigned free booking did not appear on therapist reservations", afterAssignTherapist);
+    const afterAssignCustomer = await customer.client.customer.getReservations.query();
+    const assignedCustomerRow = afterAssignCustomer.find((row) => row.id === ids.freeReservationId);
+    assert(assignedCustomerRow?.therapistId === ids.therapistId, "assigned therapist did not appear on customer reservation", assignedCustomerRow);
   });
 
   await step("顧客メモがセラピスト画面に反映される", async () => {
