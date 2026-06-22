@@ -210,7 +210,7 @@ export default function StorePayroll() {
                         disabled={updateMut.isPending}
                       >
                         <CheckCircle className="w-3.5 h-3.5 mr-1" />
-                        支払い済み
+                        支払い済みにする
                       </Button>
                     )}
                   </div>
