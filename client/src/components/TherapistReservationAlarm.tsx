@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from "react";
-import { toast } from "sonner";
 import { useLocation } from "wouter";
 import { useSession } from "@/contexts/SessionContext";
 import { trpc } from "@/lib/trpc";
@@ -82,34 +81,30 @@ export function TherapistReservationAlarm() {
 
   useEffect(() => {
     if (!shouldShowAlarm || !alerts?.length) return;
+
     for (const alert of alerts as UrgentReservationAlert[]) {
       const id = Number(alert.notificationId);
       if (!id || alertedIds.current.has(id)) continue;
-      alertedIds.current.add(id);
 
+      alertedIds.current.add(id);
       const body = formatAlertBody(alert);
       setActiveAlert(alert);
-
-      toast.error("予約通知が10分以上未読です", {
-        description: body,
-        duration: 20000,
-        action: {
-          label: "予約を見る",
-          onClick: () => navigate("/therapist/reservations"),
-        },
-      });
       navigator.vibrate?.([700, 250, 700, 250, 1200]);
       playAlarmSequence();
       sendBrowserNotification("AromaNet 予約アラーム", body);
     }
-  }, [alerts, navigate, shouldShowAlarm]);
+  }, [alerts, shouldShowAlarm]);
 
   if (!shouldShowAlarm || !activeAlert) return null;
 
   const body = formatAlertBody(activeAlert);
 
   return (
-    <div className="fixed inset-x-3 top-16 z-[1000] mx-auto max-w-md rounded-2xl border border-red-200 bg-white p-4 shadow-2xl" role="alert" aria-live="assertive">
+    <div
+      className="fixed inset-x-3 top-16 z-[1000] mx-auto max-w-md rounded-2xl border border-red-200 bg-white p-4 shadow-2xl"
+      role="alert"
+      aria-live="assertive"
+    >
       <div className="flex items-start gap-3">
         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-red-100 text-xl text-red-600">!</div>
         <div className="min-w-0 flex-1">
