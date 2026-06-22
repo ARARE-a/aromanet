@@ -17,6 +17,7 @@
     "prod:audit-data": "node scripts/audit-production-data.mjs",
     "prod:fix-audit-risks": "node scripts/fix-production-audit-risks.mjs",
     "prod:setup-showcase": "node scripts/setup-showcase-data.mjs",
+    "prod:reset-showcase": "node scripts/reset-showcase-data.mjs",
     "prod:recalculate-payroll": "node scripts/recalculate-payroll.mjs",
     "prod:cleanup-smoke": "node scripts/cleanup-smoke-data.mjs",
     "prod:smoke": "node scripts/prod-smoke-test.mjs"
