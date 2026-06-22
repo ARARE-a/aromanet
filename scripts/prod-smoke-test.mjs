@@ -123,12 +123,14 @@ async function expectUnauthenticatedUploadRejected() {
 
 const store = makeClient("store");
 const therapist = makeClient("therapist");
+const therapist2 = makeClient("therapist2");
 const customer = makeClient("customer");
 
 const ids = {};
 const emails = {
   store: `qa-smoke-store-${stamp}@example.com`,
   therapist: `qa-smoke-therapist-${stamp}@example.com`,
+  therapist2: `qa-smoke-therapist2-${stamp}@example.com`,
   customer: `qa-smoke-customer-${stamp}@example.com`,
 };
 const phones = {
@@ -204,8 +206,18 @@ try {
     ids.therapistAccountId = res.accountId;
     ids.therapistId = res.therapistId;
     assert(res.success && res.storeId === ids.storeId, "therapist invite registration did not link store", res);
+    const res2 = await therapist2.client.aroAuth.therapistRegister.mutate({
+      email: emails.therapist2,
+      password,
+      displayName: `QAセラピスト2${stamp}`,
+      inviteToken: invite.token,
+    });
+    ids.therapist2AccountId = res2.accountId;
+    ids.therapist2Id = res2.therapistId;
+    assert(res2.success && res2.storeId === ids.storeId, "second therapist invite registration did not link store", res2);
     const therapists = await store.client.store.getTherapists.query();
     assert(therapists.some((row) => row.id === ids.therapistId), "store cannot see invited therapist", therapists);
+    assert(therapists.some((row) => row.id === ids.therapist2Id), "store cannot see second invited therapist", therapists);
   });
 
   await step("店舗が給与設定を変更できる", async () => {
@@ -234,9 +246,24 @@ try {
       action: "approved",
       reviewNote: "QA承認",
     });
+    const created2 = await therapist2.client.therapist.createShift.mutate({
+      date: targetDate,
+      startTime: "11:00",
+      endTime: "20:00",
+      note: "QA second shift",
+    });
+    ids.shift2Id = created2.shiftId;
+    await store.client.store.reviewShift.mutate({
+      shiftId: ids.shift2Id,
+      action: "approved",
+      reviewNote: "QA second approval",
+    });
     const therapistShifts = await therapist.client.therapist.getShifts.query({ month });
     const approved = therapistShifts.find((row) => row.id === ids.shiftId);
     assert(approved?.approvalStatus === "approved", "therapist cannot see approved shift", therapistShifts);
+    const therapist2Shifts = await therapist2.client.therapist.getShifts.query({ month });
+    const approved2 = therapist2Shifts.find((row) => row.id === ids.shift2Id);
+    assert(approved2?.approvalStatus === "approved", "second therapist cannot see approved shift", therapist2Shifts);
   });
 
   await step("顧客を登録し、予約が3アカウントに反映される", async () => {
@@ -279,10 +306,40 @@ try {
       customerNote: "QA予約メモ",
     });
     ids.reservationId = reservation.reservationId;
+    let sameTherapistBlocked = false;
+    try {
+      await customer.client.reservation.create.mutate({
+        storeId: ids.storeId,
+        therapistId: ids.therapistId,
+        menuId: ids.menuId,
+        date: targetDate,
+        startTime: "12:00",
+        isNomination: true,
+        optionIds: [],
+        customerNote: "QA same therapist same slot should fail",
+      });
+    } catch (error) {
+      sameTherapistBlocked = String(error?.message ?? "").includes("CONFLICT") || String(error?.message ?? "").includes("別の予約");
+    }
+    assert(sameTherapistBlocked, "same therapist same time reservation was not blocked");
+    const parallelReservation = await customer.client.reservation.create.mutate({
+      storeId: ids.storeId,
+      therapistId: ids.therapist2Id,
+      menuId: ids.menuId,
+      date: targetDate,
+      startTime: "12:00",
+      isNomination: true,
+      optionIds: [],
+      customerNote: "QA different therapist same slot should pass",
+    });
+    ids.parallelReservationId = parallelReservation.reservationId;
     const storeReservations = await store.client.reservation.getStoreReservations.query({ status: "pending", limit: 100 });
     assert(storeReservations.some((row) => row.id === ids.reservationId), "store cannot see customer reservation", storeReservations);
+    assert(storeReservations.some((row) => row.id === ids.parallelReservationId), "store cannot see parallel therapist reservation", storeReservations);
     const therapistReservations = await therapist.client.therapist.getReservations.query({ date: targetDate });
     assert(therapistReservations.some((row) => row.id === ids.reservationId), "therapist cannot see customer reservation", therapistReservations);
+    const therapist2Reservations = await therapist2.client.therapist.getReservations.query({ date: targetDate });
+    assert(therapist2Reservations.some((row) => row.id === ids.parallelReservationId), "second therapist cannot see parallel reservation", therapist2Reservations);
     const customerReservations = await customer.client.customer.getReservations.query();
     assert(customerReservations.some((row) => row.id === ids.reservationId), "customer cannot see own reservation", customerReservations);
 

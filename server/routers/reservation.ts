@@ -9,6 +9,18 @@ import {
 } from "../../drizzle/schema";
 import { eq, and, desc, gte, lt, or, sql } from "drizzle-orm";
 
+const BLOCKING_RESERVATION_STATUSES = new Set([
+  "pending",
+  "confirmed",
+  "waiting",
+  "in_service",
+  "change_requested",
+]);
+
+function blocksTherapistSlot(status: string | null | undefined) {
+  return BLOCKING_RESERVATION_STATUSES.has(String(status));
+}
+
 function getMonthBoundsFromDate(date: string) {
   const [yearRaw, monthRaw] = date.split("-");
   const year = Number(yearRaw);
@@ -180,9 +192,9 @@ export const reservationRouter = router({
         });
       }
 
-      const existing = await db.select().from(reservations).where(and(eq(reservations.storeId, resolvedStoreId), eq(reservations.date, input.date)));
+      const existing = input.therapistId ? await db.select().from(reservations).where(and(eq(reservations.storeId, resolvedStoreId), eq(reservations.therapistId, input.therapistId), eq(reservations.date, input.date))) : [];
       for (const r of existing) {
-        if (r.status === "cancelled" || r.status === "no_show") continue;
+        if (!blocksTherapistSlot(r.status)) continue;
         if (input.therapistId && r.therapistId !== input.therapistId) continue;
         if (r.startTime < endTime && r.endTime > input.startTime) {
           throw new TRPCError({ code: "CONFLICT", message: "この時間帯は既に予約が入っています" });
@@ -308,7 +320,7 @@ export const reservationRouter = router({
         eq(reservations.date, target.date),
       ));
       for (const r of existing) {
-        if (r.id === target.id || r.status === "cancelled" || r.status === "no_show") continue;
+        if (r.id === target.id || !blocksTherapistSlot(r.status)) continue;
         if (r.startTime < target.endTime && r.endTime > target.startTime) {
           throw new TRPCError({ code: "CONFLICT", message: "選択したセラピストはこの時間帯に別の予約があります" });
         }
