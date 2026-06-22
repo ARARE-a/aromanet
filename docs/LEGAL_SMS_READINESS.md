@@ -10,7 +10,7 @@ Last updated: 2026-06-22
 
 ## Before wider public launch
 
-- Create and monitor `support@aromanet.club`.
+- Monitor `noreply@arare-ai.jp` as the temporary public contact address.
 - Decide the official business operator name, address, phone number, and representative name.
 - Add commercial transaction disclosure before paid plans, paid reservations, or settlement flows are introduced.
 - Keep Twilio dashboard spend alerts enabled.

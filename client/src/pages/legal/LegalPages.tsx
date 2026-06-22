@@ -4,7 +4,7 @@ import { AromaLogo } from "@/components/AromaLayout";
 import { Button } from "@/components/ui/button";
 
 const updatedAt = "2026年6月22日";
-const supportEmail = "support@aromanet.club";
+const supportEmail = "noreply@arare-ai.jp";
 
 function LegalShell({
   title,
