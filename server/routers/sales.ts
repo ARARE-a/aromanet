@@ -140,6 +140,8 @@ export const salesRouter = router({
         const existingPayroll = existing[0];
         const backAmount = Number(s?.totalBack ?? 0);
         const adjustmentAmount = existingPayroll?.adjustmentAmount ?? 0;
+        const totalPayroll = backAmount + adjustmentAmount;
+        const payrollChanged = existingPayroll && Number(existingPayroll.totalPayroll ?? 0) !== totalPayroll;
         const payrollData = {
           storeId: session.storeId,
           therapistId: t.id,
@@ -151,8 +153,9 @@ export const salesRouter = router({
           backAmount,
           optionAmount: Number(s?.optionAmount ?? 0),
           adjustmentAmount,
-          totalPayroll: backAmount + adjustmentAmount,
-          isPaid: existingPayroll?.isPaid ?? false,
+          totalPayroll,
+          isPaid: payrollChanged ? false : (existingPayroll?.isPaid ?? false),
+          paidAt: payrollChanged ? null : (existingPayroll?.paidAt ?? null),
         };
         if (existing.length > 0) {
           await db.update(therapistPayrolls).set(payrollData).where(eq(therapistPayrolls.id, existing[0].id));
@@ -184,7 +187,12 @@ export const salesRouter = router({
       const payroll = rows[0];
       if (!payroll) throw new TRPCError({ code: "NOT_FOUND" });
       if (data.adjustmentAmount !== undefined) {
-        updateData.totalPayroll = payroll.backAmount + data.adjustmentAmount;
+        const totalPayroll = payroll.backAmount + data.adjustmentAmount;
+        updateData.totalPayroll = totalPayroll;
+        if (!data.isPaid && Number(payroll.totalPayroll ?? 0) !== totalPayroll) {
+          updateData.isPaid = false;
+          updateData.paidAt = null;
+        }
       }
       if (data.isPaid) updateData.paidAt = new Date();
       await db.update(therapistPayrolls).set(updateData)

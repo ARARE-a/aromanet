@@ -74,7 +74,7 @@ async function main() {
   const preview = [];
   for (const row of rows) {
     const [existingRows] = await conn.execute(
-      "select id, adjustmentAmount, adjustmentNote, isPaid, paidAt, backRate from therapist_payrolls where storeId = ? and therapistId = ? and year = ? and month = ? limit 1",
+      "select id, adjustmentAmount, adjustmentNote, totalPayroll, isPaid, paidAt, backRate from therapist_payrolls where storeId = ? and therapistId = ? and year = ? and month = ? limit 1",
       [row.storeId, row.therapistId, year, month],
     );
     const existing = existingRows[0];
@@ -114,12 +114,14 @@ async function main() {
     let updated = 0;
     for (const row of rows) {
       const [existingRows] = await conn.execute(
-        "select id, adjustmentAmount, adjustmentNote, isPaid, paidAt, backRate from therapist_payrolls where storeId = ? and therapistId = ? and year = ? and month = ? limit 1",
+        "select id, adjustmentAmount, adjustmentNote, totalPayroll, isPaid, paidAt, backRate from therapist_payrolls where storeId = ? and therapistId = ? and year = ? and month = ? limit 1",
         [row.storeId, row.therapistId, year, month],
       );
       const existing = existingRows[0];
       const adjustmentAmount = Number(existing?.adjustmentAmount ?? 0);
       const backAmount = Number(row.backAmount ?? 0);
+      const totalPayroll = backAmount + adjustmentAmount;
+      const payrollChanged = existing && Number(existing.totalPayroll ?? 0) !== totalPayroll;
       const payload = [
         Number(row.nominationCount ?? 0),
         Number(row.totalSales ?? 0),
@@ -128,9 +130,9 @@ async function main() {
         Number(row.optionAmount ?? 0),
         adjustmentAmount,
         existing?.adjustmentNote ?? null,
-        backAmount + adjustmentAmount,
-        Boolean(existing?.isPaid ?? false),
-        existing?.paidAt ?? null,
+        totalPayroll,
+        payrollChanged ? false : Boolean(existing?.isPaid ?? false),
+        payrollChanged ? null : (existing?.paidAt ?? null),
       ];
       if (existing) {
         await conn.execute(

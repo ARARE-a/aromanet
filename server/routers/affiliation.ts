@@ -314,11 +314,15 @@ export const affiliationRouter = router({
         const payroll = payrollRows[0];
         const adjustmentAmount = Number(payroll.adjustmentAmount ?? 0) + input.amount;
         const backAmount = Number(payroll.backAmount ?? 0);
+        const totalPayroll = backAmount + adjustmentAmount;
+        const payrollChanged = Number(payroll.totalPayroll ?? 0) !== totalPayroll;
         const noteParts = [payroll.adjustmentNote, adjustmentNote].filter(Boolean);
         await db.update(therapistPayrolls).set({
           adjustmentAmount,
           adjustmentNote: noteParts.join("\n"),
-          totalPayroll: backAmount + adjustmentAmount,
+          totalPayroll,
+          isPaid: payrollChanged ? false : payroll.isPaid,
+          paidAt: payrollChanged ? null : payroll.paidAt,
         }).where(eq(therapistPayrolls.id, payroll.id));
       } else {
         await db.insert(therapistPayrolls).values({

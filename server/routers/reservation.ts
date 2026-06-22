@@ -44,6 +44,8 @@ async function recalculateTherapistPayroll(db: any, storeId: number, therapistId
   const existing = existingRows[0];
   const backAmount = Number(totals?.totalBack ?? 0);
   const adjustmentAmount = Number(existing?.adjustmentAmount ?? 0);
+  const totalPayroll = backAmount + adjustmentAmount;
+  const payrollChanged = existing && Number(existing.totalPayroll ?? 0) !== totalPayroll;
   const payrollData = {
     therapistId,
     storeId,
@@ -56,9 +58,9 @@ async function recalculateTherapistPayroll(db: any, storeId: number, therapistId
     optionAmount: Number(totals?.optionAmount ?? 0),
     adjustmentAmount,
     adjustmentNote: existing?.adjustmentNote ?? null,
-    totalPayroll: backAmount + adjustmentAmount,
-    isPaid: existing?.isPaid ?? false,
-    paidAt: existing?.paidAt ?? null,
+    totalPayroll,
+    isPaid: payrollChanged ? false : (existing?.isPaid ?? false),
+    paidAt: payrollChanged ? null : (existing?.paidAt ?? null),
   };
   if (existing) {
     await db.update(therapistPayrolls).set(payrollData).where(eq(therapistPayrolls.id, existing.id));
