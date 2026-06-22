@@ -13,6 +13,10 @@ function normalizePhoneForUi(phone: string) {
   return phone.replace(/\D/g, "");
 }
 
+function isRegisteredPhoneError(message: string) {
+  return message.includes("電話番号") && message.includes("登録");
+}
+
 export default function CustomerRegister() {
   const [phoneNumber, setPhoneNumber] = useState("");
   const [displayName, setDisplayName] = useState("");
@@ -21,22 +25,31 @@ export default function CustomerRegister() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [showLoginCta, setShowLoginCta] = useState(false);
+
+  const applyError = (e: Parameters<typeof getAuthErrorMessage>[0]) => {
+    const message = getAuthErrorMessage(e);
+    setError(message);
+    setShowLoginCta(isRegisteredPhoneError(message));
+  };
 
   const sendSmsMut = trpc.aroAuth.startCustomerPhoneVerification.useMutation({
     onSuccess: (res) => {
       setSmsSentTo(res.phoneNumber);
       setError(null);
+      setShowLoginCta(false);
     },
-    onError: (e) => setError(getAuthErrorMessage(e)),
+    onError: applyError,
   });
 
   const regMut = trpc.aroAuth.customerRegister.useMutation({
     onSuccess: () => { window.location.href = "/home"; },
-    onError: (e) => setError(getAuthErrorMessage(e)),
+    onError: applyError,
   });
 
   const handleSendSms = () => {
     setError(null);
+    setShowLoginCta(false);
     const normalizedPhone = normalizePhoneForUi(phoneNumber);
     if (normalizedPhone.length < 10) {
       setError("電話番号を入力してください。");
@@ -48,6 +61,7 @@ export default function CustomerRegister() {
 
   const handleSubmit = () => {
     setError(null);
+    setShowLoginCta(false);
     const normalizedPhone = normalizePhoneForUi(phoneNumber);
     if (!normalizedPhone || !displayName || !password || !confirmPassword) {
       setError("すべての項目を入力してください。");
@@ -104,6 +118,7 @@ export default function CustomerRegister() {
               value={phoneNumber}
               onChange={(value) => {
                 setPhoneNumber(value);
+                setShowLoginCta(false);
                 if (smsSentTo && smsSentTo !== normalizePhoneForUi(value)) {
                   setSmsSentTo("");
                   setVerificationCode("");
@@ -143,6 +158,11 @@ export default function CustomerRegister() {
           </div>
 
           {error && <p className="rounded-xl bg-destructive/10 px-3 py-2 text-destructive text-xs">{error}</p>}
+          {showLoginCta && (
+            <Button asChild variant="outline" className="w-full border-primary/30 text-primary">
+              <Link href="/customer/login">ログイン画面へ進む</Link>
+            </Button>
+          )}
 
           <Button
             className="w-full"
