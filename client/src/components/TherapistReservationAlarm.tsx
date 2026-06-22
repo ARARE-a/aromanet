@@ -65,22 +65,23 @@ function sendBrowserNotification(title: string, body: string) {
 
 export function TherapistReservationAlarm() {
   const { session } = useSession();
-  const [, navigate] = useLocation();
+  const [location, navigate] = useLocation();
   const alertedIds = useRef<Set<number>>(new Set());
   const [activeAlert, setActiveAlert] = useState<UrgentReservationAlert | null>(null);
+  const shouldShowAlarm = session?.role === "therapist" && (location.startsWith("/therapist") || location === "/messages");
 
   const { data: alerts } = trpc.therapist.getUrgentReservationAlerts.useQuery(undefined, {
-    enabled: session?.role === "therapist",
+    enabled: shouldShowAlarm,
     refetchInterval: 30000,
     retry: false,
   });
 
   useEffect(() => {
-    if (session?.role !== "therapist") setActiveAlert(null);
-  }, [session?.role]);
+    if (!shouldShowAlarm) setActiveAlert(null);
+  }, [shouldShowAlarm]);
 
   useEffect(() => {
-    if (session?.role !== "therapist" || !alerts?.length) return;
+    if (!shouldShowAlarm || !alerts?.length) return;
     for (const alert of alerts as UrgentReservationAlert[]) {
       const id = Number(alert.notificationId);
       if (!id || alertedIds.current.has(id)) continue;
@@ -101,9 +102,9 @@ export function TherapistReservationAlarm() {
       playAlarmSequence();
       sendBrowserNotification("AromaNet 予約アラーム", body);
     }
-  }, [alerts, navigate, session?.role]);
+  }, [alerts, navigate, shouldShowAlarm]);
 
-  if (session?.role !== "therapist" || !activeAlert) return null;
+  if (!shouldShowAlarm || !activeAlert) return null;
 
   const body = formatAlertBody(activeAlert);
 
