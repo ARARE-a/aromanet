@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { AromaLogo } from "@/components/AromaLayout";
+import { LegalLinks } from "@/components/LegalLinks";
 import { cn } from "@/lib/utils";
 
 interface AuthFormField {
@@ -26,7 +27,6 @@ interface AuthFormProps {
   isLoading?: boolean;
   error?: string | null;
   footer?: React.ReactNode;
-  showCrashPassword?: boolean;
 }
 
 export function AuthForm({
@@ -38,11 +38,9 @@ export function AuthForm({
   isLoading,
   error,
   footer,
-  showCrashPassword = false,
 }: AuthFormProps) {
   const [values, setValues] = useState<Record<string, string>>({});
   const [showPasswords, setShowPasswords] = useState<Record<string, boolean>>({});
-  const [showCrashInfo, setShowCrashInfo] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -137,30 +135,8 @@ export function AuthForm({
           </Button>
         </form>
 
-        {showCrashPassword && (
-          <div className="mt-4">
-            <button
-              type="button"
-              onClick={() => setShowCrashInfo(!showCrashInfo)}
-              className="w-full text-xs text-muted-foreground hover:text-foreground transition-colors flex items-center justify-center gap-1"
-            >
-              <AlertTriangle className="w-3 h-3" />
-              クラッシュパスワードについて
-            </button>
-            {showCrashInfo && (
-              <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: "auto" }}
-                className="mt-2 p-3 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-800"
-              >
-                <strong>クラッシュパスワード</strong>は、緊急時にアカウントと関連データを復元不可で削除する特殊なパスワードです。
-                設定後にこのパスワードでログインすると、通常ログインではなく削除処理が実行されます。
-              </motion.div>
-            )}
-          </div>
-        )}
-
         {footer && <div className="mt-6 text-center text-sm text-muted-foreground">{footer}</div>}
+        <LegalLinks className="mt-5" />
       </motion.div>
     </div>
   );

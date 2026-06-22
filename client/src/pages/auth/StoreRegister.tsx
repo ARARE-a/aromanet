@@ -6,6 +6,7 @@ import { getAuthErrorMessage } from "@/lib/errors";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { LegalLinks } from "@/components/LegalLinks";
 
 export default function StoreRegister() {
   const [email, setEmail] = useState("");
@@ -128,6 +129,7 @@ export default function StoreRegister() {
           すでにアカウントをお持ちの方は{" "}
           <Link href="/store/login" className="text-primary font-medium hover:underline">ログイン</Link>
         </p>
+        <LegalLinks className="mt-4" />
       </div>
     </div>
   );

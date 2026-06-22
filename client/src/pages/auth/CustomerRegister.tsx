@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { AromaLogo } from "@/components/AromaLayout";
+import { LegalLinks } from "@/components/LegalLinks";
 import { trpc } from "@/lib/trpc";
 import { getAuthErrorMessage } from "@/lib/errors";
 
@@ -177,6 +178,7 @@ export default function CustomerRegister() {
           すでにアカウントをお持ちの方は{" "}
           <Link href="/customer/login" className="text-primary font-medium hover:underline">ログイン</Link>
         </p>
+        <LegalLinks className="mt-4" />
       </div>
     </div>
   );

@@ -6,6 +6,7 @@ import { getAuthErrorMessage } from "@/lib/errors";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { LegalLinks } from "@/components/LegalLinks";
 
 export default function TherapistRegister() {
   const inviteToken = new URLSearchParams(window.location.search).get("invite")?.trim() ?? "";
@@ -184,6 +185,7 @@ export default function TherapistRegister() {
           すでにアカウントをお持ちの方は{" "}
           <Link href="/therapist/login" className="text-primary font-medium hover:underline">ログイン</Link>
         </p>
+        <LegalLinks className="mt-4" />
       </div>
     </div>
   );
