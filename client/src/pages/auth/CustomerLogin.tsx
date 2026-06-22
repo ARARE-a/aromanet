@@ -35,7 +35,6 @@ export default function CustomerLogin() {
       }}
       isLoading={loginMut.isPending}
       error={error}
-      showCrashPassword
       footer={(
         <>
           <Link href="/customer/register" className="text-primary font-medium hover:underline">新規登録</Link>
