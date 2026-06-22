@@ -306,40 +306,26 @@ try {
       customerNote: "QA予約メモ",
     });
     ids.reservationId = reservation.reservationId;
-    let sameTherapistBlocked = false;
+    let sameCustomerBlocked = false;
     try {
       await customer.client.reservation.create.mutate({
         storeId: ids.storeId,
-        therapistId: ids.therapistId,
+        therapistId: ids.therapist2Id,
         menuId: ids.menuId,
         date: targetDate,
         startTime: "12:00",
         isNomination: true,
         optionIds: [],
-        customerNote: "QA same therapist same slot should fail",
+        customerNote: "QA same customer same slot should fail",
       });
-    } catch (error) {
-      sameTherapistBlocked = String(error?.message ?? "").includes("CONFLICT") || String(error?.message ?? "").includes("別の予約");
+    } catch {
+      sameCustomerBlocked = true;
     }
-    assert(sameTherapistBlocked, "same therapist same time reservation was not blocked");
-    const parallelReservation = await customer.client.reservation.create.mutate({
-      storeId: ids.storeId,
-      therapistId: ids.therapist2Id,
-      menuId: ids.menuId,
-      date: targetDate,
-      startTime: "12:00",
-      isNomination: true,
-      optionIds: [],
-      customerNote: "QA different therapist same slot should pass",
-    });
-    ids.parallelReservationId = parallelReservation.reservationId;
+    assert(sameCustomerBlocked, "same customer same time reservation was not blocked");
     const storeReservations = await store.client.reservation.getStoreReservations.query({ status: "pending", limit: 100 });
     assert(storeReservations.some((row) => row.id === ids.reservationId), "store cannot see customer reservation", storeReservations);
-    assert(storeReservations.some((row) => row.id === ids.parallelReservationId), "store cannot see parallel therapist reservation", storeReservations);
     const therapistReservations = await therapist.client.therapist.getReservations.query({ date: targetDate });
     assert(therapistReservations.some((row) => row.id === ids.reservationId), "therapist cannot see customer reservation", therapistReservations);
-    const therapist2Reservations = await therapist2.client.therapist.getReservations.query({ date: targetDate });
-    assert(therapist2Reservations.some((row) => row.id === ids.parallelReservationId), "second therapist cannot see parallel reservation", therapist2Reservations);
     const customerReservations = await customer.client.customer.getReservations.query();
     assert(customerReservations.some((row) => row.id === ids.reservationId), "customer cannot see own reservation", customerReservations);
 

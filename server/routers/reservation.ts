@@ -192,6 +192,17 @@ export const reservationRouter = router({
         });
       }
 
+      const customerExisting = await db.select().from(reservations).where(and(
+        eq(reservations.customerId, session.accountId),
+        eq(reservations.date, input.date),
+      ));
+      for (const r of customerExisting) {
+        if (!blocksTherapistSlot(r.status)) continue;
+        if (r.startTime < endTime && r.endTime > input.startTime) {
+          throw new TRPCError({ code: "CONFLICT", message: "同じ時間帯に別の予約があります" });
+        }
+      }
+
       const existing = input.therapistId ? await db.select().from(reservations).where(and(eq(reservations.storeId, resolvedStoreId), eq(reservations.therapistId, input.therapistId), eq(reservations.date, input.date))) : [];
       for (const r of existing) {
         if (!blocksTherapistSlot(r.status)) continue;
