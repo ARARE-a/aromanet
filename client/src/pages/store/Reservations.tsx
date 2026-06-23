@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { motion } from "framer-motion";
-import { Calendar, ChevronLeft, ChevronRight, Edit3, Home, MessageCircle, TrendingUp, Users } from "lucide-react";
+import { Calendar, ChevronLeft, ChevronRight, Edit3, Home, MessageCircle, ReceiptText, TrendingUp, Users } from "lucide-react";
 import { addDays, format, subDays } from "date-fns";
 import { ja } from "date-fns/locale";
 import { toast } from "sonner";
@@ -66,6 +66,8 @@ export default function StoreReservations() {
   const [selectedTherapistId, setSelectedTherapistId] = useState("");
   const [editingReservation, setEditingReservation] = useState<any | null>(null);
   const [editForm, setEditForm] = useState({ date: "", startTime: "", menuId: "", therapistId: "none", isNomination: false, note: "" });
+  const [financialReservation, setFinancialReservation] = useState<any | null>(null);
+  const [financialForm, setFinancialForm] = useState({ optionTotal: "0", discountAmount: "0", note: "" });
   const [cancelingReservation, setCancelingReservation] = useState<any | null>(null);
   const [cancelReason, setCancelReason] = useState("");
 
@@ -110,6 +112,15 @@ export default function StoreReservations() {
     onError: e => toast.error(e.message),
   });
 
+  const adjustFinancials = trpc.reservation.adjustFinancials.useMutation({
+    onSuccess: () => {
+      toast.success("金額調整を売上・給与に反映しました");
+      setFinancialReservation(null);
+      refetch();
+    },
+    onError: e => toast.error(e.message),
+  });
+
   const list = (reservations as any[]) ?? [];
   const therapistList = (therapists as any[]) ?? [];
   const menuList = (menus as any[]) ?? [];
@@ -148,6 +159,25 @@ export default function StoreReservations() {
       therapistId: editForm.therapistId === "none" ? null : Number(editForm.therapistId),
       isNomination: editForm.isNomination && editForm.therapistId !== "none",
       note: editForm.note,
+    });
+  };
+
+  const openFinancialAdjust = (reservation: any) => {
+    setFinancialReservation(reservation);
+    setFinancialForm({
+      optionTotal: String(reservation.optionTotal ?? 0),
+      discountAmount: String(reservation.discountAmount ?? 0),
+      note: reservation.note ?? reservation.customerNote ?? "",
+    });
+  };
+
+  const submitFinancialAdjust = () => {
+    if (!financialReservation) return;
+    adjustFinancials.mutate({
+      id: financialReservation.id,
+      optionTotal: Math.max(0, parseInt(financialForm.optionTotal, 10) || 0),
+      discountAmount: Math.max(0, parseInt(financialForm.discountAmount, 10) || 0),
+      note: financialForm.note,
     });
   };
 
@@ -250,6 +280,19 @@ export default function StoreReservations() {
               <div className="text-xs text-muted-foreground bg-muted/50 rounded-lg p-2 mb-3 whitespace-pre-wrap">{r.notes}</div>
             )}
 
+            <div className="mb-3 grid grid-cols-2 gap-2 rounded-xl bg-muted/30 p-2 text-xs">
+              <div>
+                <div className="text-muted-foreground">予約時コース</div>
+                <div className="font-semibold text-foreground">¥{(r.menuPrice ?? 0).toLocaleString()}</div>
+              </div>
+              <div>
+                <div className="text-muted-foreground">最終金額</div>
+                <div className="font-semibold text-foreground">¥{(r.totalPrice ?? 0).toLocaleString()}</div>
+              </div>
+              {(r.optionTotal ?? 0) > 0 && <div className="text-muted-foreground">追加 ¥{(r.optionTotal ?? 0).toLocaleString()}</div>}
+              {(r.discountAmount ?? 0) > 0 && <div className="text-muted-foreground">割引 -¥{(r.discountAmount ?? 0).toLocaleString()}</div>}
+            </div>
+
             {!r.therapistId && !["completed", "cancelled", "no_show"].includes(r.status) && (
               <div className="mb-3 rounded-xl border border-primary/15 bg-primary/5 p-3">
                 {assigningReservationId === r.id ? (
@@ -311,6 +354,17 @@ export default function StoreReservations() {
                   onClick={() => openEdit(r)}
                 >
                   <Edit3 className="w-3.5 h-3.5 mr-1" />編集
+                </Button>
+              )}
+              {!["cancelled", "no_show"].includes(r.status) && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="text-xs h-8 rounded-lg border-teal-200 text-teal-700 hover:bg-teal-50"
+                  onClick={() => openFinancialAdjust(r)}
+                  disabled={adjustFinancials.isPending}
+                >
+                  <ReceiptText className="w-3.5 h-3.5 mr-1" />金額調整
                 </Button>
               )}
               {r.status === "pending" && (
@@ -448,6 +502,58 @@ export default function StoreReservations() {
             <Button className="w-full h-11 rounded-xl gradient-luxury text-white" onClick={submitEdit} disabled={updateReservation.isPending}>
               変更を保存
             </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!financialReservation} onOpenChange={(open) => !open && setFinancialReservation(null)}>
+        <DialogContent className="max-w-sm rounded-2xl max-h-[86dvh] overflow-y-auto">
+          <DialogHeader><DialogTitle>現場オプション・金額調整</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <div className="rounded-xl bg-muted/40 p-3 text-xs text-muted-foreground">
+              <div className="flex justify-between"><span>予約時コース</span><span>¥{(financialReservation?.menuPrice ?? 0).toLocaleString()}</span></div>
+              <div className="flex justify-between"><span>指名料</span><span>¥{(financialReservation?.nominationFee ?? 0).toLocaleString()}</span></div>
+              <div className="flex justify-between border-t border-border/50 pt-2 mt-2 text-foreground font-semibold">
+                <span>現在の最終金額</span><span>¥{(financialReservation?.totalPrice ?? 0).toLocaleString()}</span>
+              </div>
+            </div>
+            <div>
+              <Label>オプション/追加料金 合計</Label>
+              <Input
+                type="number"
+                min={0}
+                value={financialForm.optionTotal}
+                onChange={e => setFinancialForm(f => ({ ...f, optionTotal: e.target.value }))}
+                className="mt-1 rounded-xl"
+                placeholder="例: 3000"
+              />
+              <p className="mt-1 text-[11px] text-muted-foreground">現場で追加したオプションや延長料金を合計で入力します。</p>
+            </div>
+            <div>
+              <Label>割引金額</Label>
+              <Input
+                type="number"
+                min={0}
+                value={financialForm.discountAmount}
+                onChange={e => setFinancialForm(f => ({ ...f, discountAmount: e.target.value }))}
+                className="mt-1 rounded-xl"
+                placeholder="例: 1000"
+              />
+            </div>
+            <div>
+              <Label>店舗メモ</Label>
+              <Textarea
+                value={financialForm.note}
+                onChange={e => setFinancialForm(f => ({ ...f, note: e.target.value }))}
+                className="mt-1 rounded-xl resize-none"
+                rows={3}
+                placeholder="例: 現場で延長30分、割引適用"
+              />
+            </div>
+            <Button className="w-full h-11 rounded-xl gradient-luxury text-white" onClick={submitFinancialAdjust} disabled={adjustFinancials.isPending}>
+              売上・給与に反映する
+            </Button>
+            <p className="text-[11px] text-muted-foreground">完了済み予約の場合は、店舗売上・店舗給与管理・セラピスト売上確認へ即時反映されます。</p>
           </div>
         </DialogContent>
       </Dialog>

@@ -3,7 +3,7 @@ import { publicProcedure, router } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import { getSession } from "../session";
-import { sales, therapistPayrolls, therapists } from "../../drizzle/schema";
+import { sales, therapistPayrolls, therapists, therapistSalarySettings } from "../../drizzle/schema";
 import { eq, and, desc, gte, lt, sql } from "drizzle-orm";
 
 function getMonthBounds(month: string) {
@@ -118,6 +118,24 @@ export const salesRouter = router({
       const { start, end } = getMonthBounds(monthStr);
       const therapistRows = await db.select().from(therapists).where(eq(therapists.storeId, session.storeId));
       for (const t of therapistRows) {
+        const salaryRows = await db.select().from(therapistSalarySettings)
+          .where(and(eq(therapistSalarySettings.therapistId, t.id), eq(therapistSalarySettings.storeId, session.storeId)))
+          .limit(1);
+        const effectiveBackRate = Number(salaryRows[0]?.backRate ?? t.backRate ?? 50);
+        const saleRowsForRate = await db.select({
+          id: sales.id,
+          totalAmount: sales.totalAmount,
+          nominationFee: sales.nominationFee,
+        }).from(sales).where(and(
+          eq(sales.storeId, session.storeId),
+          eq(sales.therapistId, t.id),
+          gte(sales.date, start),
+          lt(sales.date, end),
+        ));
+        for (const sale of saleRowsForRate) {
+          const therapistBack = Math.floor(Math.max(0, Number(sale.totalAmount ?? 0) - Number(sale.nominationFee ?? 0)) * effectiveBackRate / 100);
+          await db.update(sales).set({ therapistBack }).where(eq(sales.id, sale.id));
+        }
         const salesRows = await db.select({
           totalSales: sql<number>`COALESCE(SUM(${sales.totalAmount}), 0)`,
           totalBack: sql<number>`COALESCE(SUM(${sales.therapistBack}), 0)`,
@@ -149,7 +167,7 @@ export const salesRouter = router({
           month: input.month,
           nominationCount: s?.nominationCount ?? 0,
           totalSales: Number(s?.totalSales ?? 0),
-          backRate: String(t.backRate ?? "50.00"),
+          backRate: String(effectiveBackRate.toFixed(2)),
           backAmount,
           optionAmount: Number(s?.optionAmount ?? 0),
           adjustmentAmount,

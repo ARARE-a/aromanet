@@ -64,6 +64,7 @@ export default function StorePayroll() {
   const updateSalaryMut = trpc.affiliation.updateSalarySettings.useMutation({
     onSuccess: () => {
       utils.affiliation.getSalarySettings.invalidate();
+      utils.store.getTherapists.invalidate();
       toast.success("給与設定を更新しました");
       setShowSalarySettings(false);
     },
@@ -127,6 +128,10 @@ export default function StorePayroll() {
           <Send className="w-3.5 h-3.5 mr-1" />
           女子給を通知
         </Button>
+      </div>
+
+      <div className="mx-4 mb-3 rounded-2xl border border-teal-100 bg-teal-50/70 p-3 text-xs leading-relaxed text-teal-800">
+        バック率の変更は今後の売上に適用されます。過去分へ反映したい場合は、対象月を選んで「給与を再計算」を押してください。再計算で金額が変わった給与は未払いに戻ります。
       </div>
 
       <div className="px-4 space-y-3 pb-24">

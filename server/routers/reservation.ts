@@ -186,6 +186,57 @@ async function removeReservationSaleAndRecalculatePayroll(db: any, reservationId
   }
 }
 
+async function getReservationBackRate(db: any, storeId: number, therapistId: number | null) {
+  if (!therapistId) return 0;
+  const salaryRows = await db.select().from(therapistSalarySettings)
+    .where(and(eq(therapistSalarySettings.therapistId, therapistId), eq(therapistSalarySettings.storeId, storeId)))
+    .limit(1);
+  if (salaryRows[0]) return Number(salaryRows[0].backRate ?? 50);
+  const therapistRows = await db.select().from(therapists).where(and(eq(therapists.id, therapistId), eq(therapists.storeId, storeId))).limit(1);
+  return Number(therapistRows[0]?.backRate ?? 50);
+}
+
+async function upsertSaleForCompletedReservation(db: any, reservationId: number) {
+  const resRows = await db.select().from(reservations).where(eq(reservations.id, reservationId)).limit(1);
+  const r = resRows[0];
+  if (!r || r.status !== "completed") return;
+
+  const existingSales = await db.select({ id: sales.id, totalAmount: sales.totalAmount }).from(sales).where(eq(sales.reservationId, reservationId)).limit(1);
+  const backRate = await getReservationBackRate(db, r.storeId, r.therapistId);
+  const therapistBack = Math.floor(Math.max(0, r.totalPrice - r.nominationFee) * backRate / 100);
+  const saleData = {
+    storeId: r.storeId,
+    therapistId: r.therapistId,
+    date: r.date,
+    menuAmount: r.totalPrice - r.nominationFee - r.optionTotal + r.discountAmount,
+    nominationFee: r.nominationFee,
+    optionAmount: r.optionTotal,
+    discountAmount: r.discountAmount,
+    totalAmount: r.totalPrice,
+    therapistBack,
+  };
+
+  if (!existingSales[0]) {
+    await db.insert(sales).values({ reservationId, ...saleData });
+    await db.update(customerProfiles).set({ totalSpent: sql`totalSpent + ${r.totalPrice}` }).where(eq(customerProfiles.accountId, r.customerId));
+    await db.insert(notifications).values({
+      recipientRole: "customer",
+      recipientId: r.customerId,
+      type: "reservation_completed",
+      title: "施術が完了しました",
+      body: "口コミを投稿してください",
+      relatedId: reservationId,
+    });
+  } else {
+    await db.update(sales).set(saleData).where(eq(sales.id, existingSales[0].id));
+    const spentDelta = r.totalPrice - Number(existingSales[0].totalAmount ?? 0);
+    if (spentDelta !== 0) {
+      await db.update(customerProfiles).set({ totalSpent: sql`GREATEST(totalSpent + ${spentDelta}, 0)` }).where(eq(customerProfiles.accountId, r.customerId));
+    }
+  }
+  await recalculateTherapistPayroll(db, r.storeId, r.therapistId, r.date);
+}
+
 export const reservationRouter = router({
   create: publicProcedure
     .input(z.object({
@@ -644,60 +695,7 @@ export const reservationRouter = router({
       await db.update(reservations).set(data).where(eq(reservations.id, id));
 
       if (input.status === "completed") {
-        const resRows = await db.select().from(reservations).where(eq(reservations.id, id)).limit(1);
-        if (resRows[0]) {
-          const r = resRows[0];
-          const existingSales = await db.select({ id: sales.id }).from(sales).where(eq(sales.reservationId, id)).limit(1);
-          let backRate = 50;
-          if (r.therapistId) {
-            const salaryRows = await db.select().from(therapistSalarySettings)
-              .where(and(eq(therapistSalarySettings.therapistId, r.therapistId), eq(therapistSalarySettings.storeId, r.storeId)))
-              .limit(1);
-            if (salaryRows[0]) {
-              backRate = Number(salaryRows[0].backRate);
-            } else {
-              const tRows = await db.select().from(therapists).where(eq(therapists.id, r.therapistId)).limit(1);
-              if (tRows[0]) backRate = Number(tRows[0].backRate);
-            }
-          }
-          const therapistBack = Math.floor((r.totalPrice - r.nominationFee) * backRate / 100);
-          if (!existingSales[0]) {
-            await db.insert(sales).values({
-              reservationId: id,
-              storeId: r.storeId,
-              therapistId: r.therapistId,
-              date: r.date,
-              menuAmount: r.totalPrice - r.nominationFee - r.optionTotal + r.discountAmount,
-              nominationFee: r.nominationFee,
-              optionAmount: r.optionTotal,
-              discountAmount: r.discountAmount,
-              totalAmount: r.totalPrice,
-              therapistBack,
-            });
-            await db.update(customerProfiles).set({ totalSpent: sql`totalSpent + ${r.totalPrice}` }).where(eq(customerProfiles.accountId, r.customerId));
-            await db.insert(notifications).values({
-              recipientRole: "customer",
-              recipientId: r.customerId,
-              type: "reservation_completed",
-              title: "施術が完了しました",
-              body: "口コミを投稿してください",
-              relatedId: id,
-            });
-          } else {
-            await db.update(sales).set({
-              storeId: r.storeId,
-              therapistId: r.therapistId,
-              date: r.date,
-              menuAmount: r.totalPrice - r.nominationFee - r.optionTotal + r.discountAmount,
-              nominationFee: r.nominationFee,
-              optionAmount: r.optionTotal,
-              discountAmount: r.discountAmount,
-              totalAmount: r.totalPrice,
-              therapistBack,
-            }).where(eq(sales.id, existingSales[0].id));
-          }
-          await recalculateTherapistPayroll(db, r.storeId, r.therapistId, r.date);
-        }
+        await upsertSaleForCompletedReservation(db, id);
       }
       if (input.status === "cancelled" || input.status === "no_show") {
         await removeReservationSaleAndRecalculatePayroll(db, id, {
@@ -725,6 +723,47 @@ export const reservationRouter = router({
         }
       }
       return { success: true };
+    }),
+
+  adjustFinancials: publicProcedure
+    .input(z.object({
+      id: z.number(),
+      optionTotal: z.number().min(0),
+      discountAmount: z.number().min(0).default(0),
+      note: z.string().optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const session = await getSession(ctx.req);
+      if (!session || session.role !== "store" || !session.storeId) throw new TRPCError({ code: "UNAUTHORIZED" });
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      const targetRows = await db.select().from(reservations).where(eq(reservations.id, input.id)).limit(1);
+      const target = targetRows[0];
+      if (!target || target.storeId !== session.storeId) throw new TRPCError({ code: "NOT_FOUND" });
+      if (["cancelled", "no_show"].includes(target.status)) {
+        throw new TRPCError({ code: "CONFLICT", message: "キャンセル済みの予約は金額調整できません" });
+      }
+
+      const menuRows = target.menuId
+        ? await db.select().from(menus).where(and(eq(menus.id, target.menuId), eq(menus.storeId, session.storeId))).limit(1)
+        : [];
+      const menuAmount = Number(menuRows[0]?.price ?? Math.max(0, target.totalPrice - target.nominationFee - target.optionTotal + target.discountAmount));
+      const totalPrice = Math.max(0, menuAmount + target.nominationFee + input.optionTotal - input.discountAmount);
+
+      await db.update(reservations).set({
+        optionTotal: input.optionTotal,
+        discountAmount: input.discountAmount,
+        totalPrice,
+        note: input.note ?? target.note,
+        updatedAt: new Date(),
+      }).where(eq(reservations.id, input.id));
+
+      if (target.status === "completed") {
+        await upsertSaleForCompletedReservation(db, input.id);
+      }
+
+      return { success: true, totalPrice };
     }),
 
   cancel: publicProcedure

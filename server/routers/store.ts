@@ -6,7 +6,7 @@ import { getSession } from "../session";
 import {
   stores, storeAccounts, customerAccounts, therapists, menus, menuOptions,
   coupons, reservations, reviews, posts,
-  notifications, ngCustomers, sales, shifts,
+  notifications, ngCustomers, sales, shifts, therapistSalarySettings,
 } from "../../drizzle/schema";
 import { eq, and, desc, like, gte, lt, lte, sql } from "drizzle-orm";
 import { ensureRuntimeSchema } from "../runtimeMigrations";
@@ -97,6 +97,43 @@ export const storeRouter = router({
     if (!session.storeId) return [];
     return db.select().from(therapists).where(eq(therapists.storeId, session.storeId)).orderBy(desc(therapists.nominationCount));
   }),
+
+  updateTherapist: publicProcedure
+    .input(z.object({
+      id: z.number(),
+      displayName: z.string().min(1).max(50).optional(),
+      catchphrase: z.string().max(100).optional(),
+      selfIntroduction: z.string().optional(),
+      bio: z.string().optional(),
+      specialties: z.string().optional(),
+      isPublic: z.boolean().optional(),
+      backRate: z.number().min(0).max(100).optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const session = await getSession(ctx.req);
+      if (!session || session.role !== "store" || !session.storeId) throw new TRPCError({ code: "UNAUTHORIZED" });
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const targetRows = await db.select({ id: therapists.id }).from(therapists)
+        .where(and(eq(therapists.id, input.id), eq(therapists.storeId, session.storeId)))
+        .limit(1);
+      if (!targetRows[0]) throw new TRPCError({ code: "NOT_FOUND" });
+      const { id, backRate, ...profileData } = input;
+      const updateData: any = { ...profileData };
+      if (backRate !== undefined) updateData.backRate = String(backRate);
+      await db.update(therapists).set(updateData).where(and(eq(therapists.id, id), eq(therapists.storeId, session.storeId)));
+      if (backRate !== undefined) {
+        const existing = await db.select().from(therapistSalarySettings)
+          .where(and(eq(therapistSalarySettings.therapistId, id), eq(therapistSalarySettings.storeId, session.storeId)))
+          .limit(1);
+        if (existing[0]) {
+          await db.update(therapistSalarySettings).set({ backRate: String(backRate) }).where(eq(therapistSalarySettings.id, existing[0].id));
+        } else {
+          await db.insert(therapistSalarySettings).values({ therapistId: id, storeId: session.storeId, backRate: String(backRate), nominationFee: 0 });
+        }
+      }
+      return { success: true };
+    }),
 
   getMenus: publicProcedure.query(async ({ ctx }) => {
     const session = await getSession(ctx.req);
