@@ -9,6 +9,10 @@ export function registerStorageProxy(app: Express) {
       res.status(400).send("Missing upload key");
       return;
     }
+    if (key.startsWith("private/")) {
+      res.status(404).send("Upload not found");
+      return;
+    }
 
     try {
       const file = await storageRead(key);
@@ -31,6 +35,10 @@ export function registerStorageProxy(app: Express) {
     const key = (req.params as Record<string, string>)[0];
     if (!key) {
       res.status(400).send("Missing storage key");
+      return;
+    }
+    if (key.startsWith("private/")) {
+      res.status(404).send("Storage not found");
       return;
     }
 

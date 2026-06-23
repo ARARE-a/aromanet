@@ -109,7 +109,7 @@ async function verifyToken(token: string): Promise<JWTPayload & Record<string, a
   return payload as JWTPayload & Record<string, any>;
 }
 
-async function setSessionCookie(res: any, payload: Record<string, unknown>) {
+export async function setSessionCookie(res: any, payload: Record<string, unknown>) {
   const token = await signToken(payload);
   res.cookie(SESSION_COOKIE, token, {
     httpOnly: true,

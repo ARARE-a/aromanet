@@ -14,6 +14,11 @@ import { eq, and, desc, inArray, like, or, sql } from "drizzle-orm";
 const SMOKE_MARKERS = ["本番動作確認", "動作確認"] as const;
 let ageVerificationColumnsReady = false;
 
+function isPrivateVerificationUrl(value: string): boolean {
+  return value.startsWith("/uploads/private/verifications/")
+    || value.startsWith("/manus-storage/private/verifications/");
+}
+
 function isDuplicateColumnError(error: any): boolean {
   const seen = new Set<any>();
   const stack = [error];
@@ -265,7 +270,13 @@ export const adminRouter = router({
     }),
 
   submitIdentityVerification: publicProcedure
-    .input(z.object({ documentType: z.string(), documentImageUrl: z.string() }))
+    .input(z.object({
+      documentType: z.string(),
+      documentImageUrl: z.string().min(1).refine(
+        isPrivateVerificationUrl,
+        "Verification image must be uploaded privately",
+      ),
+    }))
     .mutation(async ({ input, ctx }) => {
       const session = await getSession(ctx.req);
       if (!session || !["store", "therapist"].includes(session.role)) throw new TRPCError({ code: "UNAUTHORIZED" });
@@ -285,8 +296,8 @@ export const adminRouter = router({
       method: z.string().default("document_upload"),
       documentType: z.string().min(1),
       documentImageUrl: z.string().min(1).refine(
-        value => value.startsWith("/") || URL.canParse(value),
-        "Invalid document image URL",
+        isPrivateVerificationUrl,
+        "Verification image must be uploaded privately",
       ),
     }))
     .mutation(async ({ input, ctx }) => {
@@ -311,11 +322,17 @@ export const adminRouter = router({
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     if (session.role === "store" || session.role === "therapist") {
       const rows = await db.select().from(identityVerifications).where(and(eq(identityVerifications.role, session.role), eq(identityVerifications.accountId, session.accountId))).orderBy(desc(identityVerifications.submittedAt)).limit(1);
-      return rows[0] ?? null;
+      const latest = rows[0];
+      if (!latest) return null;
+      const { documentImageUrl, ...safeVerification } = latest as typeof latest & { documentImageUrl?: string | null };
+      return { ...safeVerification, hasDocumentImage: Boolean(documentImageUrl) };
     } else {
       await ensureAgeVerificationDocumentColumns(db);
       const rows = await db.select().from(ageVerifications).where(eq(ageVerifications.customerId, session.accountId)).orderBy(desc(ageVerifications.createdAt)).limit(1);
-      return rows[0] ?? null;
+      const latest = rows[0];
+      if (!latest) return null;
+      const { documentImageUrl, ...safeVerification } = latest as typeof latest & { documentImageUrl?: string | null };
+      return { ...safeVerification, hasDocumentImage: Boolean(documentImageUrl) };
     }
   }),
 

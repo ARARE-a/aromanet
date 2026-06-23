@@ -27,6 +27,14 @@ function customerDisplayName(row: { displayName?: string | null; nickname?: stri
   return row?.displayName ?? row?.nickname ?? (customerId ? `顧客#${customerId}` : null);
 }
 
+function maskDemoCustomerMessage(row: any) {
+  return {
+    ...row,
+    content: row.content ? "デモメッセージ" : row.content,
+    imageUrl: null,
+  };
+}
+
 function canAccessThread(session: any, thread: any) {
   if (session.role === "store") return thread.storeId === session.storeId;
   if (session.role === "therapist") return thread.therapistId === session.therapistId;
@@ -228,11 +236,11 @@ export const messageRouter = router({
         } else if (thread.therapistId && thread.customerId && thread.threadType === "therapist_customer") {
           const tRows = await db.select({ displayName: therapists.displayName }).from(therapists).where(eq(therapists.id, thread.therapistId)).limit(1);
           const cpRows = await db.select({ displayName: customerProfiles.displayName, nickname: customerProfiles.nickname, profileImageUrl: customerProfiles.profileImageUrl }).from(customerProfiles).where(eq(customerProfiles.accountId, thread.customerId)).limit(1);
-          otherName = customerDisplayName(cpRows[0], thread.customerId); otherAvatar = cpRows[0]?.profileImageUrl ?? null; otherRole = "お客様";
+          otherName = session.demo ? `デモ顧客#${thread.customerId}` : customerDisplayName(cpRows[0], thread.customerId); otherAvatar = session.demo ? null : (cpRows[0]?.profileImageUrl ?? null); otherRole = "お客様";
           contextLabel = `${tRows[0]?.displayName ?? "セラピスト"}とのDM`;
         } else if (thread.customerId) {
           const cpRows = await db.select({ displayName: customerProfiles.displayName, nickname: customerProfiles.nickname, profileImageUrl: customerProfiles.profileImageUrl }).from(customerProfiles).where(eq(customerProfiles.accountId, thread.customerId)).limit(1);
-          otherName = customerDisplayName(cpRows[0], thread.customerId); otherAvatar = cpRows[0]?.profileImageUrl ?? null; otherRole = "お客様";
+          otherName = session.demo ? `デモ顧客#${thread.customerId}` : customerDisplayName(cpRows[0], thread.customerId); otherAvatar = session.demo ? null : (cpRows[0]?.profileImageUrl ?? null); otherRole = "お客様";
           contextLabel = "店舗DM";
         }
       } else if (session.role === "therapist") {
@@ -259,7 +267,15 @@ export const messageRouter = router({
           contextLabel = "店舗DM";
         }
       }
-      result.push({ ...thread, otherName, otherAvatar, otherRole, contextLabel, unreadCount, lastMessage: lastMsgRows[0]?.content ?? null });
+      result.push({
+        ...thread,
+        otherName,
+        otherAvatar,
+        otherRole,
+        contextLabel,
+        unreadCount,
+        lastMessage: session.demo && thread.customerId ? "デモメッセージ" : (lastMsgRows[0]?.content ?? null),
+      });
     }
     return result;
   }),
@@ -301,7 +317,8 @@ export const messageRouter = router({
       const threadRows = await db.select().from(messageThreads).where(eq(messageThreads.id, input.threadId)).limit(1);
       if (!threadRows[0] || !canAccessThread(session, threadRows[0])) throw new TRPCError({ code: "NOT_FOUND" });
       await markThreadRead(db, input.threadId, threadRows[0], session.role);
-      return db.select().from(messages).where(and(eq(messages.threadId, input.threadId), visibleMessageCondition(session.role))).orderBy(messages.createdAt).limit(input.limit);
+      const rows = await db.select().from(messages).where(and(eq(messages.threadId, input.threadId), visibleMessageCondition(session.role))).orderBy(messages.createdAt).limit(input.limit);
+      return session.demo && threadRows[0].customerId ? rows.map(maskDemoCustomerMessage) : rows;
     }),
 
   send: publicProcedure

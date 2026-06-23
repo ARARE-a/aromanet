@@ -44,7 +44,7 @@ export default function CustomerVerification() {
   const isVerified = Boolean(p?.isVerified);
   const isPending = status === "pending";
   const isRejected = status === "rejected";
-  const latestDocumentUrl = verification?.documentImageUrl;
+  const hasSubmittedDocument = Boolean(verification?.hasDocumentImage);
   const adminNote = verification?.adminNote;
 
   const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -65,7 +65,7 @@ export default function CustomerVerification() {
     try {
       const formData = new FormData();
       formData.append("file", file, file.name || "age-verification.jpg");
-      const res = await fetch("/api/upload", { method: "POST", body: formData });
+      const res = await fetch("/api/upload?purpose=verification", { method: "POST", body: formData });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.url) throw new Error(data?.error || "Upload failed");
       setDocumentImageUrl(data.url);
@@ -156,8 +156,8 @@ export default function CustomerVerification() {
                 </label>
               </div>
 
-              {latestDocumentUrl && !documentImageUrl && (
-                <p className="text-xs text-muted-foreground">前回提出済みの書類があります。再申請する場合は新しい画像をアップロードしてください。</p>
+              {hasSubmittedDocument && !documentImageUrl && (
+                <p className="text-xs text-muted-foreground">提出済みの本人確認画像があります。安全のため保存済み画像は再表示しません。再申請する場合は新しい画像をアップロードしてください。</p>
               )}
 
               <ul className="space-y-2 text-sm text-muted-foreground">

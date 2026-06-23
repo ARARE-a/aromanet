@@ -21,6 +21,19 @@ function blocksTherapistSlot(status: string | null | undefined) {
   return BLOCKING_RESERVATION_STATUSES.has(String(status));
 }
 
+function maskStoreDemoReservation(row: any) {
+  return {
+    ...row,
+    customerName: `デモ顧客#${row.id}`,
+    customerPhone: "090-0000-0000",
+    customerPhoneVerified: true,
+    customerImage: null,
+    note: row.note ? "デモ予約メモ" : row.note,
+    customerNote: row.customerNote ? "デモ予約メモ" : row.customerNote,
+    notes: row.notes ? "デモ予約メモ" : row.notes,
+  };
+}
+
 function getMonthBoundsFromDate(date: string) {
   const [yearRaw, monthRaw] = date.split("-");
   const year = Number(yearRaw);
@@ -377,7 +390,7 @@ export const reservationRouter = router({
       const conditions: any[] = [eq(reservations.storeId, session.storeId)];
       if (input.date) conditions.push(eq(reservations.date, input.date));
       if (input.status) conditions.push(eq(reservations.status, input.status as any));
-      return db.select({
+      const rows = await db.select({
         id: reservations.id,
         storeId: reservations.storeId,
         therapistId: reservations.therapistId,
@@ -419,6 +432,7 @@ export const reservationRouter = router({
         .where(and(...conditions))
         .orderBy(desc(reservations.date), reservations.startTime)
         .limit(input.limit);
+      return session.demo ? rows.map(maskStoreDemoReservation) : rows;
     }),
 
   updateStatus: publicProcedure

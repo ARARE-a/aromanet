@@ -12,6 +12,7 @@ export interface AromaSession {
   storeId?: number;
   therapistId?: number;
   email?: string;
+  demo?: boolean;
 }
 
 export async function getSession(req: any): Promise<AromaSession | null> {
@@ -45,12 +46,16 @@ export async function validateSessionPayload(payload: AromaSession): Promise<Aro
       .limit(1);
     const account = rows[0];
     if (!account || account.status !== "active") return null;
-    return {
+    const session: AromaSession = {
       role: "store",
       accountId: account.id,
       storeId: account.storeId,
       email: account.email,
     };
+    if (payload.demo && account.email === (process.env.DEMO_STORE_EMAIL || "showcase-store@aromanet.club")) {
+      session.demo = true;
+    }
+    return session;
   }
 
   if (payload.role === "therapist") {

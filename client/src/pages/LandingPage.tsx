@@ -403,7 +403,7 @@ export default function LandingPage() {
             </p>
 
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-              <CtaLink href="#demo">デモアカウントを見る</CtaLink>
+              <CtaLink href="/api/demo-login">ワンクリックで店舗デモを見る</CtaLink>
               <CtaLink href="/store/login" variant="secondary">
                 店舗デモでログイン
               </CtaLink>
@@ -543,7 +543,7 @@ export default function LandingPage() {
           </div>
 
           <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
-            <CtaLink href="/roles">ロール選択から開く</CtaLink>
+            <CtaLink href="/api/demo-login">ワンクリックで店舗デモを見る</CtaLink>
             <CtaLink href={`mailto:${CONTACT_EMAIL}`} variant="secondary">
               問い合わせする
             </CtaLink>
@@ -581,7 +581,7 @@ export default function LandingPage() {
             店舗、セラピスト、顧客の3画面を切り替えながら、実際の導入イメージを確認できます。
           </p>
           <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
-            <CtaLink href="#demo">デモアカウントを見る</CtaLink>
+            <CtaLink href="/api/demo-login">ワンクリックで店舗デモを見る</CtaLink>
             <CtaLink href="/store/login" variant="secondary">
               店舗ログインへ
             </CtaLink>

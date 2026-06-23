@@ -266,10 +266,10 @@ export const storeRouter = router({
       const cp = cpRows[0];
       result.push({
         ...row,
-        displayName: cp?.displayName ?? cp?.nickname ?? `顧客#${row.customerId}`,
-        phone: cp?.phone ?? null,
-        phoneVerified: Boolean(cp?.phoneVerified),
-        profileImageUrl: cp?.profileImageUrl ?? null,
+        displayName: session.demo ? `デモ顧客#${row.customerId}` : (cp?.displayName ?? cp?.nickname ?? `顧客#${row.customerId}`),
+        phone: session.demo ? "090-0000-0000" : (cp?.phone ?? null),
+        phoneVerified: session.demo ? true : Boolean(cp?.phoneVerified),
+        profileImageUrl: session.demo ? null : (cp?.profileImageUrl ?? null),
         level: cp?.memberLevel ?? 1,
         totalSpent: cp?.totalSpent ?? 0,
       });
@@ -315,7 +315,13 @@ export const storeRouter = router({
     ]);
     return {
       store: storeRows[0] ?? null,
-      todayReservations,
+      todayReservations: session.demo
+        ? todayReservations.map((reservation) => ({
+            ...reservation,
+            note: reservation.note ? "デモ予約メモ" : reservation.note,
+            customerNote: reservation.customerNote ? "デモ予約メモ" : reservation.customerNote,
+          }))
+        : todayReservations,
       pendingCount: pendingCount[0]?.count ?? 0,
       monthlySales: totalSalesRows[0]?.total ?? 0,
       therapistCount: therapistCount[0]?.count ?? 0,

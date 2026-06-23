@@ -3,7 +3,7 @@ import express from "express";
 import cookieParser from "cookie-parser";
 import { createServer } from "http";
 import net from "net";
-import { sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { registerOAuthRoutes } from "./oauth";
 import { registerStorageProxy } from "./storageProxy";
@@ -14,6 +14,8 @@ import { storagePut } from "../storage";
 import { getDb } from "../db";
 import { ensureRuntimeSchema } from "../runtimeMigrations";
 import { getSession } from "../session";
+import { storeAccounts, stores } from "../../drizzle/schema";
+import { setSessionCookie } from "../routers/auth";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -150,6 +152,45 @@ async function startServer() {
   registerStorageProxy(app);
   registerOAuthRoutes(app);
 
+  app.get("/api/demo-login", async (_req, res) => {
+    try {
+      const demoEmail = process.env.DEMO_STORE_EMAIL || "showcase-store@aromanet.club";
+      const db = await getDb();
+      if (!db) {
+        return res.redirect(302, "/store/login?demo=unavailable");
+      }
+
+      const rows = await db
+        .select({
+          accountId: storeAccounts.id,
+          email: storeAccounts.email,
+          status: storeAccounts.status,
+          storeId: stores.id,
+        })
+        .from(storeAccounts)
+        .innerJoin(stores, eq(stores.accountId, storeAccounts.id))
+        .where(eq(storeAccounts.email, demoEmail))
+        .limit(1);
+
+      const demo = rows[0];
+      if (!demo || demo.status !== "active") {
+        return res.redirect(302, "/store/login?demo=unavailable");
+      }
+
+      await setSessionCookie(res, {
+        role: "store",
+        accountId: demo.accountId,
+        storeId: demo.storeId,
+        email: demo.email,
+        demo: true,
+      });
+      return res.redirect(302, "/store/dashboard?demo=1");
+    } catch (error) {
+      console.error("[DemoLogin] Failed to create demo session", error);
+      return res.redirect(302, "/store/login?demo=unavailable");
+    }
+  });
+
   app.get("/api/health", (_req, res) => {
     res.json({ ok: true });
   });
@@ -199,7 +240,11 @@ async function startServer() {
       }
 
       const ext = extensionForUpload(parsed.mimeType.toLowerCase());
-      const key = `uploads/${Date.now()}.${ext}`;
+      const uploadPurpose = String(req.query.purpose || "");
+      const keyPrefix = uploadPurpose === "verification"
+        ? `private/verifications/${session.role}-${session.accountId}`
+        : "uploads";
+      const key = `${keyPrefix}/${Date.now()}.${ext}`;
       const { url, key: storedKey } = await storagePut(key, parsed.buffer, parsed.mimeType);
       res.json({ url, key: storedKey });
     } catch (e: any) {
