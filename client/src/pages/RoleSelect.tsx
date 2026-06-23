@@ -111,6 +111,7 @@ export default function RoleSelect() {
           <div className="mt-3 flex justify-center gap-4 text-xs font-medium text-[#5b6a67]">
             <Link href="/terms">利用規約</Link>
             <Link href="/privacy">プライバシー</Link>
+            <Link href="/legal/tokushoho">特商法表記</Link>
             <Link href="/contact">問い合わせ</Link>
           </div>
         </footer>

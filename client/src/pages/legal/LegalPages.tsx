@@ -1,8 +1,8 @@
 import type { ReactNode } from "react";
 import { Link } from "wouter";
-import { ArrowLeft, FileText, Mail, ShieldCheck } from "lucide-react";
+import { ArrowLeft, Building2, FileText, Mail, ShieldCheck } from "lucide-react";
 
-const updatedAt = "2026年6月22日";
+const updatedAt = "2026年6月23日";
 const supportEmail = "noreply@arare-ai.jp";
 
 function LegalShell({
@@ -39,6 +39,13 @@ function LegalShell({
             </div>
           </div>
           <div className="space-y-6 text-sm leading-7 text-[#303837]">{children}</div>
+
+          <nav className="mt-8 flex flex-wrap gap-3 border-t border-[#e3ebe8] pt-4 text-sm font-semibold text-[#005b56]">
+            <Link href="/terms">利用規約</Link>
+            <Link href="/privacy">プライバシー</Link>
+            <Link href="/legal/tokushoho">特商法表記</Link>
+            <Link href="/contact">問い合わせ</Link>
+          </nav>
         </section>
       </div>
     </main>
@@ -111,8 +118,7 @@ export function TermsPage() {
 
       <LegalBlock title="5. 投稿・メッセージ">
         <p>
-          投稿、口コミ、メッセージは、通報や安全管理のため確認される場合があります。不適切と判断した内容は、表示制限、削除、
-          アカウント停止の対象になります。
+          投稿、口コミ、メッセージは、通報や安全管理のため確認される場合があります。不適切と判断した内容は、表示制限、削除、アカウント停止の対象になります。
         </p>
       </LegalBlock>
 
@@ -125,8 +131,7 @@ export function TermsPage() {
 
       <LegalBlock title="7. 免責">
         <p>
-          通信障害、外部サービス障害、端末環境、店舗側の運用により、予約や通知が遅延する場合があります。
-          重要な予約内容は、店舗と利用者の間で最終確認してください。
+          通信障害、外部サービス障害、端末環境、店舗側の運用により、予約や通知が遅延する場合があります。重要な予約内容は、店舗と利用者の間で最終確認してください。
         </p>
       </LegalBlock>
 
@@ -188,8 +193,7 @@ export function PrivacyPage() {
 
       <LegalBlock title="5. 開示・訂正・削除">
         <p>
-          登録情報の確認、訂正、削除を希望する場合は、問い合わせ窓口へご連絡ください。予約履歴や監査ログなど、
-          法令または安全管理上必要な情報は一定期間保持する場合があります。
+          登録情報の確認、訂正、削除を希望する場合は、問い合わせ窓口へご連絡ください。予約履歴や監査ログなど、法令または安全管理上必要な情報は一定期間保持する場合があります。
         </p>
       </LegalBlock>
 
@@ -200,6 +204,68 @@ export function PrivacyPage() {
             {supportEmail}
           </a>
         </p>
+      </LegalBlock>
+    </LegalShell>
+  );
+}
+
+export function TokushohoPage() {
+  return (
+    <LegalShell
+      title="特定商取引法に基づく表記"
+      description="AromaNetの有料提供や導入相談に関する最低限の取引条件です。正式な契約条件は申込時に個別に提示します。"
+      icon={<Building2 className="h-5 w-5" />}
+    >
+      <LegalBlock title="販売事業者">
+        <p>AromaNet運営</p>
+      </LegalBlock>
+
+      <LegalBlock title="運営責任者">
+        <p>正式運用開始前のため準備中です。契約または請求が発生する前に開示します。</p>
+      </LegalBlock>
+
+      <LegalBlock title="所在地">
+        <p>請求があった場合、法令に基づき遅滞なく開示します。</p>
+      </LegalBlock>
+
+      <LegalBlock title="問い合わせ先">
+        <p>
+          <a className="font-semibold text-[#005b56]" href={`mailto:${supportEmail}`}>
+            {supportEmail}
+          </a>
+        </p>
+      </LegalBlock>
+
+      <LegalBlock title="販売価格">
+        <p>現在はデモ提供中です。有料プラン、初期費用、月額費用は正式申込時に個別見積もりまたは申込画面で表示します。</p>
+      </LegalBlock>
+
+      <LegalBlock title="商品代金以外の必要料金">
+        <BulletList
+          items={[
+            "インターネット接続料金、通信料、端末利用料。",
+            "銀行振込を利用する場合の振込手数料。",
+            "店舗側の運用により発生する外部サービス利用料。",
+          ]}
+        />
+      </LegalBlock>
+
+      <LegalBlock title="支払い方法と支払い時期">
+        <p>正式契約時に請求書払い、カード払い等の方法と支払い時期を個別に提示します。</p>
+      </LegalBlock>
+
+      <LegalBlock title="サービス提供時期">
+        <p>申込内容の確認、必要な初期設定、アカウント発行が完了した後に提供を開始します。</p>
+      </LegalBlock>
+
+      <LegalBlock title="キャンセル・返金">
+        <p>
+          デジタルサービスの性質上、提供開始後の返金は原則として受け付けません。ただし、契約条件や個別合意がある場合はその内容を優先します。
+        </p>
+      </LegalBlock>
+
+      <LegalBlock title="動作環境">
+        <p>スマートフォンまたはPCの最新ブラウザでの利用を推奨します。端末、OS、ブラウザ、通信環境により一部機能が利用できない場合があります。</p>
       </LegalBlock>
     </LegalShell>
   );
@@ -236,15 +302,14 @@ export function ContactPage() {
 
       <LegalBlock title="SMS費用について">
         <p>
-          お客様にAromaNetからSMS認証費用を個別請求する想定はありません。運営側ではTwilio Verifyの認証成功料と、
-          日本向けSMS送信に関するチャネル料金が発生します。実際の金額はTwilioの契約、送信元、送信先、為替で変わります。
+          お客様にAromaNetからSMS認証費用を個別請求する想定はありません。運営側ではTwilio Verifyの認証成功料と、日本向けSMS送信に関するチャネル料金が発生します。
+          実際の金額はTwilioの契約、送信元、送信先、為替で変わります。
         </p>
       </LegalBlock>
 
       <LegalBlock title="緊急時">
         <p>
-          迷惑行為、なりすまし、不適切なメッセージは、アプリ内の通報・ブロック導線も利用してください。
-          生命・身体に関わる緊急事態は、サービス内の問い合わせではなく警察・救急等の公的窓口へ連絡してください。
+          迷惑行為、なりすまし、不適切なメッセージは、アプリ内の通報・ブロック導線も利用してください。生命・身体に関わる緊急事態は、サービス内の問い合わせではなく警察・救急等の公的窓口へ連絡してください。
         </p>
       </LegalBlock>
     </LegalShell>

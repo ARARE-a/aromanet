@@ -59,7 +59,7 @@ import CustomerVerification from "./pages/customer/Verification";
 // Shared pages
 import MessagesPage from "./pages/Messages";
 import SecurityPage from "./pages/shared/Security";
-import { ContactPage, PrivacyPage, TermsPage } from "./pages/legal/LegalPages";
+import { ContactPage, PrivacyPage, TermsPage, TokushohoPage } from "./pages/legal/LegalPages";
 
 function Router() {
   return (
@@ -82,6 +82,8 @@ function Router() {
       {/* Legal */}
       <Route path="/terms" component={TermsPage} />
       <Route path="/privacy" component={PrivacyPage} />
+      <Route path="/legal/tokushoho" component={TokushohoPage} />
+      <Route path="/tokushoho" component={TokushohoPage} />
       <Route path="/contact" component={ContactPage} />
 
       {/* Store */}
