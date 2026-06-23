@@ -9,6 +9,7 @@ import { SessionProvider } from "./contexts/SessionContext";
 
 // Auth pages
 import RoleSelect from "./pages/RoleSelect";
+import DemoSelect from "./pages/DemoSelect";
 import StoreLogin from "./pages/auth/StoreLogin";
 import TherapistLogin from "./pages/auth/TherapistLogin";
 import CustomerLogin from "./pages/auth/CustomerLogin";
@@ -67,6 +68,7 @@ function Router() {
       <Route path="/" component={RoleSelect} />
       <Route path="/lp" component={RoleSelect} />
       <Route path="/roles" component={RoleSelect} />
+      <Route path="/demo" component={DemoSelect} />
 
       {/* Auth */}
       <Route path="/store/login" component={StoreLogin} />
