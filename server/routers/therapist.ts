@@ -313,6 +313,8 @@ export const therapistRouter = router({
         totalPrice: reservations.totalPrice,
         totalAmount: reservations.totalPrice,
         customerNote: reservations.customerNote,
+        cancelReason: reservations.cancelReason,
+        cancelFee: reservations.cancelFee,
         note: reservations.note,
         notes: sql<string>`COALESCE(${reservations.note}, ${reservations.customerNote})`,
         customerName: sql<string>`COALESCE(${customerProfiles.displayName}, ${customerProfiles.nickname}, CONCAT('顧客#', ${reservations.customerId}))`,

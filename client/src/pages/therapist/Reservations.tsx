@@ -86,6 +86,7 @@ export default function TherapistReservations() {
               <span className="text-sm text-foreground">{r.customerName ?? "お客様"}</span>
             </div>
             {r.notes && <div className="mt-2 text-xs text-muted-foreground bg-muted/50 rounded-lg p-2 whitespace-pre-wrap">{r.notes}</div>}
+            {r.cancelReason && <div className="mt-2 text-xs text-red-600 bg-red-50 rounded-lg p-2 whitespace-pre-wrap">キャンセル理由: {r.cancelReason}</div>}
           </motion.div>
         ))}
       </div>

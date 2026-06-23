@@ -1,13 +1,17 @@
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { motion } from "framer-motion";
-import { Calendar, ChevronLeft, ChevronRight, Home, MessageCircle, TrendingUp, Users } from "lucide-react";
+import { Calendar, ChevronLeft, ChevronRight, Edit3, Home, MessageCircle, TrendingUp, Users } from "lucide-react";
 import { addDays, format, subDays } from "date-fns";
 import { ja } from "date-fns/locale";
 import { toast } from "sonner";
 import { AromaAvatar, AromaLayout, StatusBadge } from "@/components/AromaLayout";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import { trpc } from "@/lib/trpc";
 import { useSession } from "@/contexts/SessionContext";
 
@@ -60,6 +64,10 @@ export default function StoreReservations() {
   const [statusFilter, setStatusFilter] = useState("pending");
   const [assigningReservationId, setAssigningReservationId] = useState<number | null>(null);
   const [selectedTherapistId, setSelectedTherapistId] = useState("");
+  const [editingReservation, setEditingReservation] = useState<any | null>(null);
+  const [editForm, setEditForm] = useState({ date: "", startTime: "", menuId: "", therapistId: "none", isNomination: false, note: "" });
+  const [cancelingReservation, setCancelingReservation] = useState<any | null>(null);
+  const [cancelReason, setCancelReason] = useState("");
 
   useEffect(() => {
     if (!isLoading && (!session || session.role !== "store")) navigate("/store/login");
@@ -75,6 +83,7 @@ export default function StoreReservations() {
     { enabled: !!session, refetchOnWindowFocus: true, refetchInterval: 15000 },
   );
   const { data: therapists } = trpc.store.getTherapists.useQuery(undefined, { enabled: !!session });
+  const { data: menus } = trpc.store.getMenus.useQuery(undefined, { enabled: !!session });
 
   const updateStatus = trpc.reservation.updateStatus.useMutation({
     onSuccess: () => {
@@ -92,9 +101,18 @@ export default function StoreReservations() {
     },
     onError: e => toast.error(e.message),
   });
+  const updateReservation = trpc.reservation.updateReservation.useMutation({
+    onSuccess: () => {
+      toast.success("予約内容を変更しました");
+      setEditingReservation(null);
+      refetch();
+    },
+    onError: e => toast.error(e.message),
+  });
 
   const list = (reservations as any[]) ?? [];
   const therapistList = (therapists as any[]) ?? [];
+  const menuList = (menus as any[]) ?? [];
   const heading =
     statusFilter === "pending" ? "確認待ち一覧" :
       statusFilter === "all" ? "予約一覧" :
@@ -104,6 +122,48 @@ export default function StoreReservations() {
     statusFilter === "pending" ? "確認待ちの予約はありません" :
       statusFilter === "all" ? "予約はありません" :
         "この日の予約はありません";
+
+  const openEdit = (reservation: any) => {
+    setEditingReservation(reservation);
+    setEditForm({
+      date: reservation.date ?? dateStr,
+      startTime: reservation.startTime ?? "12:00",
+      menuId: reservation.menuId ? String(reservation.menuId) : "",
+      therapistId: reservation.therapistId ? String(reservation.therapistId) : "none",
+      isNomination: Boolean(reservation.isNomination || reservation.therapistId),
+      note: reservation.note ?? reservation.customerNote ?? "",
+    });
+  };
+
+  const submitEdit = () => {
+    if (!editingReservation || !editForm.date || !editForm.startTime || !editForm.menuId) {
+      toast.error("日時とコースを入力してください");
+      return;
+    }
+    updateReservation.mutate({
+      id: editingReservation.id,
+      date: editForm.date,
+      startTime: editForm.startTime,
+      menuId: Number(editForm.menuId),
+      therapistId: editForm.therapistId === "none" ? null : Number(editForm.therapistId),
+      isNomination: editForm.isNomination && editForm.therapistId !== "none",
+      note: editForm.note,
+    });
+  };
+
+  const submitNormalCancel = () => {
+    if (!cancelingReservation) return;
+    const reason = cancelReason.trim() || "通常キャンセル";
+    updateStatus.mutate(
+      { id: cancelingReservation.id, status: "cancelled", cancelReason: reason, note: reason },
+      {
+        onSuccess: () => {
+          setCancelingReservation(null);
+          setCancelReason("");
+        },
+      },
+    );
+  };
 
   return (
     <AromaLayout title="予約管理" showBack backHref="/store/dashboard" showNav navItems={navItems}>
@@ -243,24 +303,25 @@ export default function StoreReservations() {
             )}
 
             <div className="flex gap-2 flex-wrap">
+              {!["completed", "cancelled", "no_show"].includes(r.status) && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="text-xs h-8 rounded-lg border-primary/30 text-primary hover:bg-primary/5"
+                  onClick={() => openEdit(r)}
+                >
+                  <Edit3 className="w-3.5 h-3.5 mr-1" />編集
+                </Button>
+              )}
               {r.status === "pending" && (
                 <>
                   <Button
                     size="sm"
-                    className="text-xs h-7 rounded-lg bg-green-600 hover:bg-green-700 text-white"
+                    className="text-xs h-8 rounded-lg bg-green-600 hover:bg-green-700 text-white"
                     onClick={() => updateStatus.mutate({ id: r.id, status: "confirmed" })}
                     disabled={updateStatus.isPending}
                   >
                     確定
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="text-xs h-7 rounded-lg text-red-600 border-red-200 hover:bg-red-50"
-                    onClick={() => updateStatus.mutate({ id: r.id, status: "cancelled" })}
-                    disabled={updateStatus.isPending}
-                  >
-                    キャンセル
                   </Button>
                 </>
               )}
@@ -268,7 +329,7 @@ export default function StoreReservations() {
                 <>
                   <Button
                     size="sm"
-                    className="text-xs h-7 rounded-lg bg-purple-600 hover:bg-purple-700 text-white"
+                    className="text-xs h-8 rounded-lg bg-purple-600 hover:bg-purple-700 text-white"
                     onClick={() => updateStatus.mutate({ id: r.id, status: "in_service" })}
                     disabled={updateStatus.isPending}
                   >
@@ -277,7 +338,7 @@ export default function StoreReservations() {
                   <Button
                     size="sm"
                     variant="outline"
-                    className="text-xs h-7 rounded-lg text-orange-600 border-orange-200 hover:bg-orange-50"
+                    className="text-xs h-8 rounded-lg text-orange-600 border-orange-200 hover:bg-orange-50"
                     onClick={() => updateStatus.mutate({ id: r.id, status: "no_show" })}
                     disabled={updateStatus.isPending}
                   >
@@ -288,17 +349,137 @@ export default function StoreReservations() {
               {r.status === "in_service" && (
                 <Button
                   size="sm"
-                  className="text-xs h-7 rounded-lg gradient-luxury text-white"
+                  className="text-xs h-8 rounded-lg gradient-luxury text-white"
                   onClick={() => updateStatus.mutate({ id: r.id, status: "completed" })}
                   disabled={updateStatus.isPending}
                 >
                   施術完了
                 </Button>
               )}
+              {["pending", "confirmed"].includes(r.status) && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="text-xs h-8 rounded-lg text-red-600 border-red-200 hover:bg-red-50"
+                  onClick={() => {
+                    setCancelingReservation(r);
+                    setCancelReason(r.cancelReason ?? "");
+                  }}
+                  disabled={updateStatus.isPending}
+                >
+                  通常キャンセル
+                </Button>
+              )}
             </div>
           </motion.div>
         ))}
       </div>
+
+      <Dialog open={!!editingReservation} onOpenChange={(open) => !open && setEditingReservation(null)}>
+        <DialogContent className="max-w-sm rounded-2xl max-h-[86dvh] overflow-y-auto">
+          <DialogHeader><DialogTitle>予約を編集</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <Label>日付</Label>
+              <Input
+                type="date"
+                value={editForm.date}
+                onChange={e => setEditForm(f => ({ ...f, date: e.target.value }))}
+                className="mt-1 rounded-xl"
+              />
+            </div>
+            <div>
+              <Label>開始時間</Label>
+              <Input
+                type="time"
+                value={editForm.startTime}
+                onChange={e => setEditForm(f => ({ ...f, startTime: e.target.value }))}
+                className="mt-1 rounded-xl"
+              />
+            </div>
+            <div>
+              <Label>コース</Label>
+              <Select value={editForm.menuId} onValueChange={v => setEditForm(f => ({ ...f, menuId: v }))}>
+                <SelectTrigger className="mt-1 rounded-xl"><SelectValue placeholder="コースを選択" /></SelectTrigger>
+                <SelectContent>
+                  {menuList.map((m: any) => (
+                    <SelectItem key={m.id} value={String(m.id)}>
+                      {m.name} ({m.durationMinutes}分 / ¥{(m.price ?? 0).toLocaleString()})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>担当セラピスト</Label>
+              <Select
+                value={editForm.therapistId}
+                onValueChange={v => setEditForm(f => ({ ...f, therapistId: v, isNomination: v !== "none" }))}
+              >
+                <SelectTrigger className="mt-1 rounded-xl"><SelectValue placeholder="担当を選択" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">指名無し</SelectItem>
+                  {therapistList.map((t: any) => (
+                    <SelectItem key={t.id} value={String(t.id)}>{t.displayName}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="mt-1 text-[11px] text-muted-foreground">担当ありの場合、出勤枠と重複予約を再チェックします。</p>
+            </div>
+            <label className="flex items-center gap-2 rounded-xl bg-muted/40 px-3 py-2 text-sm">
+              <input
+                type="checkbox"
+                checked={editForm.isNomination}
+                disabled={editForm.therapistId === "none"}
+                onChange={e => setEditForm(f => ({ ...f, isNomination: e.target.checked }))}
+              />
+              指名予約として扱う
+            </label>
+            <div>
+              <Label>店舗メモ</Label>
+              <Textarea
+                value={editForm.note}
+                onChange={e => setEditForm(f => ({ ...f, note: e.target.value }))}
+                className="mt-1 rounded-xl"
+                rows={3}
+                placeholder="変更理由や店舗内メモ"
+              />
+            </div>
+            <Button className="w-full h-11 rounded-xl gradient-luxury text-white" onClick={submitEdit} disabled={updateReservation.isPending}>
+              変更を保存
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!cancelingReservation} onOpenChange={(open) => !open && setCancelingReservation(null)}>
+        <DialogContent className="max-w-sm rounded-2xl">
+          <DialogHeader><DialogTitle>通常キャンセル</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              無断キャンセルとは別に、理由を残して通常キャンセルにします。売上/給与には入りません。
+            </p>
+            <div>
+              <Label>理由メモ</Label>
+              <Textarea
+                value={cancelReason}
+                onChange={e => setCancelReason(e.target.value)}
+                className="mt-1 rounded-xl"
+                rows={3}
+                placeholder="例: 顧客都合、店舗都合、日程変更のため"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <Button variant="outline" className="h-10 rounded-xl" onClick={() => setCancelingReservation(null)}>
+                戻る
+              </Button>
+              <Button className="h-10 rounded-xl bg-red-600 text-white hover:bg-red-700" onClick={submitNormalCancel} disabled={updateStatus.isPending}>
+                通常キャンセル
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </AromaLayout>
   );
 }

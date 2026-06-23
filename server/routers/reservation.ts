@@ -21,6 +21,14 @@ function blocksTherapistSlot(status: string | null | undefined) {
   return BLOCKING_RESERVATION_STATUSES.has(String(status));
 }
 
+const EDIT_LOCKED_RESERVATION_STATUSES = new Set(["completed", "cancelled", "no_show"]);
+
+function assertReservationEditable(status: string | null | undefined) {
+  if (EDIT_LOCKED_RESERVATION_STATUSES.has(String(status))) {
+    throw new TRPCError({ code: "CONFLICT", message: "完了済み、キャンセル済み、無断キャンセル済みの予約は変更できません" });
+  }
+}
+
 function maskStoreDemoReservation(row: any) {
   return {
     ...row,
@@ -122,6 +130,59 @@ async function requireTherapistAvailableForReservation(db: any, input: {
     input.endTime > matchingShift.breakStart;
   if (overlapsBreak) {
     throw new TRPCError({ code: "CONFLICT", message: "選択した時間は休憩時間と重なっています" });
+  }
+}
+
+async function assertReservationConflicts(db: any, input: {
+  reservationId: number;
+  storeId: number;
+  customerId: number;
+  therapistId?: number | null;
+  date: string;
+  startTime: string;
+  endTime: string;
+}) {
+  const customerExisting = await db.select().from(reservations).where(and(
+    eq(reservations.customerId, input.customerId),
+    eq(reservations.date, input.date),
+  ));
+  for (const r of customerExisting) {
+    if (r.id === input.reservationId || !blocksTherapistSlot(r.status)) continue;
+    if (r.startTime < input.endTime && r.endTime > input.startTime) {
+      throw new TRPCError({ code: "CONFLICT", message: "同じ顧客の同じ時間帯に別の予約があります" });
+    }
+  }
+
+  if (!input.therapistId) return;
+
+  const therapistExisting = await db.select().from(reservations).where(and(
+    eq(reservations.storeId, input.storeId),
+    eq(reservations.therapistId, input.therapistId),
+    eq(reservations.date, input.date),
+  ));
+  for (const r of therapistExisting) {
+    if (r.id === input.reservationId || !blocksTherapistSlot(r.status)) continue;
+    if (r.startTime < input.endTime && r.endTime > input.startTime) {
+      throw new TRPCError({ code: "CONFLICT", message: "選択したセラピストの同じ時間帯に別の予約があります" });
+    }
+  }
+}
+
+async function removeReservationSaleAndRecalculatePayroll(db: any, reservationId: number, fallback: { storeId: number; therapistId: number | null; date: string }) {
+  const existingSales = await db.select().from(sales).where(eq(sales.reservationId, reservationId));
+  if (!existingSales.length) return;
+  await db.delete(sales).where(eq(sales.reservationId, reservationId));
+  const pairs = new Map<string, { storeId: number; therapistId: number | null; date: string }>();
+  pairs.set(`${fallback.storeId}:${fallback.therapistId}:${fallback.date}`, fallback);
+  for (const sale of existingSales) {
+    pairs.set(`${sale.storeId}:${sale.therapistId}:${sale.date}`, {
+      storeId: sale.storeId,
+      therapistId: sale.therapistId,
+      date: sale.date,
+    });
+  }
+  for (const row of Array.from(pairs.values())) {
+    await recalculateTherapistPayroll(db, row.storeId, row.therapistId, row.date);
   }
 }
 
@@ -375,6 +436,129 @@ export const reservationRouter = router({
       return { success: true };
     }),
 
+  updateReservation: publicProcedure
+    .input(z.object({
+      id: z.number(),
+      date: z.string(),
+      startTime: z.string(),
+      menuId: z.number(),
+      therapistId: z.number().nullable().optional(),
+      isNomination: z.boolean().optional(),
+      note: z.string().optional(),
+      cancelReason: z.string().optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const session = await getSession(ctx.req);
+      if (!session || session.role !== "store" || !session.storeId) throw new TRPCError({ code: "UNAUTHORIZED" });
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      const targetRows = await db.select().from(reservations).where(eq(reservations.id, input.id)).limit(1);
+      const target = targetRows[0];
+      if (!target || target.storeId !== session.storeId) throw new TRPCError({ code: "NOT_FOUND" });
+      assertReservationEditable(target.status);
+
+      const menuRows = await db.select().from(menus).where(and(eq(menus.id, input.menuId), eq(menus.storeId, session.storeId))).limit(1);
+      const menu = menuRows[0];
+      if (!menu) throw new TRPCError({ code: "NOT_FOUND", message: "コースが見つかりません" });
+
+      const nextTherapistId = input.therapistId === undefined ? target.therapistId : input.therapistId;
+      let therapistName: string | null = null;
+      if (nextTherapistId) {
+        const therapistRows = await db.select({ id: therapists.id, displayName: therapists.displayName })
+          .from(therapists)
+          .innerJoin(therapistAccounts, eq(therapists.accountId, therapistAccounts.id))
+          .where(and(
+            eq(therapists.id, nextTherapistId),
+            eq(therapists.storeId, session.storeId),
+            eq(therapistAccounts.status, "active"),
+          ))
+          .limit(1);
+        if (!therapistRows[0]) throw new TRPCError({ code: "NOT_FOUND", message: "担当セラピストが見つかりません" });
+        therapistName = therapistRows[0].displayName;
+      }
+
+      const [h, m] = input.startTime.split(":").map(Number);
+      if (!Number.isFinite(h) || !Number.isFinite(m)) throw new TRPCError({ code: "BAD_REQUEST", message: "開始時間が不正です" });
+      const endMinutes = h * 60 + m + menu.durationMinutes;
+      const endTime = `${String(Math.floor(endMinutes / 60)).padStart(2, "0")}:${String(endMinutes % 60).padStart(2, "0")}`;
+
+      if (nextTherapistId) {
+        await requireTherapistAvailableForReservation(db, {
+          storeId: session.storeId,
+          therapistId: nextTherapistId,
+          date: input.date,
+          startTime: input.startTime,
+          endTime,
+        });
+      }
+      await assertReservationConflicts(db, {
+        reservationId: target.id,
+        storeId: session.storeId,
+        customerId: target.customerId,
+        therapistId: nextTherapistId,
+        date: input.date,
+        startTime: input.startTime,
+        endTime,
+      });
+
+      const isNomination = input.isNomination ?? Boolean(nextTherapistId);
+      const nominationFee = isNomination && nextTherapistId ? menu.nominationFee : 0;
+      const totalPrice = Math.max(0, menu.price + nominationFee + target.optionTotal - target.discountAmount);
+
+      await db.update(reservations).set({
+        menuId: input.menuId,
+        therapistId: nextTherapistId,
+        date: input.date,
+        startTime: input.startTime,
+        endTime,
+        isNomination,
+        nominationFee,
+        totalPrice,
+        note: input.note,
+        cancelReason: input.cancelReason,
+        updatedAt: new Date(),
+      }).where(eq(reservations.id, target.id));
+
+      await removeReservationSaleAndRecalculatePayroll(db, target.id, {
+        storeId: target.storeId,
+        therapistId: target.therapistId,
+        date: target.date,
+      });
+
+      const changeBody = `${input.date} ${input.startTime}〜${endTime} / ${menu.name}${therapistName ? ` / ${therapistName}` : " / 指名無し"}`;
+      await db.insert(notifications).values({
+        recipientRole: "customer",
+        recipientId: target.customerId,
+        type: "reservation_updated",
+        title: "予約内容が変更されました",
+        body: changeBody,
+        relatedId: target.id,
+      });
+      if (target.therapistId && target.therapistId !== nextTherapistId) {
+        await db.insert(notifications).values({
+          recipientRole: "therapist",
+          recipientId: target.therapistId,
+          type: "reservation_updated",
+          title: "担当予約が変更されました",
+          body: "この予約の担当から外れました",
+          relatedId: target.id,
+        });
+      }
+      if (nextTherapistId) {
+        await db.insert(notifications).values({
+          recipientRole: "therapist",
+          recipientId: nextTherapistId,
+          type: "reservation_updated",
+          title: "予約内容が変更されました",
+          body: changeBody,
+          relatedId: target.id,
+        });
+      }
+
+      return { success: true };
+    }),
+
   getStoreReservations: publicProcedure
     .input(z.object({
       date: z.string().optional(),
@@ -454,6 +638,9 @@ export const reservationRouter = router({
       if (!target) throw new TRPCError({ code: "NOT_FOUND" });
       if (session.role === "store" && target.storeId !== session.storeId) throw new TRPCError({ code: "UNAUTHORIZED" });
       if (session.role === "therapist" && target.therapistId !== session.therapistId) throw new TRPCError({ code: "UNAUTHORIZED" });
+      if (["completed", "cancelled", "no_show"].includes(target.status) && target.status !== input.status) {
+        throw new TRPCError({ code: "CONFLICT", message: "完了済み、キャンセル済み、無断キャンセル済みの予約ステータスは変更できません" });
+      }
       await db.update(reservations).set(data).where(eq(reservations.id, id));
 
       if (input.status === "completed") {
@@ -512,6 +699,31 @@ export const reservationRouter = router({
           await recalculateTherapistPayroll(db, r.storeId, r.therapistId, r.date);
         }
       }
+      if (input.status === "cancelled" || input.status === "no_show") {
+        await removeReservationSaleAndRecalculatePayroll(db, id, {
+          storeId: target.storeId,
+          therapistId: target.therapistId,
+          date: target.date,
+        });
+        await db.insert(notifications).values({
+          recipientRole: "customer",
+          recipientId: target.customerId,
+          type: input.status === "cancelled" ? "reservation_cancelled" : "reservation_no_show",
+          title: input.status === "cancelled" ? "予約がキャンセルされました" : "予約が無断キャンセルになりました",
+          body: input.cancelReason || input.note || `${target.date} ${target.startTime}〜${target.endTime}`,
+          relatedId: id,
+        });
+        if (target.therapistId) {
+          await db.insert(notifications).values({
+            recipientRole: "therapist",
+            recipientId: target.therapistId,
+            type: input.status === "cancelled" ? "reservation_cancelled" : "reservation_no_show",
+            title: input.status === "cancelled" ? "予約がキャンセルされました" : "予約が無断キャンセルになりました",
+            body: input.cancelReason || input.note || `${target.date} ${target.startTime}〜${target.endTime}`,
+            relatedId: id,
+          });
+        }
+      }
       return { success: true };
     }),
 
@@ -523,8 +735,33 @@ export const reservationRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       const rows = await db.select().from(reservations).where(and(eq(reservations.id, input.id), eq(reservations.customerId, session.accountId))).limit(1);
-      if (!rows[0]) throw new TRPCError({ code: "NOT_FOUND" });
-      await db.update(reservations).set({ status: "cancelled", cancelReason: input.reason }).where(eq(reservations.id, input.id));
+      const target = rows[0];
+      if (!target) throw new TRPCError({ code: "NOT_FOUND" });
+      assertReservationEditable(target.status);
+      await db.update(reservations).set({ status: "cancelled", cancelReason: input.reason, updatedAt: new Date() }).where(eq(reservations.id, input.id));
+      await removeReservationSaleAndRecalculatePayroll(db, input.id, {
+        storeId: target.storeId,
+        therapistId: target.therapistId,
+        date: target.date,
+      });
+      await db.insert(notifications).values({
+        recipientRole: "store",
+        recipientId: target.storeId,
+        type: "reservation_cancelled",
+        title: "顧客が予約をキャンセルしました",
+        body: input.reason || `${target.date} ${target.startTime}〜${target.endTime}`,
+        relatedId: target.id,
+      });
+      if (target.therapistId) {
+        await db.insert(notifications).values({
+          recipientRole: "therapist",
+          recipientId: target.therapistId,
+          type: "reservation_cancelled",
+          title: "予約がキャンセルされました",
+          body: input.reason || `${target.date} ${target.startTime}〜${target.endTime}`,
+          relatedId: target.id,
+        });
+      }
       return { success: true };
     }),
 

@@ -187,6 +187,18 @@ try {
     const menu = menus.find((row) => row.name === `QA60分${stamp}`);
     assert(menu, "created menu not found", menus);
     ids.menuId = menu.id;
+    await store.client.store.createMenu.mutate({
+      name: `QA90編集${stamp}`,
+      description: "予約編集確認用コース",
+      durationMinutes: 90,
+      price: 14000,
+      nominationFee: 3000,
+      isPublic: true,
+    });
+    const menusAfterEditCourse = await store.client.store.getMenus.query();
+    const editMenu = menusAfterEditCourse.find((row) => row.name === `QA90編集${stamp}`);
+    assert(editMenu, "edit menu not found", menusAfterEditCourse);
+    ids.editMenuId = editMenu.id;
   });
 
   await step("店舗が招待URLを発行し、セラピストを所属登録する", async () => {
@@ -353,6 +365,61 @@ try {
     const afterAssignCustomer = await customer.client.customer.getReservations.query();
     const assignedCustomerRow = afterAssignCustomer.find((row) => row.id === ids.freeReservationId);
     assert(assignedCustomerRow?.therapistId === ids.therapistId, "assigned therapist did not appear on customer reservation", assignedCustomerRow);
+  });
+
+  await step("店舗が予約編集と通常キャンセルを実行でき、3画面へ反映される", async () => {
+    await store.client.reservation.updateReservation.mutate({
+      id: ids.reservationId,
+      date: targetDate,
+      startTime: "14:30",
+      menuId: ids.editMenuId,
+      therapistId: ids.therapist2Id,
+      isNomination: true,
+      note: "QA予約編集メモ",
+    });
+    const editedStoreRows = await store.client.reservation.getStoreReservations.query({ status: "pending", limit: 100 });
+    const editedStore = editedStoreRows.find((row) => row.id === ids.reservationId);
+    assert(editedStore?.startTime === "14:30" && editedStore?.therapistId === ids.therapist2Id && editedStore?.menuId === ids.editMenuId, "edited reservation did not appear on store", editedStore);
+    const editedCustomerRows = await customer.client.customer.getReservations.query();
+    const editedCustomer = editedCustomerRows.find((row) => row.id === ids.reservationId);
+    assert(editedCustomer?.startTime === "14:30" && editedCustomer?.therapistId === ids.therapist2Id && editedCustomer?.menuId === ids.editMenuId, "edited reservation did not appear on customer", editedCustomer);
+    const oldTherapistRows = await therapist.client.therapist.getReservations.query({ date: targetDate });
+    assert(!oldTherapistRows.some((row) => row.id === ids.reservationId), "edited reservation remained on old therapist", oldTherapistRows);
+    const newTherapistRows = await therapist2.client.therapist.getReservations.query({ date: targetDate });
+    assert(newTherapistRows.some((row) => row.id === ids.reservationId && row.startTime === "14:30"), "edited reservation did not appear on new therapist", newTherapistRows);
+    await store.client.reservation.updateReservation.mutate({
+      id: ids.reservationId,
+      date: targetDate,
+      startTime: "14:45",
+      menuId: ids.menuId,
+      therapistId: ids.therapistId,
+      isNomination: true,
+      note: "QA予約編集メモ 戻し",
+    });
+
+    const cancelReservation = await customer.client.reservation.create.mutate({
+      storeId: ids.storeId,
+      therapistId: ids.therapistId,
+      menuId: ids.menuId,
+      date: targetDate,
+      startTime: "16:00",
+      isNomination: true,
+      optionIds: [],
+      customerNote: "QA normal cancel booking",
+    });
+    ids.normalCancelReservationId = cancelReservation.reservationId;
+    await store.client.reservation.updateStatus.mutate({
+      id: ids.normalCancelReservationId,
+      status: "cancelled",
+      cancelReason: "QA通常キャンセル",
+      note: "QA通常キャンセル",
+    });
+    const cancelledStoreRows = await store.client.reservation.getStoreReservations.query({ status: "cancelled", limit: 100 });
+    const cancelledStore = cancelledStoreRows.find((row) => row.id === ids.normalCancelReservationId);
+    assert(cancelledStore?.status === "cancelled" && cancelledStore?.cancelReason === "QA通常キャンセル", "normal cancel did not appear on store", cancelledStore);
+    const cancelledCustomerRows = await customer.client.customer.getReservations.query();
+    const cancelledCustomer = cancelledCustomerRows.find((row) => row.id === ids.normalCancelReservationId);
+    assert(cancelledCustomer?.status === "cancelled" && cancelledCustomer?.cancelReason === "QA通常キャンセル", "normal cancel did not appear on customer", cancelledCustomer);
   });
 
   await step("顧客メモがセラピスト画面に反映される", async () => {

@@ -128,7 +128,7 @@ export default function CustomerReservations() {
           >
             <div className="flex items-start justify-between gap-3 mb-2">
               <div className="min-w-0">
-                <div className="text-sm font-semibold text-foreground">{r.date} {r.startTime}</div>
+                <div className="text-sm font-semibold text-foreground">{r.date} {r.startTime}{r.endTime ? ` - ${r.endTime}` : ""}</div>
                 <div className="text-xs text-muted-foreground truncate">{r.storeName} / {r.menuName}</div>
                 {r.therapistName && <div className="text-xs text-muted-foreground truncate">指名: {r.therapistName}</div>}
               </div>
@@ -143,6 +143,18 @@ export default function CustomerReservations() {
                   <div>
                     <span>備考</span>
                     <p className="mt-1 text-foreground whitespace-pre-wrap">{r.customerNote}</p>
+                  </div>
+                )}
+                {r.note && (
+                  <div>
+                    <span>店舗メモ</span>
+                    <p className="mt-1 text-foreground whitespace-pre-wrap">{r.note}</p>
+                  </div>
+                )}
+                {r.cancelReason && (
+                  <div>
+                    <span>キャンセル理由</span>
+                    <p className="mt-1 text-red-600 whitespace-pre-wrap">{r.cancelReason}</p>
                   </div>
                 )}
               </div>
