@@ -205,7 +205,7 @@ export default function StoreProfile() {
         <Link href="/security">
           <Button variant="outline" className="w-full h-10 rounded-xl text-sm border-gray-300 text-gray-600">
             <Shield className="w-4 h-4 mr-2" />
-            セキュリティ設定（パスワード・クラッシュ）
+            セキュリティ設定（パスワード・緊急保護）
           </Button>
         </Link>
       </div>

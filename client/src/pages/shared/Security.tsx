@@ -37,7 +37,7 @@ export default function SecurityPage() {
 
   const setCrashMut = trpc.aroAuth.setCrashPassword.useMutation({
     onSuccess: () => {
-      toast.success("クラッシュパスワードを設定しました");
+      toast.success("緊急保護パスワードを設定しました");
       setCrashPw(""); setConfirmCrashPw(""); setCrashConfirmed(false);
     },
     onError: (e: { message: string }) => toast.error(e.message),
@@ -51,9 +51,9 @@ export default function SecurityPage() {
   };
 
   const handleSetCrashPassword = () => {
-    if (!crashPw || !confirmCrashPw) { toast.error("クラッシュパスワードを入力してください"); return; }
-    if (crashPw.length < 8) { toast.error("クラッシュパスワードは8文字以上で入力してください"); return; }
-    if (crashPw !== confirmCrashPw) { toast.error("クラッシュパスワードが一致しません"); return; }
+    if (!crashPw || !confirmCrashPw) { toast.error("緊急保護パスワードを入力してください"); return; }
+    if (crashPw.length < 8) { toast.error("緊急保護パスワードは8文字以上で入力してください"); return; }
+    if (crashPw !== confirmCrashPw) { toast.error("緊急保護パスワードが一致しません"); return; }
     if (!crashConfirmed) { toast.error("注意事項を確認してチェックを入れてください"); return; }
     setCrashMut.mutate({ crashPassword: crashPw });
   };
@@ -134,7 +134,7 @@ export default function SecurityPage() {
           </Button>
         </motion.div>
 
-        {/* Crash password */}
+        {/* Emergency protection password */}
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
           className="bg-white rounded-2xl shadow-luxury p-4 space-y-4">
           <div className="flex items-center gap-2">
@@ -142,8 +142,8 @@ export default function SecurityPage() {
               <Shield className="w-4 h-4 text-red-600" />
             </div>
             <div>
-              <h3 className="text-sm font-semibold text-foreground">クラッシュパスワード設定</h3>
-              <p className="text-xs text-muted-foreground">緊急時にデータを即時削除する特殊パスワード</p>
+              <h3 className="text-sm font-semibold text-foreground">緊急保護パスワード設定</h3>
+              <p className="text-xs text-muted-foreground">通常パスワードとは別に管理する緊急削除用パスワード</p>
             </div>
           </div>
 
@@ -154,13 +154,13 @@ export default function SecurityPage() {
               <p className="text-xs font-semibold text-red-700">重要な注意事項</p>
             </div>
             <p className="text-xs text-red-600 leading-relaxed">
-              クラッシュパスワードでログインすると、アカウント・予約・メッセージ・投稿などすべてのデータが<strong>即時完全削除</strong>されます。この操作は<strong>取り消せません</strong>。強制捜査・脅迫などの緊急時のみ使用してください。
+              緊急保護パスワードでログインすると、アカウント・予約・メッセージ・投稿などのデータ削除処理が実行されます。この操作は<strong>取り消せません</strong>。通常パスワードとは別に管理し、アカウント保護が必要な場合のみ使用してください。
             </p>
           </div>
 
           <div className="space-y-3">
             <div className="space-y-1.5">
-              <Label className="text-xs font-medium text-muted-foreground">クラッシュパスワード（8文字以上）</Label>
+              <Label className="text-xs font-medium text-muted-foreground">緊急保護パスワード（8文字以上）</Label>
               <div className="relative">
                 <Input
                   type={showCrashPw ? "text" : "password"}
@@ -176,12 +176,12 @@ export default function SecurityPage() {
               </div>
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs font-medium text-muted-foreground">クラッシュパスワード（確認）</Label>
+              <Label className="text-xs font-medium text-muted-foreground">緊急保護パスワード（確認）</Label>
               <Input
                 type="password"
                 value={confirmCrashPw}
                 onChange={e => setConfirmCrashPw(e.target.value)}
-                placeholder="クラッシュパスワードを再入力"
+                placeholder="緊急保護パスワードを再入力"
                 className="rounded-xl h-11"
               />
             </div>
@@ -196,7 +196,7 @@ export default function SecurityPage() {
               className="mt-0.5 w-4 h-4 rounded accent-red-500"
             />
             <span className="text-xs text-muted-foreground leading-relaxed">
-              上記の注意事項を理解し、クラッシュパスワードを設定することに同意します
+              上記の注意事項を理解し、緊急保護パスワードを設定することに同意します
             </span>
           </label>
 
@@ -207,18 +207,18 @@ export default function SecurityPage() {
             disabled={setCrashMut.isPending || !crashConfirmed}
           >
             <Shield className="w-4 h-4 mr-2" />
-            {setCrashMut.isPending ? "設定中..." : "クラッシュパスワードを設定する"}
+            {setCrashMut.isPending ? "設定中..." : "緊急保護パスワードを設定する"}
           </Button>
         </motion.div>
 
-        {/* How crash works */}
+        {/* How emergency protection works */}
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}
           className="bg-gray-50 rounded-2xl p-4 space-y-2">
-          <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">クラッシュ機能の使い方</h4>
+          <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">緊急保護機能の使い方</h4>
           {[
             "ログイン画面でメールアドレスを入力する",
-            "パスワード欄に通常パスワードの代わりに「クラッシュパスワード」を入力する",
-            "ログインボタンを押すと、すべてのデータが即時削除される",
+            "パスワード欄に通常パスワードの代わりに「緊急保護パスワード」を入力する",
+            "ログインボタンを押すと、対象データの削除処理が実行される",
           ].map((step, i) => (
             <div key={i} className="flex items-start gap-2">
               <div className="w-5 h-5 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0 mt-0.5">

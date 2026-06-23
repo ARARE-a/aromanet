@@ -5,6 +5,11 @@ import { getDb } from "./db";
 import { getJwtSecretKey } from "./jwtSecret";
 
 const SESSION_COOKIE = "aromanet_session";
+const DEMO_EMAILS = {
+  store: process.env.DEMO_STORE_EMAIL || "showcase-store@aromanet.club",
+  therapist: process.env.DEMO_THERAPIST_EMAIL || "showcase-therapist@aromanet.club",
+  customer: process.env.DEMO_CUSTOMER_EMAIL || "showcase-customer@aromanet.club",
+} as const;
 
 export interface AromaSession {
   role: "store" | "therapist" | "customer";
@@ -24,6 +29,10 @@ export async function getSession(req: any): Promise<AromaSession | null> {
   } catch {
     return null;
   }
+}
+
+function isDemoSession(role: AromaSession["role"], email?: string | null) {
+  return Boolean(email && email === DEMO_EMAILS[role]);
 }
 
 export async function validateSessionPayload(payload: AromaSession): Promise<AromaSession | null> {
@@ -52,7 +61,7 @@ export async function validateSessionPayload(payload: AromaSession): Promise<Aro
       storeId: account.storeId,
       email: account.email,
     };
-    if (payload.demo && account.email === (process.env.DEMO_STORE_EMAIL || "showcase-store@aromanet.club")) {
+    if (payload.demo && isDemoSession("store", account.email)) {
       session.demo = true;
     }
     return session;
@@ -72,12 +81,16 @@ export async function validateSessionPayload(payload: AromaSession): Promise<Aro
       .limit(1);
     const account = rows[0];
     if (!account || account.status !== "active") return null;
-    return {
+    const session: AromaSession = {
       role: "therapist",
       accountId: account.id,
       therapistId: account.therapistId,
       email: account.email,
     };
+    if (payload.demo && isDemoSession("therapist", account.email)) {
+      session.demo = true;
+    }
+    return session;
   }
 
   if (payload.role === "customer") {
@@ -92,11 +105,15 @@ export async function validateSessionPayload(payload: AromaSession): Promise<Aro
       .limit(1);
     const account = rows[0];
     if (!account || account.status !== "active") return null;
-    return {
+    const session: AromaSession = {
       role: "customer",
       accountId: account.id,
       email: account.email,
     };
+    if (payload.demo && isDemoSession("customer", account.email)) {
+      session.demo = true;
+    }
+    return session;
   }
 
   return null;

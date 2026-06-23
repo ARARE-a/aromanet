@@ -1,7 +1,6 @@
+import type { ReactNode } from "react";
 import { Link } from "wouter";
-import { ArrowLeft, ExternalLink, FileText, Mail, MessageCircle, ShieldCheck } from "lucide-react";
-import { AromaLogo } from "@/components/AromaLayout";
-import { Button } from "@/components/ui/button";
+import { ArrowLeft, FileText, Mail, ShieldCheck } from "lucide-react";
 
 const updatedAt = "2026年6月22日";
 const supportEmail = "noreply@arare-ai.jp";
@@ -14,43 +13,43 @@ function LegalShell({
 }: {
   title: string;
   description: string;
-  icon: React.ReactNode;
-  children: React.ReactNode;
+  icon: ReactNode;
+  children: ReactNode;
 }) {
   return (
-    <main className="min-h-screen bg-background px-5 py-6">
-      <div className="mx-auto w-full max-w-2xl">
-        <div className="mb-6 flex items-center justify-between">
-          <Button asChild variant="ghost" size="icon" aria-label="戻る">
-            <Link href="/roles">
-              <ArrowLeft className="h-5 w-5" />
-            </Link>
-          </Button>
-          <AromaLogo size="sm" />
+    <main className="min-h-screen bg-[#fbfcfb] px-5 py-5 text-[#171b1b]">
+      <div className="mx-auto w-full max-w-3xl">
+        <div className="mb-5 flex items-center justify-between">
+          <Link href="/roles" className="grid h-10 w-10 place-items-center rounded-full border border-[#dfe7e4] bg-white">
+            <ArrowLeft className="h-5 w-5" />
+          </Link>
+          <Link href="/roles" className="font-serif text-2xl text-[#245c55]">
+            AromaNet
+          </Link>
           <div className="h-10 w-10" />
         </div>
 
-        <section className="rounded-2xl border bg-white p-5 shadow-sm">
-          <div className="mb-5 flex items-start gap-3">
-            <div className="rounded-full bg-primary/10 p-2 text-primary">{icon}</div>
+        <section className="rounded-2xl border border-[#e3ebe8] bg-white p-5 shadow-sm">
+          <div className="mb-6 flex items-start gap-3">
+            <div className="rounded-full bg-[#e7f4f1] p-2 text-[#005b56]">{icon}</div>
             <div>
-              <h1 className="text-xl font-semibold text-foreground">{title}</h1>
-              <p className="mt-1 text-sm leading-6 text-muted-foreground">{description}</p>
-              <p className="mt-2 text-xs text-muted-foreground">最終更新日: {updatedAt}</p>
+              <h1 className="text-2xl font-bold">{title}</h1>
+              <p className="mt-2 text-sm leading-6 text-[#65716f]">{description}</p>
+              <p className="mt-2 text-xs text-[#7a8583]">最終更新日: {updatedAt}</p>
             </div>
           </div>
-          <div className="space-y-5 text-sm leading-7 text-foreground">{children}</div>
+          <div className="space-y-6 text-sm leading-7 text-[#303837]">{children}</div>
         </section>
       </div>
     </main>
   );
 }
 
-function LegalBlock({ title, children }: { title: string; children: React.ReactNode }) {
+function LegalBlock({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section>
       <h2 className="mb-2 text-base font-semibold">{title}</h2>
-      <div className="space-y-2 text-muted-foreground">{children}</div>
+      <div className="space-y-2 text-[#5d6866]">{children}</div>
     </section>
   );
 }
@@ -74,8 +73,8 @@ export function TermsPage() {
     >
       <LegalBlock title="1. サービスの内容">
         <p>
-          AromaNetは、店舗、セラピスト、お客様の予約、メッセージ、投稿、顧客管理、売上確認を支援する
-          SNS型予約管理サービスです。実際の施術、料金、キャンセル対応、本人確認運用は、各店舗の責任で行われます。
+          AromaNetは、店舗、セラピスト、お客様の予約、メッセージ、投稿、顧客管理、売上確認を支援するSNS型予約管理サービスです。
+          実際の施術、料金、キャンセル対応、本人確認運用は、各店舗の責任で行われます。
         </p>
       </LegalBlock>
 
@@ -112,15 +111,15 @@ export function TermsPage() {
 
       <LegalBlock title="5. 投稿・メッセージ">
         <p>
-          投稿、口コミ、メッセージは、通報や安全管理のため確認される場合があります。不適切と判断した内容は、
-          表示制限、削除、アカウント停止の対象になります。
+          投稿、口コミ、メッセージは、通報や安全管理のため確認される場合があります。不適切と判断した内容は、表示制限、削除、
+          アカウント停止の対象になります。
         </p>
       </LegalBlock>
 
       <LegalBlock title="6. SMS認証と通信料">
         <p>
-          AromaNetは登録時の本人性確認のためSMS認証を利用します。認証SMSの送信に関する外部サービス利用料は
-          原則として運営側で負担します。ただし、利用者の携帯電話契約により、SMS受信料や通信料が発生する場合があります。
+          AromaNetは登録時の本人性確認のためSMS認証を利用します。認証SMSの送信に関する外部サービス利用料は原則として運営側で負担します。
+          ただし、利用者の携帯電話契約により、SMS受信料や通信料が発生する場合があります。
         </p>
       </LegalBlock>
 
@@ -133,7 +132,11 @@ export function TermsPage() {
 
       <LegalBlock title="8. 問い合わせ">
         <p>
-          本規約やサービスに関する問い合わせは、問い合わせページまたは {supportEmail} までご連絡ください。
+          本規約やサービスに関する問い合わせは、問い合わせページまたは{" "}
+          <a className="font-semibold text-[#005b56]" href={`mailto:${supportEmail}`}>
+            {supportEmail}
+          </a>{" "}
+          までご連絡ください。
         </p>
       </LegalBlock>
     </LegalShell>
@@ -171,8 +174,8 @@ export function PrivacyPage() {
 
       <LegalBlock title="3. 第三者サービス">
         <p>
-          SMS認証にはTwilio等の外部サービスを利用します。サーバー、データベース、画像保存、ログ管理にも
-          外部インフラを利用する場合があります。法令に基づく場合を除き、目的外に個人情報を販売しません。
+          SMS認証にはTwilio等の外部サービスを利用します。サーバー、データベース、画像保存、ログ管理にも外部インフラを利用する場合があります。
+          法令に基づく場合を除き、目的外に個人情報を販売しません。
         </p>
       </LegalBlock>
 
@@ -191,7 +194,12 @@ export function PrivacyPage() {
       </LegalBlock>
 
       <LegalBlock title="6. 問い合わせ">
-        <p>個人情報の取り扱いに関する問い合わせ先: {supportEmail}</p>
+        <p>
+          個人情報の取り扱いに関する問い合わせ先:{" "}
+          <a className="font-semibold text-[#005b56]" href={`mailto:${supportEmail}`}>
+            {supportEmail}
+          </a>
+        </p>
       </LegalBlock>
     </LegalShell>
   );
@@ -202,17 +210,16 @@ export function ContactPage() {
     <LegalShell
       title="問い合わせ窓口"
       description="不具合、予約、アカウント、SMS認証、デモ導入相談はこちらから連絡してください。"
-      icon={<MessageCircle className="h-5 w-5" />}
+      icon={<Mail className="h-5 w-5" />}
     >
       <LegalBlock title="連絡先">
-        <div className="rounded-xl bg-primary/5 p-4">
-          <p className="font-semibold text-foreground">AromaNetサポート</p>
-          <a href={`mailto:${supportEmail}`} className="mt-1 inline-flex items-center gap-2 text-primary underline">
-            <Mail className="h-4 w-4" />
+        <p>AromaNetサポート</p>
+        <p>
+          <a className="font-semibold text-[#005b56]" href={`mailto:${supportEmail}`}>
             {supportEmail}
           </a>
-          <p className="mt-2 text-xs text-muted-foreground">受付目安: 平日 10:00 - 18:00</p>
-        </div>
+        </p>
+        <p>受付目安: 平日 10:00 - 18:00</p>
       </LegalBlock>
 
       <LegalBlock title="問い合わせ時に入れてほしい内容">
@@ -232,26 +239,6 @@ export function ContactPage() {
           お客様にAromaNetからSMS認証費用を個別請求する想定はありません。運営側ではTwilio Verifyの認証成功料と、
           日本向けSMS送信に関するチャネル料金が発生します。実際の金額はTwilioの契約、送信元、送信先、為替で変わります。
         </p>
-        <div className="flex flex-col gap-2 text-xs">
-          <a
-            href="https://www.twilio.com/en-us/verify/pricing"
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex items-center gap-1 text-primary underline"
-          >
-            Twilio Verify pricing
-            <ExternalLink className="h-3 w-3" />
-          </a>
-          <a
-            href="https://www.twilio.com/en-us/sms/pricing/jp"
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex items-center gap-1 text-primary underline"
-          >
-            Twilio Japan SMS pricing
-            <ExternalLink className="h-3 w-3" />
-          </a>
-        </div>
       </LegalBlock>
 
       <LegalBlock title="緊急時">

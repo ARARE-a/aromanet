@@ -14,8 +14,35 @@ import { storagePut } from "../storage";
 import { getDb } from "../db";
 import { ensureRuntimeSchema } from "../runtimeMigrations";
 import { getSession } from "../session";
-import { storeAccounts, stores } from "../../drizzle/schema";
+import { customerAccounts, storeAccounts, stores, therapistAccounts, therapists } from "../../drizzle/schema";
 import { setSessionCookie } from "../routers/auth";
+
+type DemoRole = "store" | "therapist" | "customer";
+
+const DEMO_LOGIN_CONFIG: Record<
+  DemoRole,
+  { email: string; unavailablePath: string; redirectPath: string }
+> = {
+  store: {
+    email: process.env.DEMO_STORE_EMAIL || "showcase-store@aromanet.club",
+    unavailablePath: "/store/login?demo=unavailable",
+    redirectPath: "/store/dashboard?demo=1",
+  },
+  therapist: {
+    email: process.env.DEMO_THERAPIST_EMAIL || "showcase-therapist@aromanet.club",
+    unavailablePath: "/therapist/login?demo=unavailable",
+    redirectPath: "/therapist/dashboard?demo=1",
+  },
+  customer: {
+    email: process.env.DEMO_CUSTOMER_EMAIL || "showcase-customer@aromanet.club",
+    unavailablePath: "/customer/login?demo=unavailable",
+    redirectPath: "/home?demo=1",
+  },
+};
+
+function parseDemoRole(value: unknown): DemoRole {
+  return value === "therapist" || value === "customer" ? value : "store";
+}
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -152,39 +179,93 @@ async function startServer() {
   registerStorageProxy(app);
   registerOAuthRoutes(app);
 
-  app.get("/api/demo-login", async (_req, res) => {
+  app.get("/api/demo-login", async (req, res) => {
     try {
-      const demoEmail = process.env.DEMO_STORE_EMAIL || "showcase-store@aromanet.club";
+      const role = parseDemoRole(req.query.role);
+      const config = DEMO_LOGIN_CONFIG[role];
       const db = await getDb();
       if (!db) {
-        return res.redirect(302, "/store/login?demo=unavailable");
+        return res.redirect(302, config.unavailablePath);
+      }
+
+      if (role === "store") {
+        const rows = await db
+          .select({
+            accountId: storeAccounts.id,
+            email: storeAccounts.email,
+            status: storeAccounts.status,
+            storeId: stores.id,
+          })
+          .from(storeAccounts)
+          .innerJoin(stores, eq(stores.accountId, storeAccounts.id))
+          .where(eq(storeAccounts.email, config.email))
+          .limit(1);
+
+        const demo = rows[0];
+        if (!demo || demo.status !== "active") {
+          return res.redirect(302, config.unavailablePath);
+        }
+
+        await setSessionCookie(res, {
+          role: "store",
+          accountId: demo.accountId,
+          storeId: demo.storeId,
+          email: demo.email,
+          demo: true,
+        });
+        return res.redirect(302, config.redirectPath);
+      }
+
+      if (role === "therapist") {
+        const rows = await db
+          .select({
+            accountId: therapistAccounts.id,
+            email: therapistAccounts.email,
+            status: therapistAccounts.status,
+            therapistId: therapists.id,
+          })
+          .from(therapistAccounts)
+          .innerJoin(therapists, eq(therapists.accountId, therapistAccounts.id))
+          .where(eq(therapistAccounts.email, config.email))
+          .limit(1);
+
+        const demo = rows[0];
+        if (!demo || demo.status !== "active") {
+          return res.redirect(302, config.unavailablePath);
+        }
+
+        await setSessionCookie(res, {
+          role: "therapist",
+          accountId: demo.accountId,
+          therapistId: demo.therapistId,
+          email: demo.email,
+          demo: true,
+        });
+        return res.redirect(302, config.redirectPath);
       }
 
       const rows = await db
         .select({
-          accountId: storeAccounts.id,
-          email: storeAccounts.email,
-          status: storeAccounts.status,
-          storeId: stores.id,
+          accountId: customerAccounts.id,
+          email: customerAccounts.email,
+          status: customerAccounts.status,
         })
-        .from(storeAccounts)
-        .innerJoin(stores, eq(stores.accountId, storeAccounts.id))
-        .where(eq(storeAccounts.email, demoEmail))
+        .from(customerAccounts)
+        .where(eq(customerAccounts.email, config.email))
         .limit(1);
 
       const demo = rows[0];
       if (!demo || demo.status !== "active") {
-        return res.redirect(302, "/store/login?demo=unavailable");
+        return res.redirect(302, config.unavailablePath);
       }
 
       await setSessionCookie(res, {
-        role: "store",
+        role: "customer",
         accountId: demo.accountId,
-        storeId: demo.storeId,
         email: demo.email,
         demo: true,
       });
-      return res.redirect(302, "/store/dashboard?demo=1");
+      return res.redirect(302, config.redirectPath);
     } catch (error) {
       console.error("[DemoLogin] Failed to create demo session", error);
       return res.redirect(302, "/store/login?demo=unavailable");
