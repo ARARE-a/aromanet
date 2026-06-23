@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { Link, useLocation } from "wouter";
-import { ArrowRight, Building2, Heart, User } from "lucide-react";
+import { Building2, ChevronRight, Heart, PlayCircle, User } from "lucide-react";
 import { useSession } from "@/contexts/SessionContext";
 
 const roles = [
@@ -8,36 +8,36 @@ const roles = [
     id: "store",
     label: "店舗",
     sublabel: "Store",
-    icon: Building2,
+    description: "予約・売上・セラピスト管理",
     loginPath: "/store/login",
-    registerPath: "/store/register",
-    dashPath: "/store/dashboard",
+    dashboardPath: "/store/dashboard",
     demoPath: "/api/demo-login?role=store",
-    description: "予約、出勤、顧客、売上、女子給をまとめて管理できます。",
+    icon: Building2,
+    iconClass: "from-[#00645f] to-[#008982]",
   },
   {
     id: "therapist",
     label: "セラピスト",
     sublabel: "Therapist",
-    icon: Heart,
+    description: "出勤・予約・投稿管理",
     loginPath: "/therapist/login",
-    registerPath: "/therapist/register",
-    dashPath: "/therapist/dashboard",
+    dashboardPath: "/therapist/dashboard",
     demoPath: "/api/demo-login?role=therapist",
-    description: "出勤、予約、投稿、顧客メモ、売上確認をスマホで扱えます。",
+    icon: Heart,
+    iconClass: "from-[#008982] to-[#31b6ae]",
   },
   {
     id: "customer",
     label: "お客様",
     sublabel: "Customer",
-    icon: User,
+    description: "検索・予約・マイページ",
     loginPath: "/customer/login",
-    registerPath: "/customer/register",
-    dashPath: "/home",
+    dashboardPath: "/home",
     demoPath: "/api/demo-login?role=customer",
-    description: "店舗検索、電話番号登録、予約、メッセージを確認できます。",
+    icon: User,
+    iconClass: "from-[#b99450] to-[#d1b777]",
   },
-];
+] as const;
 
 export default function RoleSelect() {
   const [, navigate] = useLocation();
@@ -45,99 +45,92 @@ export default function RoleSelect() {
 
   useEffect(() => {
     if (isLoading || !session?.role) return;
-    const role = roles.find((item) => item.id === session.role);
-    if (role) navigate(role.dashPath);
-  }, [session, isLoading, navigate]);
+    const currentRole = roles.find((role) => role.id === session.role);
+    if (currentRole) {
+      navigate(currentRole.dashboardPath);
+    }
+  }, [isLoading, navigate, session?.role]);
 
   return (
-    <main className="min-h-screen bg-[#fbfcfb] text-[#171b1b]">
-      <section className="border-b border-[#e7ece8] bg-white">
-        <div className="mx-auto flex w-full max-w-4xl items-center justify-between px-5 py-4">
-          <Link href="/roles" className="font-serif text-2xl text-[#245c55]">
-            AromaNet
-          </Link>
-          <div className="flex items-center gap-3 text-xs text-[#687674]">
+    <main className="min-h-screen bg-gradient-to-b from-white via-[#f7fffd] to-[#e6fbf8] text-[#1b2423]">
+      <section className="mx-auto flex min-h-screen w-full max-w-[430px] flex-col px-5 py-12 sm:max-w-[440px]">
+        <div className="flex flex-1 flex-col justify-center">
+          <header className="mb-8 text-center">
+            <div className="mx-auto mb-5 grid h-16 w-16 place-items-center rounded-2xl bg-gradient-to-br from-[#00645f] via-[#6f9285] to-[#c7a66b] shadow-lg shadow-[#00645f]/10">
+              <Heart className="h-8 w-8 fill-white text-white" />
+            </div>
+            <h1 className="font-serif text-3xl text-[#2b645d]">AromaNet</h1>
+            <p className="mt-2 text-sm font-medium text-[#425754]">
+              メンズエステ予約・管理プラットフォーム
+            </p>
+            <div className="mx-auto mt-3 h-0.5 w-12 rounded-full bg-gradient-to-r from-[#00645f] to-[#c7a66b]" />
+          </header>
+
+          <div className="space-y-4">
+            {roles.map((role) => {
+              const Icon = role.icon;
+              return (
+                <article
+                  key={role.id}
+                  className="overflow-hidden rounded-2xl border border-[#dde9e6] bg-white shadow-[0_8px_24px_rgba(0,0,0,0.06)]"
+                >
+                  <Link
+                    href={role.loginPath}
+                    className="flex min-h-[78px] items-center gap-4 px-4 py-4 transition-colors active:bg-[#f3fbf9]"
+                  >
+                    <span
+                      className={`grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-gradient-to-br ${role.iconClass} text-white shadow-sm`}
+                    >
+                      <Icon className="h-6 w-6" />
+                    </span>
+                    <span className="min-w-0 flex-1 text-left">
+                      <span className="flex items-baseline gap-2">
+                        <span className="text-lg font-bold">{role.label}</span>
+                        <span className="text-xs font-semibold text-[#73817f]">
+                          {role.sublabel}
+                        </span>
+                      </span>
+                      <span className="mt-1 block text-sm font-medium text-[#5f6d6a]">
+                        {role.description}
+                      </span>
+                    </span>
+                    <ChevronRight className="h-5 w-5 text-[#6f7a78]" />
+                  </Link>
+
+                  <div className="border-t border-[#edf3f1] px-4 pb-4 pt-3">
+                    <a
+                      href={role.demoPath}
+                      className="flex min-h-10 items-center justify-center rounded-xl border border-[#cfe4df] bg-[#f7fffd] text-sm font-bold text-[#005b56] transition-colors active:bg-[#e8f7f4]"
+                    >
+                      <PlayCircle className="mr-2 h-4 w-4" />
+                      {role.label}デモを見る
+                    </a>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+
+          <div className="mt-5 rounded-2xl border border-[#dbe9e5] bg-white/80 p-4 text-center shadow-sm">
+            <p className="text-sm font-bold text-[#24413d]">
+              ID・パスワードなしでデモ確認できます
+            </p>
+            <p className="mt-1 text-xs leading-5 text-[#66726f]">
+              確認用データのみを開くため、実店舗データとは分けて確認できます。
+            </p>
+          </div>
+        </div>
+
+        <footer className="pb-4 pt-8 text-center">
+          <p className="text-xs text-[#8b9996]">
+            © 2024 AromaNet. All rights reserved.
+          </p>
+          <div className="mt-3 flex justify-center gap-4 text-xs font-medium text-[#5b6a67]">
             <Link href="/terms">利用規約</Link>
             <Link href="/privacy">プライバシー</Link>
             <Link href="/contact">問い合わせ</Link>
           </div>
-        </div>
-      </section>
-
-      <section className="mx-auto w-full max-w-4xl px-5 py-8">
-        <div className="mb-6">
-          <p className="text-sm font-semibold text-[#00645e]">AromaNet</p>
-          <h1 className="mt-2 text-3xl font-bold">使う画面を選択</h1>
-          <p className="mt-3 text-sm leading-6 text-[#5d6866]">
-            ログイン、新規登録、デモ確認をここから開始できます。デモはID/パスワード不要で、確認用アカウントだけを開きます。
-          </p>
-        </div>
-
-        <div className="mb-6 rounded-2xl border border-[#d6e9e5] bg-white p-4 shadow-sm">
-          <p className="text-sm font-bold text-[#23302f]">まず触って確認する</p>
-          <div className="mt-3 grid gap-2 sm:grid-cols-3">
-            {roles.map((role) => (
-              <a
-                key={role.id}
-                href={role.demoPath}
-                className="flex min-h-11 items-center justify-center rounded-xl bg-[#005b56] px-4 text-sm font-semibold text-white"
-              >
-                {role.label}デモ
-                <ArrowRight className="ml-2 h-4 w-4" />
-              </a>
-            ))}
-          </div>
-        </div>
-
-        <div className="grid gap-4 md:grid-cols-3">
-          {roles.map((role) => {
-            const Icon = role.icon;
-            return (
-              <article key={role.id} className="rounded-2xl border border-[#e1ebe8] bg-white p-5 shadow-sm">
-                <div className="flex items-center gap-3">
-                  <span className="grid h-12 w-12 place-items-center rounded-full bg-[#e4f4f2] text-[#005b56]">
-                    <Icon className="h-6 w-6" />
-                  </span>
-                  <div>
-                    <h2 className="text-lg font-bold">{role.label}</h2>
-                    <p className="text-xs text-[#7a8583]">{role.sublabel}</p>
-                  </div>
-                </div>
-                <p className="mt-4 min-h-12 text-sm leading-6 text-[#5d6866]">{role.description}</p>
-                <div className="mt-5 space-y-2">
-                  <a
-                    href={role.demoPath}
-                    className="flex min-h-11 items-center justify-center rounded-xl bg-[#005b56] px-4 text-sm font-semibold text-white"
-                  >
-                    デモを見る
-                    <ArrowRight className="ml-2 h-4 w-4" />
-                  </a>
-                  <div className="grid grid-cols-2 gap-2">
-                    <Link
-                      href={role.loginPath}
-                      className="flex min-h-10 items-center justify-center rounded-xl border border-[#d7e2df] text-sm font-semibold"
-                    >
-                      ログイン
-                    </Link>
-                    <Link
-                      href={role.registerPath}
-                      className="flex min-h-10 items-center justify-center rounded-xl border border-[#d7e2df] text-sm font-semibold"
-                    >
-                      新規登録
-                    </Link>
-                  </div>
-                </div>
-              </article>
-            );
-          })}
-        </div>
-
-        <div className="mt-6 rounded-2xl border border-[#e1ebe8] bg-white p-4 text-sm leading-6 text-[#5d6866]">
-          <p className="font-semibold text-[#23302f]">本番URLについて</p>
-          <p className="mt-1">
-            現在は本番アプリとデモ入口を同じドメイン内で運用しています。デモは確認用アカウントだけに入るため、実店舗データとは分けて確認できます。
-          </p>
-        </div>
+        </footer>
       </section>
     </main>
   );
