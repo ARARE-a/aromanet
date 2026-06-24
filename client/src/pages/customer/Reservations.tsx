@@ -13,6 +13,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { useSession } from "@/contexts/SessionContext";
 import { trpc } from "@/lib/trpc";
 
+const cancellationPolicyNotice = "キャンセルに関する条件は各店舗が定めます。詳細は予約先の店舗にご確認ください。";
+
 export default function CustomerReservations() {
   const [, navigate] = useLocation();
   const search = useSearch();
@@ -177,6 +179,11 @@ export default function CustomerReservations() {
                 )}
               </div>
             </div>
+            {["pending", "confirmed"].includes(r.status) && (
+              <p className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-[11px] leading-relaxed text-amber-800">
+                {cancellationPolicyNotice}
+              </p>
+            )}
           </motion.div>
         ))}
       </div>
@@ -225,6 +232,9 @@ export default function CustomerReservations() {
               <Label>備考（任意）</Label>
               <Textarea value={notes} onChange={e => setNotes(e.target.value)} className="mt-1 rounded-xl" rows={2} placeholder="希望や質問があれば入力" />
             </div>
+            <p className="rounded-xl bg-amber-50 px-3 py-2 text-[11px] leading-relaxed text-amber-800">
+              {cancellationPolicyNotice}
+            </p>
             <Button className="w-full h-11 rounded-xl gradient-luxury text-white" onClick={handleCreate} disabled={createMut.isPending}>
               予約リクエストを送る
             </Button>
