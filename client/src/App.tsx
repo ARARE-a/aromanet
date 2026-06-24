@@ -31,6 +31,7 @@ import StorePayroll from "./pages/store/Payroll";
 import StoreCustomers from "./pages/store/Customers";
 import StoreRooms from "./pages/store/Rooms";
 import StoreAffiliations from "./pages/store/Affiliations";
+import StoreAuditLogs from "./pages/store/AuditLogs";
 
 // Therapist pages
 import TherapistDashboard from "./pages/therapist/Dashboard";
@@ -99,6 +100,7 @@ function Router() {
       <Route path="/store/customers" component={StoreCustomers} />
       <Route path="/store/rooms" component={StoreRooms} />
       <Route path="/store/affiliations" component={StoreAffiliations} />
+      <Route path="/store/audit-logs" component={StoreAuditLogs} />
 
       {/* Therapist */}
       <Route path="/therapist/dashboard" component={TherapistDashboard} />

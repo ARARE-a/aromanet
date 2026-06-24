@@ -6,7 +6,7 @@ import { getSession } from "../session";
 import {
   stores, storeAccounts, customerAccounts, therapists, menus, menuOptions,
   coupons, reservations, reviews, posts,
-  notifications, ngCustomers, sales, shifts, therapistSalarySettings,
+  notifications, ngCustomers, sales, shifts, therapistSalarySettings, auditLogs,
 } from "../../drizzle/schema";
 import { eq, and, desc, like, gte, lt, lte, sql } from "drizzle-orm";
 import { ensureRuntimeSchema } from "../runtimeMigrations";
@@ -97,6 +97,27 @@ export const storeRouter = router({
     if (!session.storeId) return [];
     return db.select().from(therapists).where(eq(therapists.storeId, session.storeId)).orderBy(desc(therapists.nominationCount));
   }),
+
+  getAuditLogs: publicProcedure
+    .input(z.object({
+      limit: z.number().min(1).max(100).default(50),
+      action: z.string().optional(),
+    }).optional())
+    .query(async ({ input, ctx }) => {
+      const session = await getSession(ctx.req);
+      if (!session || session.role !== "store") throw new TRPCError({ code: "UNAUTHORIZED" });
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const conditions = [
+        eq(auditLogs.actorRole, "store"),
+        eq(auditLogs.actorId, session.accountId),
+      ];
+      if (input?.action) conditions.push(eq(auditLogs.action, input.action));
+      return db.select().from(auditLogs)
+        .where(and(...conditions))
+        .orderBy(desc(auditLogs.createdAt))
+        .limit(input?.limit ?? 50);
+    }),
 
   updateTherapist: publicProcedure
     .input(z.object({
