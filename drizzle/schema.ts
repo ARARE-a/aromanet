@@ -254,6 +254,25 @@ export const reservationOptions = mysqlTable("reservation_options", {
   price: int("price").notNull(),
 });
 
+export const reservationFinancialEvents = mysqlTable("reservation_financial_events", {
+  id: int("id").autoincrement().primaryKey(),
+  reservationId: int("reservationId").notNull().references(() => reservations.id),
+  storeId: int("storeId").notNull().references(() => stores.id),
+  actorRole: mysqlEnum("actorRole", ["store", "therapist", "customer", "admin"]).default("store").notNull(),
+  actorId: int("actorId").notNull(),
+  eventType: mysqlEnum("eventType", ["financial_adjustment", "status_change", "payroll_recalculation"]).default("financial_adjustment").notNull(),
+  beforeTotal: int("beforeTotal").default(0).notNull(),
+  afterTotal: int("afterTotal").default(0).notNull(),
+  optionAmount: int("optionAmount").default(0).notNull(),
+  discountAmount: int("discountAmount").default(0).notNull(),
+  detail: text("detail"),
+  note: text("note"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (t) => [
+  index("idx_reservation_financial_events_reservation").on(t.reservationId),
+  index("idx_reservation_financial_events_store").on(t.storeId),
+]);
+
 // ─── Messages ─────────────────────────────────────────────────────────────────
 
 export const messageThreads = mysqlTable("message_threads", {
@@ -545,6 +564,7 @@ export type MenuOption = typeof menuOptions.$inferSelect;
 export type Coupon = typeof coupons.$inferSelect;
 export type Shift = typeof shifts.$inferSelect;
 export type Reservation = typeof reservations.$inferSelect;
+export type ReservationFinancialEvent = typeof reservationFinancialEvents.$inferSelect;
 export type MessageThread = typeof messageThreads.$inferSelect;
 export type Message = typeof messages.$inferSelect;
 export type Post = typeof posts.$inferSelect;
@@ -626,6 +646,7 @@ export const storyPosts = mysqlTable("story_posts", {
   mediaUrl: text("mediaUrl").notNull(),
   mediaType: mysqlEnum("mediaType", ["image", "video"]).default("image").notNull(),
   caption: text("caption"),
+  editorState: text("editorState"),
   viewCount: int("viewCount").default(0).notNull(),
   expiresAt: timestamp("expiresAt").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),

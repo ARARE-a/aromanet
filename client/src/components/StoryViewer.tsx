@@ -8,6 +8,7 @@ export interface StoryItem {
   mediaUrl: string;
   mediaType: "image" | "video";
   caption?: string | null;
+  editorState?: string | null;
   expiresAt: Date | string;
   createdAt: Date | string;
 }
@@ -27,6 +28,25 @@ interface StoryViewerProps {
 }
 
 const STORY_DURATION = 5000; // 5 seconds per story
+
+function parseEditorState(raw?: string | null) {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    return {
+      text: String(parsed.text ?? ""),
+      textColor: String(parsed.textColor ?? "#ffffff"),
+      textSize: Number(parsed.textSize ?? 28),
+      textX: Number(parsed.textX ?? 50),
+      textY: Number(parsed.textY ?? 70),
+      cropX: Number(parsed.cropX ?? 50),
+      cropY: Number(parsed.cropY ?? 50),
+      cropScale: Number(parsed.cropScale ?? 1),
+    };
+  } catch {
+    return null;
+  }
+}
 
 export function StoryViewer({ authors, initialAuthorIndex = 0, onClose }: StoryViewerProps) {
   const [authorIdx, setAuthorIdx] = useState(initialAuthorIndex);
@@ -96,6 +116,8 @@ export function StoryViewer({ authors, initialAuthorIndex = 0, onClose }: StoryV
   }, [onClose, goNext, goPrev]);
 
   if (!currentAuthor || !currentStory) return null;
+  const editor = parseEditorState(currentStory.editorState);
+  const overlayText = editor?.text || currentStory.caption;
 
   const timeAgo = (date: Date | string) => {
     const diff = Date.now() - new Date(date).getTime();
@@ -139,6 +161,10 @@ export function StoryViewer({ authors, initialAuthorIndex = 0, onClose }: StoryV
                   <video
                     src={currentStory.mediaUrl}
                     className="w-full h-full object-cover"
+                    style={editor ? {
+                      objectPosition: `${editor.cropX}% ${editor.cropY}%`,
+                      transform: `scale(${editor.cropScale})`,
+                    } : undefined}
                     autoPlay
                     muted
                     playsInline
@@ -149,6 +175,10 @@ export function StoryViewer({ authors, initialAuthorIndex = 0, onClose }: StoryV
                     src={currentStory.mediaUrl}
                     alt=""
                     className="w-full h-full object-cover"
+                    style={editor ? {
+                      objectPosition: `${editor.cropX}% ${editor.cropY}%`,
+                      transform: `scale(${editor.cropScale})`,
+                    } : undefined}
                   />
                 )}
               </motion.div>
@@ -228,10 +258,16 @@ export function StoryViewer({ authors, initialAuthorIndex = 0, onClose }: StoryV
           )}
 
           {/* Caption */}
-          {currentStory.caption && (
-            <div className="absolute bottom-[calc(env(safe-area-inset-bottom)+124px)] inset-x-8 z-40">
-              <p className="whitespace-pre-wrap text-white text-[21px] leading-tight text-center font-medium drop-shadow-[0_2px_5px_rgba(0,0,0,0.9)]">
-                {currentStory.caption}
+          {overlayText && (
+            <div
+              className={editor ? "absolute z-40 max-w-[86%] -translate-x-1/2 -translate-y-1/2" : "absolute bottom-[calc(env(safe-area-inset-bottom)+124px)] inset-x-8 z-40"}
+              style={editor ? { left: `${editor.textX}%`, top: `${editor.textY}%` } : undefined}
+            >
+              <p
+                className="whitespace-pre-wrap text-center font-bold leading-tight drop-shadow-[0_2px_5px_rgba(0,0,0,0.9)]"
+                style={editor ? { color: editor.textColor, fontSize: `${editor.textSize}px` } : { color: "white", fontSize: "21px" }}
+              >
+                {overlayText}
               </p>
             </div>
           )}

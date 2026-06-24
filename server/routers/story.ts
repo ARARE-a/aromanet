@@ -14,6 +14,7 @@ export const storyRouter = router({
       mediaUrl: z.string().min(1), // accepts both absolute URLs and /manus-storage/... paths
       mediaType: z.enum(["image", "video"]).default("image"),
       caption: z.string().max(200).optional(),
+      editorState: z.string().max(5000).optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       const session = await getSession(ctx.req);
@@ -37,6 +38,7 @@ export const storyRouter = router({
           mediaUrl: input.mediaUrl,
           mediaType: input.mediaType,
           caption: input.caption,
+          editorState: input.editorState,
           expiresAt,
         });
       } else {
@@ -51,6 +53,7 @@ export const storyRouter = router({
           mediaUrl: input.mediaUrl,
           mediaType: input.mediaType,
           caption: input.caption,
+          editorState: input.editorState,
           expiresAt,
         });
       }

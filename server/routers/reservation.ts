@@ -5,7 +5,7 @@ import { getDb } from "../db";
 import { getSession } from "../session";
 import {
   reservations, reservationOptions, menus, menuOptions,
-  coupons, notifications, customerAccounts, customerProfiles, storeAccounts, therapistAccounts, therapists, stores, sales, therapistSalarySettings, therapistPayrolls, shifts,
+  coupons, notifications, customerAccounts, customerProfiles, storeAccounts, therapistAccounts, therapists, stores, sales, therapistSalarySettings, therapistPayrolls, shifts, reservationFinancialEvents, auditLogs,
 } from "../../drizzle/schema";
 import { eq, and, desc, gte, lt, or, sql } from "drizzle-orm";
 
@@ -19,6 +19,42 @@ const BLOCKING_RESERVATION_STATUSES = new Set([
 
 function blocksTherapistSlot(status: string | null | undefined) {
   return BLOCKING_RESERVATION_STATUSES.has(String(status));
+}
+
+const financialItemSchema = z.object({
+  label: z.string().max(80).optional(),
+  amount: z.number().min(0),
+  itemType: z.enum(["option", "extension", "discount", "adjustment"]).default("option"),
+  backRate: z.number().min(0).max(100).optional(),
+});
+
+type FinancialItem = z.infer<typeof financialItemSchema>;
+
+function safeParseFinancialItems(detail: unknown): FinancialItem[] {
+  if (!detail) return [];
+  try {
+    const parsed = typeof detail === "string" ? JSON.parse(detail) : detail;
+    if (!parsed || !Array.isArray(parsed.items)) return [];
+    return parsed.items
+      .filter((item: any) => item && Number(item.amount) > 0)
+      .map((item: any) => ({
+        label: String(item.label ?? ""),
+        amount: Number(item.amount ?? 0),
+        itemType: ["option", "extension", "discount", "adjustment"].includes(item.itemType) ? item.itemType : "option",
+        backRate: item.backRate === null || item.backRate === undefined || item.backRate === "" ? undefined : Number(item.backRate),
+      }));
+  } catch {
+    return [];
+  }
+}
+
+async function getLatestFinancialItems(db: any, reservationId: number): Promise<FinancialItem[]> {
+  const rows = await db.select({ detail: reservationFinancialEvents.detail })
+    .from(reservationFinancialEvents)
+    .where(eq(reservationFinancialEvents.reservationId, reservationId))
+    .orderBy(desc(reservationFinancialEvents.createdAt), desc(reservationFinancialEvents.id))
+    .limit(1);
+  return safeParseFinancialItems(rows[0]?.detail);
 }
 
 const EDIT_LOCKED_RESERVATION_STATUSES = new Set(["completed", "cancelled", "no_show"]);
@@ -203,12 +239,22 @@ async function upsertSaleForCompletedReservation(db: any, reservationId: number)
 
   const existingSales = await db.select({ id: sales.id, totalAmount: sales.totalAmount }).from(sales).where(eq(sales.reservationId, reservationId)).limit(1);
   const backRate = await getReservationBackRate(db, r.storeId, r.therapistId);
-  const therapistBack = Math.floor(Math.max(0, r.totalPrice - r.nominationFee) * backRate / 100);
+  const financialItems = await getLatestFinancialItems(db, reservationId);
+  const menuAmount = Math.max(0, r.totalPrice - r.nominationFee - r.optionTotal + r.discountAmount);
+  const itemBack = financialItems
+    .filter(item => item.itemType !== "discount")
+    .reduce((sum, item) => {
+      const itemRate = Number.isFinite(item.backRate) ? Number(item.backRate) : backRate;
+      return sum + Math.floor(item.amount * itemRate / 100);
+    }, 0);
+  const therapistBack = financialItems.length
+    ? Math.floor(menuAmount * backRate / 100) + itemBack
+    : Math.floor(Math.max(0, r.totalPrice - r.nominationFee) * backRate / 100);
   const saleData = {
     storeId: r.storeId,
     therapistId: r.therapistId,
     date: r.date,
-    menuAmount: r.totalPrice - r.nominationFee - r.optionTotal + r.discountAmount,
+    menuAmount,
     nominationFee: r.nominationFee,
     optionAmount: r.optionTotal,
     discountAmount: r.discountAmount,
@@ -731,6 +777,7 @@ export const reservationRouter = router({
       optionTotal: z.number().min(0),
       discountAmount: z.number().min(0).default(0),
       note: z.string().optional(),
+      items: z.array(financialItemSchema).default([]),
     }))
     .mutation(async ({ input, ctx }) => {
       const session = await getSession(ctx.req);
@@ -749,21 +796,86 @@ export const reservationRouter = router({
         ? await db.select().from(menus).where(and(eq(menus.id, target.menuId), eq(menus.storeId, session.storeId))).limit(1)
         : [];
       const menuAmount = Number(menuRows[0]?.price ?? Math.max(0, target.totalPrice - target.nominationFee - target.optionTotal + target.discountAmount));
-      const totalPrice = Math.max(0, menuAmount + target.nominationFee + input.optionTotal - input.discountAmount);
+      const optionAmountFromItems = input.items
+        .filter(item => item.itemType !== "discount")
+        .reduce((sum, item) => sum + item.amount, 0);
+      const discountAmountFromItems = input.items
+        .filter(item => item.itemType === "discount")
+        .reduce((sum, item) => sum + item.amount, 0);
+      const optionTotal = input.items.length ? optionAmountFromItems : input.optionTotal;
+      const discountAmount = input.items.length ? discountAmountFromItems : input.discountAmount;
+      const totalPrice = Math.max(0, menuAmount + target.nominationFee + optionTotal - discountAmount);
 
       await db.update(reservations).set({
-        optionTotal: input.optionTotal,
-        discountAmount: input.discountAmount,
+        optionTotal,
+        discountAmount,
         totalPrice,
         note: input.note ?? target.note,
         updatedAt: new Date(),
       }).where(eq(reservations.id, input.id));
+
+      const detail = JSON.stringify({
+        items: input.items,
+        previous: {
+          optionTotal: target.optionTotal,
+          discountAmount: target.discountAmount,
+          totalPrice: target.totalPrice,
+        },
+        next: {
+          optionTotal,
+          discountAmount,
+          totalPrice,
+        },
+      });
+      await db.insert(reservationFinancialEvents).values({
+        reservationId: input.id,
+        storeId: session.storeId,
+        actorRole: "store",
+        actorId: session.accountId,
+        eventType: "financial_adjustment",
+        beforeTotal: target.totalPrice,
+        afterTotal: totalPrice,
+        optionAmount: optionTotal,
+        discountAmount,
+        detail,
+        note: input.note,
+      });
+      await db.insert(auditLogs).values({
+        actorRole: "store",
+        actorId: session.accountId,
+        action: "reservation.financial_adjustment",
+        targetType: "reservation",
+        targetId: input.id,
+        detail,
+      });
 
       if (target.status === "completed") {
         await upsertSaleForCompletedReservation(db, input.id);
       }
 
       return { success: true, totalPrice };
+    }),
+
+  getFinancialHistory: publicProcedure
+    .input(z.object({ reservationId: z.number() }))
+    .query(async ({ input, ctx }) => {
+      const session = await getSession(ctx.req);
+      if (!session || session.role !== "store" || !session.storeId) throw new TRPCError({ code: "UNAUTHORIZED" });
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const targetRows = await db.select({ id: reservations.id, storeId: reservations.storeId })
+        .from(reservations)
+        .where(eq(reservations.id, input.reservationId))
+        .limit(1);
+      if (!targetRows[0] || targetRows[0].storeId !== session.storeId) throw new TRPCError({ code: "NOT_FOUND" });
+      const rows = await db.select().from(reservationFinancialEvents)
+        .where(eq(reservationFinancialEvents.reservationId, input.reservationId))
+        .orderBy(desc(reservationFinancialEvents.createdAt), desc(reservationFinancialEvents.id))
+        .limit(30);
+      return rows.map((row: any) => ({
+        ...row,
+        items: safeParseFinancialItems(row.detail),
+      }));
     }),
 
   cancel: publicProcedure

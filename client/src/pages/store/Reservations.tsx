@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { motion } from "framer-motion";
-import { Calendar, ChevronLeft, ChevronRight, Edit3, Home, MessageCircle, ReceiptText, TrendingUp, Users } from "lucide-react";
+import { Calendar, ChevronLeft, ChevronRight, Edit3, History, Home, MessageCircle, Plus, ReceiptText, Trash2, TrendingUp, Users } from "lucide-react";
 import { addDays, format, subDays } from "date-fns";
 import { ja } from "date-fns/locale";
 import { toast } from "sonner";
@@ -57,6 +57,20 @@ const STATUS_OPTIONS = [
   { value: "cancelled", label: "キャンセル" },
 ];
 
+type FinancialItemForm = {
+  label: string;
+  amount: string;
+  itemType: "option" | "extension" | "discount" | "adjustment";
+  backRate: string;
+};
+
+const emptyFinancialItem = (): FinancialItemForm => ({
+  label: "",
+  amount: "",
+  itemType: "option",
+  backRate: "",
+});
+
 export default function StoreReservations() {
   const [, navigate] = useLocation();
   const { session, isLoading } = useSession();
@@ -67,7 +81,7 @@ export default function StoreReservations() {
   const [editingReservation, setEditingReservation] = useState<any | null>(null);
   const [editForm, setEditForm] = useState({ date: "", startTime: "", menuId: "", therapistId: "none", isNomination: false, note: "" });
   const [financialReservation, setFinancialReservation] = useState<any | null>(null);
-  const [financialForm, setFinancialForm] = useState({ optionTotal: "0", discountAmount: "0", note: "" });
+  const [financialForm, setFinancialForm] = useState<{ optionTotal: string; discountAmount: string; note: string; items: FinancialItemForm[] }>({ optionTotal: "0", discountAmount: "0", note: "", items: [] });
   const [cancelingReservation, setCancelingReservation] = useState<any | null>(null);
   const [cancelReason, setCancelReason] = useState("");
 
@@ -86,6 +100,10 @@ export default function StoreReservations() {
   );
   const { data: therapists } = trpc.store.getTherapists.useQuery(undefined, { enabled: !!session });
   const { data: menus } = trpc.store.getMenus.useQuery(undefined, { enabled: !!session });
+  const { data: financialHistory } = trpc.reservation.getFinancialHistory.useQuery(
+    { reservationId: financialReservation?.id ?? 0 },
+    { enabled: !!financialReservation },
+  );
 
   const updateStatus = trpc.reservation.updateStatus.useMutation({
     onSuccess: () => {
@@ -164,21 +182,59 @@ export default function StoreReservations() {
 
   const openFinancialAdjust = (reservation: any) => {
     setFinancialReservation(reservation);
+    const items: FinancialItemForm[] = [];
+    if ((reservation.optionTotal ?? 0) > 0) {
+      items.push({ label: "現場追加", amount: String(reservation.optionTotal ?? 0), itemType: "option", backRate: "" });
+    }
+    if ((reservation.discountAmount ?? 0) > 0) {
+      items.push({ label: "割引", amount: String(reservation.discountAmount ?? 0), itemType: "discount", backRate: "" });
+    }
     setFinancialForm({
       optionTotal: String(reservation.optionTotal ?? 0),
       discountAmount: String(reservation.discountAmount ?? 0),
       note: reservation.note ?? reservation.customerNote ?? "",
+      items,
     });
   };
 
   const submitFinancialAdjust = () => {
     if (!financialReservation) return;
+    const items = financialForm.items
+      .map(item => ({
+        label: item.label.trim() || (
+          item.itemType === "extension" ? "延長" :
+            item.itemType === "discount" ? "割引" :
+              item.itemType === "adjustment" ? "調整金" : "オプション"
+        ),
+        amount: Math.max(0, parseInt(item.amount, 10) || 0),
+        itemType: item.itemType,
+        backRate: item.backRate === "" ? undefined : Math.max(0, Math.min(100, parseFloat(item.backRate) || 0)),
+      }))
+      .filter(item => item.amount > 0);
+    const optionTotal = items.length
+      ? items.filter(item => item.itemType !== "discount").reduce((sum, item) => sum + item.amount, 0)
+      : Math.max(0, parseInt(financialForm.optionTotal, 10) || 0);
+    const discountAmount = items.length
+      ? items.filter(item => item.itemType === "discount").reduce((sum, item) => sum + item.amount, 0)
+      : Math.max(0, parseInt(financialForm.discountAmount, 10) || 0);
     adjustFinancials.mutate({
       id: financialReservation.id,
-      optionTotal: Math.max(0, parseInt(financialForm.optionTotal, 10) || 0),
-      discountAmount: Math.max(0, parseInt(financialForm.discountAmount, 10) || 0),
+      optionTotal,
+      discountAmount,
       note: financialForm.note,
+      items,
     });
+  };
+
+  const updateFinancialItem = (index: number, patch: Partial<FinancialItemForm>) => {
+    setFinancialForm(f => ({
+      ...f,
+      items: f.items.map((item, i) => i === index ? { ...item, ...patch } : item),
+    }));
+  };
+
+  const removeFinancialItem = (index: number) => {
+    setFinancialForm(f => ({ ...f, items: f.items.filter((_, i) => i !== index) }));
   };
 
   const submitNormalCancel = () => {
@@ -540,6 +596,80 @@ export default function StoreReservations() {
                 placeholder="例: 1000"
               />
             </div>
+            <div className="rounded-2xl border border-border/60 p-3">
+              <div className="mb-2 flex items-center justify-between">
+                <div>
+                  <div className="text-sm font-semibold text-foreground">明細</div>
+                  <p className="text-[11px] text-muted-foreground">延長・オプション・割引ごとに残せます。バック率を空欄にすると基本バック率を使います。</p>
+                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="h-8 rounded-lg text-xs"
+                  onClick={() => setFinancialForm(f => ({ ...f, items: [...f.items, emptyFinancialItem()] }))}
+                >
+                  <Plus className="mr-1 h-3.5 w-3.5" />追加
+                </Button>
+              </div>
+              <div className="space-y-2">
+                {financialForm.items.length === 0 ? (
+                  <div className="rounded-xl bg-muted/40 p-3 text-xs text-muted-foreground">
+                    明細なし。上の合計金額だけで反映します。
+                  </div>
+                ) : financialForm.items.map((item, index) => (
+                  <div key={index} className="rounded-xl bg-muted/30 p-2">
+                    <div className="mb-2 grid grid-cols-[1fr_88px_34px] gap-2">
+                      <Input
+                        value={item.label}
+                        onChange={e => updateFinancialItem(index, { label: e.target.value })}
+                        className="h-9 rounded-lg bg-white text-xs"
+                        placeholder="例: 延長30分"
+                      />
+                      <Input
+                        type="number"
+                        min={0}
+                        value={item.amount}
+                        onChange={e => updateFinancialItem(index, { amount: e.target.value })}
+                        className="h-9 rounded-lg bg-white text-xs"
+                        placeholder="金額"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => removeFinancialItem(index)}
+                        className="flex h-9 w-9 items-center justify-center rounded-lg bg-white text-red-500"
+                        aria-label="明細を削除"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Select value={item.itemType} onValueChange={v => updateFinancialItem(index, { itemType: v as FinancialItemForm["itemType"] })}>
+                        <SelectTrigger className="h-9 rounded-lg bg-white text-xs">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="option">オプション</SelectItem>
+                          <SelectItem value="extension">延長</SelectItem>
+                          <SelectItem value="adjustment">調整金</SelectItem>
+                          <SelectItem value="discount">割引</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Input
+                        type="number"
+                        min={0}
+                        max={100}
+                        value={item.backRate}
+                        onChange={e => updateFinancialItem(index, { backRate: e.target.value })}
+                        className="h-9 rounded-lg bg-white text-xs"
+                        placeholder="個別バック率%"
+                        disabled={item.itemType === "discount"}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
             <div>
               <Label>店舗メモ</Label>
               <Textarea
@@ -549,6 +679,35 @@ export default function StoreReservations() {
                 rows={3}
                 placeholder="例: 現場で延長30分、割引適用"
               />
+            </div>
+            <div className="rounded-2xl border border-border/60 p-3">
+              <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-foreground">
+                <History className="h-4 w-4 text-primary" />
+                変更履歴
+              </div>
+              <div className="max-h-40 space-y-2 overflow-y-auto">
+                {((financialHistory as any[]) ?? []).length === 0 ? (
+                  <p className="text-xs text-muted-foreground">まだ履歴はありません。</p>
+                ) : ((financialHistory as any[]) ?? []).map(event => (
+                  <div key={event.id} className="rounded-xl bg-muted/30 p-2 text-xs">
+                    <div className="flex justify-between font-semibold text-foreground">
+                      <span>¥{Number(event.beforeTotal ?? 0).toLocaleString()} → ¥{Number(event.afterTotal ?? 0).toLocaleString()}</span>
+                      <span>{new Date(event.createdAt).toLocaleDateString("ja-JP")}</span>
+                    </div>
+                    <div className="mt-1 text-muted-foreground">
+                      追加 ¥{Number(event.optionAmount ?? 0).toLocaleString()} / 割引 ¥{Number(event.discountAmount ?? 0).toLocaleString()}
+                    </div>
+                    {event.items?.length > 0 && (
+                      <div className="mt-1 space-y-0.5 text-muted-foreground">
+                        {event.items.map((item: any, idx: number) => (
+                          <div key={idx}>{item.label || item.itemType}: ¥{Number(item.amount ?? 0).toLocaleString()}{item.backRate !== undefined ? ` / ${item.backRate}%` : ""}</div>
+                        ))}
+                      </div>
+                    )}
+                    {event.note && <div className="mt-1 whitespace-pre-wrap text-muted-foreground">{event.note}</div>}
+                  </div>
+                ))}
+              </div>
             </div>
             <Button className="w-full h-11 rounded-xl gradient-luxury text-white" onClick={submitFinancialAdjust} disabled={adjustFinancials.isPending}>
               売上・給与に反映する
