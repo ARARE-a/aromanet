@@ -4,7 +4,7 @@ import { customerAccounts, storeAccounts, stores, therapistAccounts, therapists 
 import { getDb } from "./db";
 import { getJwtSecretKey } from "./jwtSecret";
 
-const SESSION_COOKIE = "aromanet_session";
+export const SESSION_COOKIE = "aromanet_session";
 const DEMO_EMAILS = {
   store: process.env.DEMO_STORE_EMAIL || "showcase-store@aromanet.club",
   therapist: process.env.DEMO_THERAPIST_EMAIL || "showcase-therapist@aromanet.club",
@@ -31,6 +31,17 @@ export async function getSession(req: any): Promise<AromaSession | null> {
   }
 }
 
+export async function getSessionDatabaseMode(req: any): Promise<"primary" | "demo"> {
+  const token = req.cookies?.[SESSION_COOKIE];
+  if (!token) return "primary";
+  try {
+    const { payload } = await jwtVerify(token, getJwtSecretKey());
+    return payload.demo ? "demo" : "primary";
+  } catch {
+    return "primary";
+  }
+}
+
 function isDemoSession(role: AromaSession["role"], email?: string | null) {
   return Boolean(email && email === DEMO_EMAILS[role]);
 }
@@ -38,7 +49,7 @@ function isDemoSession(role: AromaSession["role"], email?: string | null) {
 export async function validateSessionPayload(payload: AromaSession): Promise<AromaSession | null> {
   if (!payload || !payload.role || typeof payload.accountId !== "number") return null;
 
-  const db = await getDb();
+  const db = await getDb(payload.demo ? "demo" : "primary");
   if (!db) return null;
 
   if (payload.role === "store") {

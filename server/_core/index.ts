@@ -11,9 +11,9 @@ import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { storagePut } from "../storage";
-import { getDb } from "../db";
+import { getDb, hasDemoDatabase, runWithDatabaseMode } from "../db";
 import { ensureRuntimeSchema } from "../runtimeMigrations";
-import { getSession } from "../session";
+import { getSession, getSessionDatabaseMode } from "../session";
 import { customerAccounts, storeAccounts, stores, therapistAccounts, therapists } from "../../drizzle/schema";
 import { setSessionCookie } from "../routers/auth";
 
@@ -172,6 +172,11 @@ async function startServer() {
   ensureRuntimeSchema().catch(error => {
     console.warn("[RuntimeSchema] skipped:", error?.message ?? error);
   });
+  if (hasDemoDatabase()) {
+    ensureRuntimeSchema("demo").catch(error => {
+      console.warn("[DemoRuntimeSchema] skipped:", error?.message ?? error);
+    });
+  }
   // Configure body parser with larger size limit for file uploads
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
@@ -183,7 +188,10 @@ async function startServer() {
     try {
       const role = parseDemoRole(req.query.role);
       const config = DEMO_LOGIN_CONFIG[role];
-      const db = await getDb();
+      if (!hasDemoDatabase()) {
+        return res.redirect(302, config.unavailablePath);
+      }
+      const db = await getDb("demo");
       if (!db) {
         return res.redirect(302, config.unavailablePath);
       }
@@ -270,6 +278,13 @@ async function startServer() {
       console.error("[DemoLogin] Failed to create demo session", error);
       return res.redirect(302, "/store/login?demo=unavailable");
     }
+  });
+
+  app.use(async (req, _res, next) => {
+    const routeSignature = `${req.path} ${req.originalUrl}`;
+    const forcePrimary = routeSignature.includes("aroAuth.") || routeSignature.includes("/api/trpc/auth.");
+    const mode = forcePrimary ? "primary" : await getSessionDatabaseMode(req);
+    runWithDatabaseMode(mode, next);
   });
 
   app.get("/api/health", (_req, res) => {

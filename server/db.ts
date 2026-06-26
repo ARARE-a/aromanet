@@ -1,12 +1,49 @@
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
+import { AsyncLocalStorage } from "node:async_hooks";
 import { InsertUser, users } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
+export type DatabaseMode = "primary" | "demo";
+
 let _db: ReturnType<typeof drizzle> | null = null;
+let _demoDb: ReturnType<typeof drizzle> | null = null;
+const databaseModeStorage = new AsyncLocalStorage<DatabaseMode>();
+
+export function getCurrentDatabaseMode(): DatabaseMode {
+  return databaseModeStorage.getStore() ?? "primary";
+}
+
+export function runWithDatabaseMode<T>(mode: DatabaseMode, fn: () => T): T {
+  return databaseModeStorage.run(mode, fn);
+}
+
+export function hasDemoDatabase() {
+  return Boolean(process.env.DEMO_DATABASE_URL);
+}
+
+function resolveMode(mode?: DatabaseMode | { demo?: boolean }): DatabaseMode {
+  if (!mode) return getCurrentDatabaseMode();
+  if (typeof mode === "string") return mode;
+  return mode.demo ? "demo" : "primary";
+}
 
 // Lazily create the drizzle instance so local tooling can run without a DB.
-export async function getDb() {
+export async function getDb(mode?: DatabaseMode | { demo?: boolean }) {
+  const resolvedMode = resolveMode(mode);
+  if (resolvedMode === "demo") {
+    if (!process.env.DEMO_DATABASE_URL) return null;
+    if (!_demoDb) {
+      try {
+        _demoDb = drizzle(process.env.DEMO_DATABASE_URL);
+      } catch (error) {
+        console.warn("[DemoDatabase] Failed to connect:", error);
+        _demoDb = null;
+      }
+    }
+    return _demoDb;
+  }
+
   if (!_db && process.env.DATABASE_URL) {
     try {
       _db = drizzle(process.env.DATABASE_URL);

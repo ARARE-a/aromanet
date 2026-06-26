@@ -1,7 +1,7 @@
 import { sql } from "drizzle-orm";
-import { getDb } from "./db";
+import { type DatabaseMode, getDb } from "./db";
 
-let runtimeSchemaReady: Promise<void> | null = null;
+const runtimeSchemaReady = new Map<DatabaseMode, Promise<void>>();
 
 async function ignoreExistingColumn(promise: Promise<unknown>) {
   try {
@@ -55,10 +55,11 @@ async function ignoreExistingTable(promise: Promise<unknown>) {
   }
 }
 
-export async function ensureRuntimeSchema() {
-  if (!runtimeSchemaReady) {
-    runtimeSchemaReady = (async () => {
-      const db = await getDb();
+export async function ensureRuntimeSchema(mode?: DatabaseMode) {
+  const resolvedMode = mode ?? "primary";
+  if (!runtimeSchemaReady.has(resolvedMode)) {
+    runtimeSchemaReady.set(resolvedMode, (async () => {
+      const db = await getDb(resolvedMode);
       if (!db) return;
 
       await ignoreExistingColumn(db.execute(sql.raw("ALTER TABLE shifts ADD COLUMN approvalStatus enum('pending','approved','rejected') NOT NULL DEFAULT 'pending'")));
@@ -101,9 +102,9 @@ export async function ensureRuntimeSchema() {
         )
       `)));
     })().catch(error => {
-      runtimeSchemaReady = null;
+      runtimeSchemaReady.delete(resolvedMode);
       throw error;
-    });
+    }));
   }
-  return runtimeSchemaReady;
+  return runtimeSchemaReady.get(resolvedMode);
 }
