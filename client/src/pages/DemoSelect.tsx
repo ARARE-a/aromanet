@@ -1,11 +1,11 @@
 import { Link } from "wouter";
-import { Building2, Heart, PlayCircle, User } from "lucide-react";
+import { AlertTriangle, Building2, Heart, PlayCircle, User } from "lucide-react";
 
 const demoRoles = [
   {
     label: "店舗デモ",
     sublabel: "Store Demo",
-    description: "予約確認、担当割当、売上、女子給を確認",
+    description: "予約確認、担当割り当て、売上、給与、顧客管理を確認できます。",
     demoPath: "/api/demo-login?role=store",
     icon: Building2,
     iconClass: "from-[#00645f] to-[#008982]",
@@ -13,7 +13,7 @@ const demoRoles = [
   {
     label: "セラピストデモ",
     sublabel: "Therapist Demo",
-    description: "予約、出勤、投稿、売上確認を確認",
+    description: "出勤申請、予約確認、投稿、顧客メモ、売上確認を試せます。",
     demoPath: "/api/demo-login?role=therapist",
     icon: Heart,
     iconClass: "from-[#008982] to-[#31b6ae]",
@@ -21,7 +21,7 @@ const demoRoles = [
   {
     label: "お客様デモ",
     sublabel: "Customer Demo",
-    description: "検索、電話番号予約、マイページを確認",
+    description: "検索、予約、メッセージ、お気に入り、マイページを確認できます。",
     demoPath: "/api/demo-login?role=customer",
     icon: User,
     iconClass: "from-[#b99450] to-[#d1b777]",
@@ -29,6 +29,10 @@ const demoRoles = [
 ] as const;
 
 export default function DemoSelect() {
+  const isUnavailable =
+    typeof window !== "undefined" &&
+    new URLSearchParams(window.location.search).get("unavailable") === "1";
+
   return (
     <main className="min-h-screen bg-gradient-to-b from-white via-[#f7fffd] to-[#e6fbf8] text-[#1b2423]">
       <section className="mx-auto flex min-h-screen w-full max-w-[430px] flex-col px-5 py-12 sm:max-w-[440px]">
@@ -39,10 +43,20 @@ export default function DemoSelect() {
             </div>
             <h1 className="font-serif text-3xl text-[#2b645d]">AromaNet Demo</h1>
             <p className="mt-2 text-sm font-medium text-[#425754]">
-              ID・パスワードなしで確認用データを開けます
+              ID・パスワードなしで確認用データに入れます。
             </p>
             <div className="mx-auto mt-3 h-0.5 w-12 rounded-full bg-gradient-to-r from-[#00645f] to-[#c7a66b]" />
           </header>
+
+          {isUnavailable && (
+            <div className="mb-4 flex gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+              <p>
+                デモ環境の準備がまだ完了していません。Renderの
+                DEMO_DATABASE_URL設定と再デプロイを確認してください。
+              </p>
+            </div>
+          )}
 
           <div className="space-y-4">
             {demoRoles.map((role) => {
@@ -77,10 +91,10 @@ export default function DemoSelect() {
 
           <div className="mt-5 rounded-2xl border border-[#dbe9e5] bg-white/80 p-4 text-center shadow-sm">
             <p className="text-sm font-bold text-[#24413d]">
-              デモ専用の隔離データです
+              デモ専用の分離データです
             </p>
             <p className="mt-1 text-xs leading-5 text-[#66726f]">
-              実店舗の顧客情報とは分離された確認用アカウントでログインします。
+              実店舗の顧客情報とは分けた確認用アカウントでログインします。本番利用は必ず通常ログインから入ってください。
             </p>
           </div>
 

@@ -25,17 +25,17 @@ const DEMO_LOGIN_CONFIG: Record<
 > = {
   store: {
     email: process.env.DEMO_STORE_EMAIL || "showcase-store@aromanet.club",
-    unavailablePath: "/store/login?demo=unavailable",
+    unavailablePath: "/demo?unavailable=1",
     redirectPath: "/store/dashboard?demo=1",
   },
   therapist: {
     email: process.env.DEMO_THERAPIST_EMAIL || "showcase-therapist@aromanet.club",
-    unavailablePath: "/therapist/login?demo=unavailable",
+    unavailablePath: "/demo?unavailable=1",
     redirectPath: "/therapist/dashboard?demo=1",
   },
   customer: {
     email: process.env.DEMO_CUSTOMER_EMAIL || "showcase-customer@aromanet.club",
-    unavailablePath: "/customer/login?demo=unavailable",
+    unavailablePath: "/demo?unavailable=1",
     redirectPath: "/home?demo=1",
   },
 };
@@ -276,7 +276,7 @@ async function startServer() {
       return res.redirect(302, config.redirectPath);
     } catch (error) {
       console.error("[DemoLogin] Failed to create demo session", error);
-      return res.redirect(302, "/store/login?demo=unavailable");
+      return res.redirect(302, "/demo?unavailable=1");
     }
   });
 

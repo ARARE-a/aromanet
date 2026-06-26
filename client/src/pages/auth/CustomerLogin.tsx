@@ -39,6 +39,8 @@ export default function CustomerLogin() {
         <>
           <Link href="/customer/register" className="text-primary font-medium hover:underline">新規登録</Link>
           {" "}|{" "}
+          <Link href="/demo" className="text-primary font-medium hover:underline">デモを見る</Link>
+          {" "}|{" "}
           <Link href="/roles" className="text-muted-foreground hover:underline">ロール選択に戻る</Link>
         </>
       )}

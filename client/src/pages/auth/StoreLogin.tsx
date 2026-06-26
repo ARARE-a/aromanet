@@ -25,7 +25,7 @@ export default function StoreLogin() {
       submitLabel="ログイン"
       onSubmit={async (d) => { setError(null); await loginMut.mutateAsync({ email: d.email.trim(), password: d.password }); }}
       isLoading={loginMut.isPending} error={error}
-      footer={<><Link href="/store/register" className="text-primary font-medium hover:underline">新規登録</Link>{" "}|{" "}<Link href="/" className="text-muted-foreground hover:underline">ロール選択に戻る</Link></>}
+      footer={<><Link href="/store/register" className="text-primary font-medium hover:underline">新規登録</Link>{" "}|{" "}<Link href="/demo" className="text-primary font-medium hover:underline">デモを見る</Link>{" "}|{" "}<Link href="/" className="text-muted-foreground hover:underline">ロール選択に戻る</Link></>}
     />
   );
 }
