@@ -1,6 +1,7 @@
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import { AsyncLocalStorage } from "node:async_hooks";
+import type { PoolOptions } from "mysql2";
 import { InsertUser, users } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
@@ -28,6 +29,28 @@ function resolveMode(mode?: DatabaseMode | { demo?: boolean }): DatabaseMode {
   return mode.demo ? "demo" : "primary";
 }
 
+function requiresSsl(url: string) {
+  try {
+    const host = new URL(url).hostname;
+    return host.includes("tidbcloud.com") || process.env.DB_SSL === "true";
+  } catch {
+    return process.env.DB_SSL === "true";
+  }
+}
+
+function createDrizzleDatabase(url: string) {
+  if (!requiresSsl(url)) return drizzle(url);
+  const connection: PoolOptions = {
+    uri: url,
+    supportBigNumbers: true,
+    ssl: {
+      minVersion: "TLSv1.2",
+      rejectUnauthorized: true,
+    },
+  };
+  return drizzle({ connection });
+}
+
 // Lazily create the drizzle instance so local tooling can run without a DB.
 export async function getDb(mode?: DatabaseMode | { demo?: boolean }) {
   const resolvedMode = resolveMode(mode);
@@ -35,7 +58,7 @@ export async function getDb(mode?: DatabaseMode | { demo?: boolean }) {
     if (!process.env.DEMO_DATABASE_URL) return null;
     if (!_demoDb) {
       try {
-        _demoDb = drizzle(process.env.DEMO_DATABASE_URL);
+        _demoDb = createDrizzleDatabase(process.env.DEMO_DATABASE_URL);
       } catch (error) {
         console.warn("[DemoDatabase] Failed to connect:", error);
         _demoDb = null;
@@ -46,7 +69,7 @@ export async function getDb(mode?: DatabaseMode | { demo?: boolean }) {
 
   if (!_db && process.env.DATABASE_URL) {
     try {
-      _db = drizzle(process.env.DATABASE_URL);
+      _db = createDrizzleDatabase(process.env.DATABASE_URL);
     } catch (error) {
       console.warn("[Database] Failed to connect:", error);
       _db = null;

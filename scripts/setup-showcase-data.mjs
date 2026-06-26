@@ -27,6 +27,14 @@ function required(name) {
   return value;
 }
 
+function connectionOptions(databaseUrl) {
+  const url = new URL(databaseUrl);
+  const needsSsl = url.hostname.includes("tidbcloud.com") || process.env.DB_SSL === "true";
+  return needsSsl
+    ? { uri: databaseUrl, ssl: { minVersion: "TLSv1.2", rejectUnauthorized: true } }
+    : databaseUrl;
+}
+
 function datePlusDays(days) {
   const date = new Date();
   date.setDate(date.getDate() + days);
@@ -450,7 +458,7 @@ async function main() {
 
   const password = getPassword();
   const passwordHash = await bcrypt.hash(password, 12);
-  const conn = await mysql.createConnection(required("DATABASE_URL"));
+  const conn = await mysql.createConnection(connectionOptions(required("DATABASE_URL")));
   const today = datePlusDays(0);
   const tomorrow = datePlusDays(1);
   const yesterday = datePlusDays(-1);
