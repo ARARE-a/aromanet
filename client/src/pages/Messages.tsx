@@ -83,6 +83,9 @@ export default function Messages() {
     } else if (type === "store_therapist" && storeId && session.role === "therapist") {
       setAutoOpenDone(true);
       getOrCreateThreadMut.mutate({ threadType: "store_therapist", storeId: parseInt(storeId, 10), therapistId: session.therapistId ?? undefined });
+    } else if (type === "therapist_customer" && customerId && session.role === "therapist") {
+      setAutoOpenDone(true);
+      getOrCreateThreadMut.mutate({ threadType: "therapist_customer", therapistId: session.therapistId ?? undefined, customerId: parseInt(customerId, 10) });
     } else if (therapistId && session.role === "customer") {
       setAutoOpenDone(true);
       getOrCreateThreadMut.mutate({ threadType: "therapist_customer", therapistId: parseInt(therapistId, 10), customerId: session.accountId ?? undefined });

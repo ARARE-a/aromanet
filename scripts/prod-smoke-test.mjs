@@ -199,6 +199,15 @@ try {
     const editMenu = menusAfterEditCourse.find((row) => row.name === `QA90編集${stamp}`);
     assert(editMenu, "edit menu not found", menusAfterEditCourse);
     ids.editMenuId = editMenu.id;
+    await store.client.room.create.mutate({
+      name: `QAルーム${stamp}`,
+      description: "QA予約確定用ルーム",
+      capacity: 1,
+    });
+    const rooms = await store.client.room.getMyRooms.query();
+    const room = rooms.find((row) => row.name === `QAルーム${stamp}`);
+    assert(room, "created room not found", rooms);
+    ids.roomId = room.id;
   });
 
   await step("店舗が招待URLを発行し、セラピストを所属登録する", async () => {
@@ -485,9 +494,9 @@ try {
   });
 
   await step("予約完了後、売上と給与が反映される", async () => {
-    await store.client.reservation.updateStatus.mutate({ id: ids.reservationId, status: "confirmed" });
-    await store.client.reservation.updateStatus.mutate({ id: ids.reservationId, status: "in_service" });
-    await store.client.reservation.updateStatus.mutate({ id: ids.reservationId, status: "completed" });
+    await store.client.reservation.updateStatus.mutate({ id: ids.reservationId, status: "confirmed", roomId: ids.roomId });
+    await store.client.reservation.updateStatus.mutate({ id: ids.reservationId, status: "in_service", roomId: ids.roomId });
+    await store.client.reservation.updateStatus.mutate({ id: ids.reservationId, status: "completed", roomId: ids.roomId });
     const autoStorePayrolls = await store.client.sales.getTherapistPayrolls.query({ year, month: monthNum });
     assert(
       autoStorePayrolls.some((row) => row.therapistId === ids.therapistId && Number(row.totalAmount ?? 0) >= 7000),

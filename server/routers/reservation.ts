@@ -5,7 +5,7 @@ import { getDb } from "../db";
 import { getSession } from "../session";
 import {
   reservations, reservationOptions, menus, menuOptions,
-  coupons, notifications, customerAccounts, customerProfiles, storeAccounts, therapistAccounts, therapists, stores, sales, therapistSalarySettings, therapistPayrolls, shifts, reservationFinancialEvents, auditLogs,
+  coupons, notifications, customerAccounts, customerProfiles, storeAccounts, therapistAccounts, therapists, stores, sales, therapistSalarySettings, therapistPayrolls, shifts, reservationFinancialEvents, auditLogs, rooms,
 } from "../../drizzle/schema";
 import { eq, and, desc, gte, lt, or, sql } from "drizzle-orm";
 
@@ -68,7 +68,7 @@ function assertReservationEditable(status: string | null | undefined) {
 function maskStoreDemoReservation(row: any) {
   return {
     ...row,
-    customerName: `デモ顧客#${row.id}`,
+    customerName: row.customerName,
     customerPhone: "090-0000-0000",
     customerPhoneVerified: true,
     customerImage: null,
@@ -204,6 +204,36 @@ async function assertReservationConflicts(db: any, input: {
   }
 }
 
+async function requireRoomAvailableForReservation(db: any, input: {
+  reservationId: number;
+  storeId: number;
+  roomId: number;
+  date: string;
+  startTime: string;
+  endTime: string;
+}) {
+  const roomRows = await db.select().from(rooms).where(and(
+    eq(rooms.id, input.roomId),
+    eq(rooms.storeId, input.storeId),
+    eq(rooms.isAvailable, true),
+  )).limit(1);
+  if (!roomRows[0]) {
+    throw new TRPCError({ code: "CONFLICT", message: "利用できるルームを選択してください" });
+  }
+
+  const existing = await db.select().from(reservations).where(and(
+    eq(reservations.storeId, input.storeId),
+    eq(reservations.roomId, input.roomId),
+    eq(reservations.date, input.date),
+  ));
+  for (const r of existing) {
+    if (r.id === input.reservationId || !blocksTherapistSlot(r.status)) continue;
+    if (r.startTime < input.endTime && r.endTime > input.startTime) {
+      throw new TRPCError({ code: "CONFLICT", message: "選択したルームはこの時間帯に別の予約があります" });
+    }
+  }
+}
+
 async function removeReservationSaleAndRecalculatePayroll(db: any, reservationId: number, fallback: { storeId: number; therapistId: number | null; date: string }) {
   const existingSales = await db.select().from(sales).where(eq(sales.reservationId, reservationId));
   if (!existingSales.length) return;
@@ -253,6 +283,7 @@ async function upsertSaleForCompletedReservation(db: any, reservationId: number)
   const saleData = {
     storeId: r.storeId,
     therapistId: r.therapistId,
+    roomId: r.roomId,
     date: r.date,
     menuAmount,
     nominationFee: r.nominationFee,
@@ -675,6 +706,7 @@ export const reservationRouter = router({
         id: reservations.id,
         storeId: reservations.storeId,
         therapistId: reservations.therapistId,
+        roomId: reservations.roomId,
         customerId: reservations.customerId,
         menuId: reservations.menuId,
         date: reservations.date,
@@ -700,6 +732,7 @@ export const reservationRouter = router({
         customerImage: customerProfiles.profileImageUrl,
         therapistName: therapists.displayName,
         therapistImage: therapists.profileImageUrl,
+        roomName: rooms.name,
         storeName: stores.name,
         menuName: menus.name,
         menuPrice: menus.price,
@@ -708,6 +741,7 @@ export const reservationRouter = router({
         .leftJoin(customerProfiles, eq(reservations.customerId, customerProfiles.accountId))
         .leftJoin(customerAccounts, eq(reservations.customerId, customerAccounts.id))
         .leftJoin(therapists, eq(reservations.therapistId, therapists.id))
+        .leftJoin(rooms, eq(reservations.roomId, rooms.id))
         .leftJoin(stores, eq(reservations.storeId, stores.id))
         .leftJoin(menus, eq(reservations.menuId, menus.id))
         .where(and(...conditions))
@@ -720,6 +754,7 @@ export const reservationRouter = router({
     .input(z.object({
       id: z.number(),
       status: z.enum(["pending", "confirmed", "waiting", "in_service", "completed", "cancelled", "no_show", "change_requested"]),
+      roomId: z.number().optional(),
       cancelReason: z.string().optional(),
       cancelFee: z.number().optional(),
       note: z.string().optional(),
@@ -738,7 +773,31 @@ export const reservationRouter = router({
       if (["completed", "cancelled", "no_show"].includes(target.status) && target.status !== input.status) {
         throw new TRPCError({ code: "CONFLICT", message: "完了済み、キャンセル済み、無断キャンセル済みの予約ステータスは変更できません" });
       }
-      await db.update(reservations).set(data).where(eq(reservations.id, id));
+      const nextRoomId = input.roomId ?? target.roomId;
+      if (["confirmed", "waiting", "in_service", "completed"].includes(input.status)) {
+        if (!target.therapistId) {
+          throw new TRPCError({ code: "CONFLICT", message: "予約を確定する前に担当セラピストを割り当ててください" });
+        }
+        if (!nextRoomId) {
+          throw new TRPCError({ code: "CONFLICT", message: "予約を確定する前に案内ルームを選択してください" });
+        }
+        await requireTherapistAvailableForReservation(db, {
+          storeId: target.storeId,
+          therapistId: target.therapistId,
+          date: target.date,
+          startTime: target.startTime,
+          endTime: target.endTime,
+        });
+        await requireRoomAvailableForReservation(db, {
+          reservationId: target.id,
+          storeId: target.storeId,
+          roomId: nextRoomId,
+          date: target.date,
+          startTime: target.startTime,
+          endTime: target.endTime,
+        });
+      }
+      await db.update(reservations).set({ ...data, roomId: nextRoomId }).where(eq(reservations.id, id));
 
       if (input.status === "completed") {
         await upsertSaleForCompletedReservation(db, id);

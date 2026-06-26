@@ -103,14 +103,6 @@ async function requireActiveTherapist(db: any, therapistId: number, publicOnly =
   return rows[0];
 }
 
-async function requireTherapistCustomerRelation(db: any, therapistId: number, customerId: number) {
-  const rows = await db.select({ id: reservations.id })
-    .from(reservations)
-    .where(and(eq(reservations.therapistId, therapistId), eq(reservations.customerId, customerId)))
-    .limit(1);
-  if (!rows[0]) throw new TRPCError({ code: "FORBIDDEN" });
-}
-
 async function buildThreadData(db: any, input: any, session: any) {
   if (input.threadType === "store_customer") {
     if (session.role === "customer") {
@@ -139,7 +131,6 @@ async function buildThreadData(db: any, input: any, session: any) {
       if (!input.customerId || !session.therapistId) throw new TRPCError({ code: "BAD_REQUEST" });
       await requireActiveTherapist(db, session.therapistId);
       await requireActiveCustomer(db, input.customerId);
-      await requireTherapistCustomerRelation(db, session.therapistId, input.customerId);
       return { threadType: input.threadType, therapistId: session.therapistId, customerId: input.customerId };
     }
     throw new TRPCError({ code: "FORBIDDEN" });

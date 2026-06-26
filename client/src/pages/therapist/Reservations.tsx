@@ -83,7 +83,19 @@ export default function TherapistReservations() {
             </div>
             <div className="flex items-center gap-2">
               <AromaAvatar name={r.customerName} size="sm" />
-              <span className="text-sm text-foreground">{r.customerName ?? "お客様"}</span>
+              <div className="min-w-0 flex-1">
+                <span className="text-sm text-foreground">{r.customerName ?? "お客様"}</span>
+              </div>
+              {r.customerId && (
+                <button
+                  type="button"
+                  onClick={() => navigate(`/messages?customerId=${r.customerId}&type=therapist_customer`)}
+                  className="inline-flex h-8 items-center gap-1 rounded-lg border border-primary/25 px-3 text-xs font-semibold text-primary active:bg-primary/5"
+                >
+                  <MessageCircle className="h-3.5 w-3.5" />
+                  DM
+                </button>
+              )}
             </div>
             {r.notes && <div className="mt-2 text-xs text-muted-foreground bg-muted/50 rounded-lg p-2 whitespace-pre-wrap">{r.notes}</div>}
             {r.cancelReason && <div className="mt-2 text-xs text-red-600 bg-red-50 rounded-lg p-2 whitespace-pre-wrap">キャンセル理由: {r.cancelReason}</div>}

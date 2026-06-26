@@ -324,7 +324,7 @@ export const storeRouter = router({
       const cp = cpRows[0];
       result.push({
         ...row,
-        displayName: session.demo ? `デモ顧客#${row.customerId}` : (cp?.displayName ?? cp?.nickname ?? `顧客#${row.customerId}`),
+        displayName: cp?.displayName ?? cp?.nickname ?? `顧客#${row.customerId}`,
         phone: session.demo ? "090-0000-0000" : (cp?.phone ?? null),
         phoneVerified: session.demo ? true : Boolean(cp?.phoneVerified),
         profileImageUrl: session.demo ? null : (cp?.profileImageUrl ?? null),

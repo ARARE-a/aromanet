@@ -28,7 +28,9 @@ async function ignoreExistingColumn(promise: Promise<unknown>) {
       message.includes("ALTER TABLE messages ADD COLUMN deletedById") ||
       message.includes("ALTER TABLE customer_accounts ADD COLUMN phoneVerified") ||
       message.includes("ALTER TABLE customer_accounts ADD COLUMN phoneVerifiedAt") ||
-      message.includes("ALTER TABLE story_posts ADD COLUMN editorState");
+      message.includes("ALTER TABLE story_posts ADD COLUMN editorState") ||
+      message.includes("ALTER TABLE reservations ADD COLUMN roomId") ||
+      message.includes("ALTER TABLE sales ADD COLUMN roomId");
     if (!existingColumn) {
       throw error;
     }
@@ -76,14 +78,17 @@ export async function ensureRuntimeSchema() {
 
       await ignoreExistingColumn(db.execute(sql.raw("ALTER TABLE story_posts ADD COLUMN editorState text")));
 
+      await ignoreExistingColumn(db.execute(sql.raw("ALTER TABLE reservations ADD COLUMN roomId int")));
+      await ignoreExistingColumn(db.execute(sql.raw("ALTER TABLE sales ADD COLUMN roomId int")));
+
       await ignoreExistingTable(db.execute(sql.raw(`
-        CREATE TABLE reservation_financial_events (
+        CREATE TABLE IF NOT EXISTS reservation_financial_events (
           id int NOT NULL AUTO_INCREMENT PRIMARY KEY,
           reservationId int NOT NULL,
           storeId int NOT NULL,
-          actorRole enum('store','therapist','customer','admin') NOT NULL DEFAULT 'store',
+          actorRole varchar(20) NOT NULL DEFAULT 'store',
           actorId int NOT NULL,
-          eventType enum('financial_adjustment','status_change','payroll_recalculation') NOT NULL DEFAULT 'financial_adjustment',
+          eventType varchar(40) NOT NULL DEFAULT 'financial_adjustment',
           beforeTotal int NOT NULL DEFAULT 0,
           afterTotal int NOT NULL DEFAULT 0,
           optionAmount int NOT NULL DEFAULT 0,
@@ -91,8 +96,8 @@ export async function ensureRuntimeSchema() {
           detail text,
           note text,
           createdAt timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
-          INDEX idx_reservation_financial_events_reservation (reservationId),
-          INDEX idx_reservation_financial_events_store (storeId)
+          KEY idx_reservation_financial_events_reservation (reservationId),
+          KEY idx_reservation_financial_events_store (storeId)
         )
       `)));
     })().catch(error => {

@@ -78,6 +78,7 @@ export default function StoreReservations() {
   const [statusFilter, setStatusFilter] = useState("pending");
   const [assigningReservationId, setAssigningReservationId] = useState<number | null>(null);
   const [selectedTherapistId, setSelectedTherapistId] = useState("");
+  const [selectedRoomByReservation, setSelectedRoomByReservation] = useState<Record<number, string>>({});
   const [editingReservation, setEditingReservation] = useState<any | null>(null);
   const [editForm, setEditForm] = useState({ date: "", startTime: "", menuId: "", therapistId: "none", isNomination: false, note: "" });
   const [financialReservation, setFinancialReservation] = useState<any | null>(null);
@@ -100,6 +101,7 @@ export default function StoreReservations() {
   );
   const { data: therapists } = trpc.store.getTherapists.useQuery(undefined, { enabled: !!session });
   const { data: menus } = trpc.store.getMenus.useQuery(undefined, { enabled: !!session });
+  const { data: rooms } = trpc.room.getMyRooms.useQuery(undefined, { enabled: !!session });
   const { data: financialHistory } = trpc.reservation.getFinancialHistory.useQuery(
     { reservationId: financialReservation?.id ?? 0 },
     { enabled: !!financialReservation },
@@ -142,6 +144,7 @@ export default function StoreReservations() {
   const list = (reservations as any[]) ?? [];
   const therapistList = (therapists as any[]) ?? [];
   const menuList = (menus as any[]) ?? [];
+  const roomList = ((rooms as any[]) ?? []).filter((room: any) => room.isAvailable !== false);
   const heading =
     statusFilter === "pending" ? "確認待ち一覧" :
       statusFilter === "all" ? "予約一覧" :
@@ -251,6 +254,20 @@ export default function StoreReservations() {
     );
   };
 
+  const selectedRoomIdFor = (reservation: any) => {
+    const selected = selectedRoomByReservation[reservation.id];
+    const current = selected ?? (reservation.roomId ? String(reservation.roomId) : "");
+    return current ? Number(current) : undefined;
+  };
+
+  const canProgressReservation = (reservation: any) => Boolean(reservation.therapistId && selectedRoomIdFor(reservation));
+
+  const progressBlockedReason = (reservation: any) => {
+    if (!reservation.therapistId) return "担当セラピストを割り当ててください";
+    if (!selectedRoomIdFor(reservation)) return "案内ルームを選択してください";
+    return "";
+  };
+
   return (
     <AromaLayout title="予約管理" showBack backHref="/store/dashboard" showNav navItems={navItems}>
       <div className="px-4 py-3 flex items-center justify-between bg-white border-b border-border/50">
@@ -345,6 +362,10 @@ export default function StoreReservations() {
                 <div className="text-muted-foreground">最終金額</div>
                 <div className="font-semibold text-foreground">¥{(r.totalPrice ?? 0).toLocaleString()}</div>
               </div>
+              <div className="col-span-2">
+                <div className="text-muted-foreground">案内ルーム</div>
+                <div className="font-semibold text-foreground">{r.roomName ?? "未設定"}</div>
+              </div>
               {(r.optionTotal ?? 0) > 0 && <div className="text-muted-foreground">追加 ¥{(r.optionTotal ?? 0).toLocaleString()}</div>}
               {(r.discountAmount ?? 0) > 0 && <div className="text-muted-foreground">割引 -¥{(r.discountAmount ?? 0).toLocaleString()}</div>}
             </div>
@@ -401,6 +422,38 @@ export default function StoreReservations() {
               </div>
             )}
 
+            {!["completed", "cancelled", "no_show"].includes(r.status) && (
+              <div className="mb-3 rounded-xl border border-border/60 bg-white p-3">
+                <Label className="text-xs font-semibold text-foreground">案内ルーム</Label>
+                <Select
+                  value={selectedRoomByReservation[r.id] ?? (r.roomId ? String(r.roomId) : "")}
+                  onValueChange={v => setSelectedRoomByReservation(prev => ({ ...prev, [r.id]: v }))}
+                >
+                  <SelectTrigger className="mt-2 h-9 rounded-lg bg-muted/30 text-xs">
+                    <SelectValue placeholder="ルームを選択" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {roomList.map((room: any) => (
+                      <SelectItem key={room.id} value={String(room.id)}>
+                        {room.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {roomList.length === 0 ? (
+                  <button
+                    type="button"
+                    onClick={() => navigate("/store/rooms")}
+                    className="mt-2 text-left text-[11px] font-semibold text-primary"
+                  >
+                    ルームが未登録です。ルーム管理で登録してください。
+                  </button>
+                ) : !selectedRoomIdFor(r) ? (
+                  <p className="mt-2 text-[11px] text-amber-700">確定前にルームを選択してください。</p>
+                ) : null}
+              </div>
+            )}
+
             <div className="flex gap-2 flex-wrap">
               {!["completed", "cancelled", "no_show"].includes(r.status) && (
                 <Button
@@ -410,6 +463,16 @@ export default function StoreReservations() {
                   onClick={() => openEdit(r)}
                 >
                   <Edit3 className="w-3.5 h-3.5 mr-1" />編集
+                </Button>
+              )}
+              {r.customerId && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="text-xs h-8 rounded-lg border-blue-200 text-blue-700 hover:bg-blue-50"
+                  onClick={() => navigate(`/messages?customerId=${r.customerId}&storeId=${session?.storeId}&type=store_customer`)}
+                >
+                  <MessageCircle className="w-3.5 h-3.5 mr-1" />顧客DM
                 </Button>
               )}
               {!["cancelled", "no_show"].includes(r.status) && (
@@ -428,8 +491,9 @@ export default function StoreReservations() {
                   <Button
                     size="sm"
                     className="text-xs h-8 rounded-lg bg-green-600 hover:bg-green-700 text-white"
-                    onClick={() => updateStatus.mutate({ id: r.id, status: "confirmed" })}
-                    disabled={updateStatus.isPending}
+                    onClick={() => updateStatus.mutate({ id: r.id, status: "confirmed", roomId: selectedRoomIdFor(r) })}
+                    disabled={updateStatus.isPending || !canProgressReservation(r)}
+                    title={progressBlockedReason(r)}
                   >
                     確定
                   </Button>
@@ -440,8 +504,9 @@ export default function StoreReservations() {
                   <Button
                     size="sm"
                     className="text-xs h-8 rounded-lg bg-purple-600 hover:bg-purple-700 text-white"
-                    onClick={() => updateStatus.mutate({ id: r.id, status: "in_service" })}
-                    disabled={updateStatus.isPending}
+                    onClick={() => updateStatus.mutate({ id: r.id, status: "in_service", roomId: selectedRoomIdFor(r) })}
+                    disabled={updateStatus.isPending || !canProgressReservation(r)}
+                    title={progressBlockedReason(r)}
                   >
                     施術開始
                   </Button>
@@ -460,8 +525,9 @@ export default function StoreReservations() {
                 <Button
                   size="sm"
                   className="text-xs h-8 rounded-lg gradient-luxury text-white"
-                  onClick={() => updateStatus.mutate({ id: r.id, status: "completed" })}
-                  disabled={updateStatus.isPending}
+                  onClick={() => updateStatus.mutate({ id: r.id, status: "completed", roomId: selectedRoomIdFor(r) })}
+                  disabled={updateStatus.isPending || !canProgressReservation(r)}
+                  title={progressBlockedReason(r)}
                 >
                   施術完了
                 </Button>
