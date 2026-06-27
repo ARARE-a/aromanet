@@ -85,6 +85,20 @@ export default function StoreReservations() {
   const [financialForm, setFinancialForm] = useState<{ optionTotal: string; discountAmount: string; note: string; items: FinancialItemForm[] }>({ optionTotal: "0", discountAmount: "0", note: "", items: [] });
   const [cancelingReservation, setCancelingReservation] = useState<any | null>(null);
   const [cancelReason, setCancelReason] = useState("");
+  const [creatingReservation, setCreatingReservation] = useState(false);
+  const [createForm, setCreateForm] = useState({
+    customerMode: "new" as "new" | "existing",
+    customerId: "",
+    customerName: "",
+    customerPhone: "",
+    date: format(new Date(), "yyyy-MM-dd"),
+    startTime: "12:00",
+    menuId: "",
+    therapistId: "",
+    roomId: "",
+    isNomination: false,
+    note: "",
+  });
 
   useEffect(() => {
     if (!isLoading && (!session || session.role !== "store")) navigate("/store/login");
@@ -102,6 +116,7 @@ export default function StoreReservations() {
   const { data: therapists } = trpc.store.getTherapists.useQuery(undefined, { enabled: !!session });
   const { data: menus } = trpc.store.getMenus.useQuery(undefined, { enabled: !!session });
   const { data: rooms } = trpc.room.getMyRooms.useQuery(undefined, { enabled: !!session });
+  const { data: customers } = trpc.store.getCustomers.useQuery(undefined, { enabled: !!session });
   const { data: financialHistory } = trpc.reservation.getFinancialHistory.useQuery(
     { reservationId: financialReservation?.id ?? 0 },
     { enabled: !!financialReservation },
@@ -131,6 +146,14 @@ export default function StoreReservations() {
     },
     onError: e => toast.error(e.message),
   });
+  const createReservation = trpc.reservation.createByStore.useMutation({
+    onSuccess: () => {
+      toast.success("予約を作成しました");
+      setCreatingReservation(false);
+      refetch();
+    },
+    onError: e => toast.error(e.message),
+  });
 
   const adjustFinancials = trpc.reservation.adjustFinancials.useMutation({
     onSuccess: () => {
@@ -145,6 +168,7 @@ export default function StoreReservations() {
   const therapistList = (therapists as any[]) ?? [];
   const menuList = (menus as any[]) ?? [];
   const roomList = ((rooms as any[]) ?? []).filter((room: any) => room.isAvailable !== false);
+  const customerList = (customers as any[]) ?? [];
   const heading =
     statusFilter === "pending" ? "確認待ち一覧" :
       statusFilter === "all" ? "予約一覧" :
@@ -154,6 +178,51 @@ export default function StoreReservations() {
     statusFilter === "pending" ? "確認待ちの予約はありません" :
       statusFilter === "all" ? "予約はありません" :
         "この日の予約はありません";
+
+  const openCreate = () => {
+    setCreateForm({
+      customerMode: "new",
+      customerId: "",
+      customerName: "",
+      customerPhone: "",
+      date: dateStr,
+      startTime: "12:00",
+      menuId: menuList[0]?.id ? String(menuList[0].id) : "",
+      therapistId: therapistList[0]?.id ? String(therapistList[0].id) : "",
+      roomId: roomList[0]?.id ? String(roomList[0].id) : "",
+      isNomination: false,
+      note: "",
+    });
+    setCreatingReservation(true);
+  };
+
+  const submitCreate = () => {
+    if (!createForm.date || !createForm.startTime || !createForm.menuId || !createForm.therapistId || !createForm.roomId) {
+      toast.error("日時・コース・セラピスト・ルームを入力してください");
+      return;
+    }
+    if (createForm.customerMode === "existing" && !createForm.customerId) {
+      toast.error("顧客を選択してください");
+      return;
+    }
+    if (createForm.customerMode === "new" && !createForm.customerName.trim()) {
+      toast.error("新規顧客名を入力してください");
+      return;
+    }
+    createReservation.mutate({
+      customerMode: createForm.customerMode,
+      customerId: createForm.customerMode === "existing" ? Number(createForm.customerId) : undefined,
+      customerName: createForm.customerMode === "new" ? createForm.customerName.trim() : undefined,
+      customerPhone: createForm.customerMode === "new" ? createForm.customerPhone.trim() : undefined,
+      date: createForm.date,
+      startTime: createForm.startTime,
+      menuId: Number(createForm.menuId),
+      therapistId: Number(createForm.therapistId),
+      roomId: Number(createForm.roomId),
+      isNomination: createForm.isNomination,
+      note: createForm.note,
+    });
+  };
 
   const openEdit = (reservation: any) => {
     setEditingReservation(reservation);
@@ -291,6 +360,20 @@ export default function StoreReservations() {
         >
           <ChevronRight className="w-5 h-5" />
         </button>
+      </div>
+
+      <div className="px-4 py-3 bg-white border-b border-border/50">
+        <Button
+          type="button"
+          onClick={openCreate}
+          className="h-11 w-full rounded-xl gradient-luxury text-white"
+        >
+          <Plus className="mr-2 h-4 w-4" />
+          新規予約を作成
+        </Button>
+        <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
+          店舗作成の予約は、セラピストとルームを指定して確定予約として登録します。
+        </p>
       </div>
 
       <div className="px-4 py-2 flex gap-2 overflow-x-auto scrollbar-none">
@@ -550,6 +633,149 @@ export default function StoreReservations() {
           </motion.div>
         ))}
       </div>
+
+      <Dialog open={creatingReservation} onOpenChange={setCreatingReservation}>
+        <DialogContent className="max-w-sm rounded-2xl max-h-[88dvh] overflow-y-auto">
+          <DialogHeader><DialogTitle>新規予約を作成</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <div className="rounded-xl bg-primary/5 p-3 text-xs leading-relaxed text-primary">
+              確定予約として登録します。出勤済みのセラピストと空きルームが必要です。
+            </div>
+            <div>
+              <Label>顧客</Label>
+              <Select
+                value={createForm.customerMode === "new" ? "new" : createForm.customerId}
+                onValueChange={v => setCreateForm(f => v === "new"
+                  ? { ...f, customerMode: "new", customerId: "" }
+                  : { ...f, customerMode: "existing", customerId: v, customerName: "", customerPhone: "" }
+                )}
+              >
+                <SelectTrigger className="mt-1 rounded-xl"><SelectValue placeholder="顧客を選択" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="new">新規顧客を作成</SelectItem>
+                  {customerList.map((c: any) => (
+                    <SelectItem key={c.customerId} value={String(c.customerId)}>
+                      {c.displayName ?? `顧客#${c.customerId}`} {c.phone ? ` / ${c.phone}` : ""}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            {createForm.customerMode === "new" && (
+              <div className="grid grid-cols-1 gap-3">
+                <div>
+                  <Label>顧客名</Label>
+                  <Input
+                    value={createForm.customerName}
+                    onChange={e => setCreateForm(f => ({ ...f, customerName: e.target.value }))}
+                    className="mt-1 rounded-xl"
+                    placeholder="例: 佐藤"
+                  />
+                </div>
+                <div>
+                  <Label>電話番号</Label>
+                  <Input
+                    value={createForm.customerPhone}
+                    onChange={e => setCreateForm(f => ({ ...f, customerPhone: e.target.value }))}
+                    className="mt-1 rounded-xl"
+                    inputMode="tel"
+                    placeholder="例: 09012345678"
+                  />
+                </div>
+              </div>
+            )}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>日付</Label>
+                <Input
+                  type="date"
+                  value={createForm.date}
+                  onChange={e => setCreateForm(f => ({ ...f, date: e.target.value }))}
+                  className="mt-1 rounded-xl"
+                />
+              </div>
+              <div>
+                <Label>開始時間</Label>
+                <Input
+                  type="time"
+                  value={createForm.startTime}
+                  onChange={e => setCreateForm(f => ({ ...f, startTime: e.target.value }))}
+                  className="mt-1 rounded-xl"
+                />
+              </div>
+            </div>
+            <div>
+              <Label>コース</Label>
+              <Select value={createForm.menuId} onValueChange={v => setCreateForm(f => ({ ...f, menuId: v }))}>
+                <SelectTrigger className="mt-1 rounded-xl"><SelectValue placeholder="コースを選択" /></SelectTrigger>
+                <SelectContent>
+                  {menuList.map((m: any) => (
+                    <SelectItem key={m.id} value={String(m.id)}>
+                      {m.name} ({m.durationMinutes}分 / ¥{(m.price ?? 0).toLocaleString()})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>担当セラピスト</Label>
+              <Select value={createForm.therapistId} onValueChange={v => setCreateForm(f => ({ ...f, therapistId: v }))}>
+                <SelectTrigger className="mt-1 rounded-xl"><SelectValue placeholder="セラピストを選択" /></SelectTrigger>
+                <SelectContent>
+                  {therapistList.map((t: any) => (
+                    <SelectItem key={t.id} value={String(t.id)}>{t.displayName}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>案内ルーム</Label>
+              <Select value={createForm.roomId} onValueChange={v => setCreateForm(f => ({ ...f, roomId: v }))}>
+                <SelectTrigger className="mt-1 rounded-xl"><SelectValue placeholder="ルームを選択" /></SelectTrigger>
+                <SelectContent>
+                  {roomList.map((room: any) => (
+                    <SelectItem key={room.id} value={String(room.id)}>{room.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {roomList.length === 0 && (
+                <button
+                  type="button"
+                  onClick={() => navigate("/store/rooms")}
+                  className="mt-2 text-left text-[11px] font-semibold text-primary"
+                >
+                  ルームが未登録です。ルーム管理で登録してください。
+                </button>
+              )}
+            </div>
+            <label className="flex items-center gap-2 rounded-xl bg-muted/40 px-3 py-2 text-sm">
+              <input
+                type="checkbox"
+                checked={createForm.isNomination}
+                onChange={e => setCreateForm(f => ({ ...f, isNomination: e.target.checked }))}
+              />
+              指名予約として扱う
+            </label>
+            <div>
+              <Label>店舗メモ</Label>
+              <Textarea
+                value={createForm.note}
+                onChange={e => setCreateForm(f => ({ ...f, note: e.target.value }))}
+                className="mt-1 rounded-xl"
+                rows={3}
+                placeholder="例: 電話受付、到着時にコース確認"
+              />
+            </div>
+            <Button
+              className="h-11 w-full rounded-xl gradient-luxury text-white"
+              onClick={submitCreate}
+              disabled={createReservation.isPending}
+            >
+              確定予約を作成
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={!!editingReservation} onOpenChange={(open) => !open && setEditingReservation(null)}>
         <DialogContent className="max-w-sm rounded-2xl max-h-[86dvh] overflow-y-auto">

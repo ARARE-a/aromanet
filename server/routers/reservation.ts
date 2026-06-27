@@ -1,6 +1,8 @@
 import { z } from "zod";
 import { publicProcedure, router } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
+import bcrypt from "bcryptjs";
+import crypto from "crypto";
 import { getDb } from "../db";
 import { getSession } from "../session";
 import {
@@ -315,6 +317,152 @@ async function upsertSaleForCompletedReservation(db: any, reservationId: number)
 }
 
 export const reservationRouter = router({
+  createByStore: publicProcedure
+    .input(z.object({
+      customerMode: z.enum(["existing", "new"]).default("new"),
+      customerId: z.number().optional(),
+      customerName: z.string().max(50).optional(),
+      customerPhone: z.string().max(20).optional(),
+      therapistId: z.number(),
+      roomId: z.number(),
+      menuId: z.number(),
+      date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      startTime: z.string().regex(/^\d{2}:\d{2}$/),
+      isNomination: z.boolean().default(false),
+      note: z.string().max(1000).optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const session = await getSession(ctx.req);
+      if (!session || session.role !== "store") throw new TRPCError({ code: "UNAUTHORIZED" });
+      if (!session.storeId) throw new TRPCError({ code: "NOT_FOUND" });
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      const menuRows = await db.select().from(menus)
+        .where(and(eq(menus.id, input.menuId), eq(menus.storeId, session.storeId)))
+        .limit(1);
+      const menu = menuRows[0];
+      if (!menu) throw new TRPCError({ code: "NOT_FOUND", message: "コースが見つかりません" });
+
+      const therapistRows = await db.select({
+        id: therapists.id,
+        storeId: therapists.storeId,
+        displayName: therapists.displayName,
+      }).from(therapists)
+        .innerJoin(therapistAccounts, eq(therapists.accountId, therapistAccounts.id))
+        .where(and(
+          eq(therapists.id, input.therapistId),
+          eq(therapists.storeId, session.storeId),
+          eq(therapistAccounts.status, "active"),
+        ))
+        .limit(1);
+      if (!therapistRows[0]) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "所属セラピストが見つかりません" });
+      }
+
+      const [hour, minute] = input.startTime.split(":").map(Number);
+      const endMinutes = hour * 60 + minute + menu.durationMinutes;
+      const endTime = `${String(Math.floor(endMinutes / 60)).padStart(2, "0")}:${String(endMinutes % 60).padStart(2, "0")}`;
+
+      await requireTherapistAvailableForReservation(db, {
+        storeId: session.storeId,
+        therapistId: input.therapistId,
+        date: input.date,
+        startTime: input.startTime,
+        endTime,
+      });
+      await requireRoomAvailableForReservation(db, {
+        reservationId: 0,
+        storeId: session.storeId,
+        roomId: input.roomId,
+        date: input.date,
+        startTime: input.startTime,
+        endTime,
+      });
+
+      let customerId = input.customerId;
+      if (input.customerMode === "existing") {
+        if (!customerId) throw new TRPCError({ code: "BAD_REQUEST", message: "顧客を選択してください" });
+        const existingCustomer = await db.select({ id: customerAccounts.id }).from(customerAccounts)
+          .where(and(eq(customerAccounts.id, customerId), eq(customerAccounts.status, "active")))
+          .limit(1);
+        if (!existingCustomer[0]) throw new TRPCError({ code: "NOT_FOUND", message: "顧客が見つかりません" });
+      } else {
+        const displayName = input.customerName?.trim();
+        if (!displayName) throw new TRPCError({ code: "BAD_REQUEST", message: "新規顧客名を入力してください" });
+        const randomPassword = crypto.randomBytes(24).toString("base64url");
+        const passwordHash = await bcrypt.hash(randomPassword, 12);
+        const email = `store-${session.storeId}-customer-${Date.now()}-${crypto.randomBytes(4).toString("hex")}@aromanet.local`;
+        const insertedCustomer = await db.insert(customerAccounts).values({
+          email,
+          passwordHash,
+          phoneVerified: false,
+          ageVerified: false,
+          status: "active",
+        });
+        customerId = (insertedCustomer as any)[0].insertId as number;
+        await db.insert(customerProfiles).values({
+          accountId: customerId,
+          displayName,
+          nickname: displayName,
+          phone: input.customerPhone?.trim() || null,
+        });
+      }
+
+      if (!customerId) throw new TRPCError({ code: "BAD_REQUEST", message: "顧客情報が不足しています" });
+
+      await assertReservationConflicts(db, {
+        reservationId: 0,
+        storeId: session.storeId,
+        customerId,
+        therapistId: input.therapistId,
+        date: input.date,
+        startTime: input.startTime,
+        endTime,
+      });
+
+      const isNomination = Boolean(input.isNomination);
+      const nominationFee = isNomination ? menu.nominationFee : 0;
+      const totalPrice = menu.price + nominationFee;
+      const result = await db.insert(reservations).values({
+        storeId: session.storeId,
+        therapistId: input.therapistId,
+        roomId: input.roomId,
+        customerId,
+        menuId: input.menuId,
+        date: input.date,
+        startTime: input.startTime,
+        endTime,
+        isNomination,
+        nominationFee,
+        optionTotal: 0,
+        discountAmount: 0,
+        totalPrice,
+        note: input.note,
+        status: "confirmed",
+      });
+      const reservationId = (result as any)[0].insertId as number;
+
+      await db.insert(notifications).values({
+        recipientRole: "therapist",
+        recipientId: input.therapistId,
+        type: "reservation_confirmed",
+        title: "店舗が予約を作成しました",
+        body: `${input.date} ${input.startTime}`,
+        relatedId: reservationId,
+      });
+      await db.insert(notifications).values({
+        recipientRole: "customer",
+        recipientId: customerId,
+        type: "reservation_confirmed",
+        title: "予約が確定しました",
+        body: `${input.date} ${input.startTime}`,
+        relatedId: reservationId,
+      });
+
+      return { success: true, reservationId, customerId };
+    }),
+
   create: publicProcedure
     .input(z.object({
       storeId: z.number(),
