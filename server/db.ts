@@ -1,14 +1,14 @@
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import { AsyncLocalStorage } from "node:async_hooks";
-import type { PoolOptions } from "mysql2";
+import mysql, { type PoolOptions } from "mysql2/promise";
 import { InsertUser, users } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
 export type DatabaseMode = "primary" | "demo";
 
-let _db: ReturnType<typeof drizzle> | null = null;
-let _demoDb: ReturnType<typeof drizzle> | null = null;
+let _db: ReturnType<typeof createDrizzleDatabase> | null = null;
+let _demoDb: ReturnType<typeof createDrizzleDatabase> | null = null;
 const databaseModeStorage = new AsyncLocalStorage<DatabaseMode>();
 
 export function getCurrentDatabaseMode(): DatabaseMode {
@@ -47,13 +47,15 @@ function createDrizzleDatabase(url: string) {
   if (!requiresSsl(normalizedUrl)) return drizzle(normalizedUrl);
   const connection: PoolOptions = {
     uri: normalizedUrl,
+    waitForConnections: true,
+    connectionLimit: 5,
     supportBigNumbers: true,
     ssl: {
       minVersion: "TLSv1.2",
       rejectUnauthorized: true,
     },
   };
-  return drizzle({ connection });
+  return drizzle(mysql.createPool(connection));
 }
 
 export function resolveDemoDatabaseUrl(url: string) {
