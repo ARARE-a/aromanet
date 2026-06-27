@@ -19,6 +19,28 @@ import { setSessionCookie } from "../routers/auth";
 
 type DemoRole = "store" | "therapist" | "customer";
 
+function publicErrorDetails(error: unknown) {
+  const err = error as {
+    message?: string;
+    code?: string;
+    errno?: number;
+    sqlState?: string;
+    cause?: {
+      message?: string;
+      code?: string;
+      errno?: number;
+      sqlState?: string;
+    };
+  };
+  return {
+    message: err?.message || "unknown_error",
+    code: err?.code || err?.cause?.code || null,
+    errno: err?.errno || err?.cause?.errno || null,
+    sqlState: err?.sqlState || err?.cause?.sqlState || null,
+    cause: err?.cause?.message || null,
+  };
+}
+
 const DEMO_LOGIN_CONFIG: Record<
   DemoRole,
   { email: string; unavailablePath: string; redirectPath: string }
@@ -299,6 +321,7 @@ async function startServer() {
         customer: false,
       },
       error: null as string | null,
+      errorDetails: null as ReturnType<typeof publicErrorDetails> | null,
     };
 
     if (!rawUrl) {
@@ -336,6 +359,7 @@ async function startServer() {
       res.json(status);
     } catch (error) {
       status.error = error instanceof Error ? error.message : "unknown_error";
+      status.errorDetails = publicErrorDetails(error);
       res.json(status);
     }
   });
