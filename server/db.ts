@@ -51,6 +51,21 @@ function createDrizzleDatabase(url: string) {
   return drizzle({ connection });
 }
 
+function resolveDemoDatabaseUrl(url: string) {
+  const demoDatabaseName = process.env.DEMO_DATABASE_NAME || "aromanet_demo";
+  try {
+    const parsed = new URL(url);
+    const databaseName = parsed.pathname.replace(/^\/+/, "");
+    if (!databaseName || databaseName === "sys" || databaseName === "mysql") {
+      parsed.pathname = `/${demoDatabaseName}`;
+      return parsed.toString();
+    }
+  } catch {
+    // Keep the original URL so the connection error remains visible in logs.
+  }
+  return url;
+}
+
 // Lazily create the drizzle instance so local tooling can run without a DB.
 export async function getDb(mode?: DatabaseMode | { demo?: boolean }) {
   const resolvedMode = resolveMode(mode);
@@ -58,7 +73,7 @@ export async function getDb(mode?: DatabaseMode | { demo?: boolean }) {
     if (!process.env.DEMO_DATABASE_URL) return null;
     if (!_demoDb) {
       try {
-        _demoDb = createDrizzleDatabase(process.env.DEMO_DATABASE_URL);
+        _demoDb = createDrizzleDatabase(resolveDemoDatabaseUrl(process.env.DEMO_DATABASE_URL));
       } catch (error) {
         console.warn("[DemoDatabase] Failed to connect:", error);
         _demoDb = null;
