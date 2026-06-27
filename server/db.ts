@@ -20,7 +20,7 @@ export function runWithDatabaseMode<T>(mode: DatabaseMode, fn: () => T): T {
 }
 
 export function hasDemoDatabase() {
-  return Boolean(process.env.DEMO_DATABASE_URL);
+  return Boolean(process.env.DEMO_DATABASE_URL?.trim());
 }
 
 function resolveMode(mode?: DatabaseMode | { demo?: boolean }): DatabaseMode {
@@ -29,9 +29,13 @@ function resolveMode(mode?: DatabaseMode | { demo?: boolean }): DatabaseMode {
   return mode.demo ? "demo" : "primary";
 }
 
+function normalizeDatabaseUrl(url: string) {
+  return url.trim().replace(/^['"]|['"]$/g, "");
+}
+
 function requiresSsl(url: string) {
   try {
-    const host = new URL(url).hostname;
+    const host = new URL(normalizeDatabaseUrl(url)).hostname;
     return host.includes("tidbcloud.com") || process.env.DB_SSL === "true";
   } catch {
     return process.env.DB_SSL === "true";
@@ -39,9 +43,10 @@ function requiresSsl(url: string) {
 }
 
 function createDrizzleDatabase(url: string) {
-  if (!requiresSsl(url)) return drizzle(url);
+  const normalizedUrl = normalizeDatabaseUrl(url);
+  if (!requiresSsl(normalizedUrl)) return drizzle(normalizedUrl);
   const connection: PoolOptions = {
-    uri: url,
+    uri: normalizedUrl,
     supportBigNumbers: true,
     ssl: {
       minVersion: "TLSv1.2",
@@ -51,10 +56,10 @@ function createDrizzleDatabase(url: string) {
   return drizzle({ connection });
 }
 
-function resolveDemoDatabaseUrl(url: string) {
+export function resolveDemoDatabaseUrl(url: string) {
   const demoDatabaseName = process.env.DEMO_DATABASE_NAME || "aromanet_demo";
   try {
-    const parsed = new URL(url);
+    const parsed = new URL(normalizeDatabaseUrl(url));
     const databaseName = parsed.pathname.replace(/^\/+/, "");
     if (!databaseName || databaseName === "sys" || databaseName === "mysql") {
       parsed.pathname = `/${demoDatabaseName}`;

@@ -11,7 +11,7 @@ import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { storagePut } from "../storage";
-import { getDb, hasDemoDatabase, runWithDatabaseMode } from "../db";
+import { getDb, hasDemoDatabase, resolveDemoDatabaseUrl, runWithDatabaseMode } from "../db";
 import { ensureRuntimeSchema } from "../runtimeMigrations";
 import { getSession, getSessionDatabaseMode } from "../session";
 import { customerAccounts, storeAccounts, stores, therapistAccounts, therapists } from "../../drizzle/schema";
@@ -277,6 +277,66 @@ async function startServer() {
     } catch (error) {
       console.error("[DemoLogin] Failed to create demo session", error);
       return res.redirect(302, "/demo?unavailable=1");
+    }
+  });
+
+  app.get("/api/demo-status", async (_req, res) => {
+    const rawUrl = process.env.DEMO_DATABASE_URL?.trim();
+    const normalizedUrl = rawUrl ? resolveDemoDatabaseUrl(rawUrl) : "";
+    let parsedUrl: URL | null = null;
+    try {
+      parsedUrl = normalizedUrl ? new URL(normalizedUrl) : null;
+    } catch {
+      parsedUrl = null;
+    }
+    const status = {
+      configured: Boolean(rawUrl),
+      database: parsedUrl?.pathname.replace(/^\/+/, "") || null,
+      host: parsedUrl?.hostname || null,
+      accounts: {
+        store: false,
+        therapist: false,
+        customer: false,
+      },
+      error: null as string | null,
+    };
+
+    if (!rawUrl) {
+      res.json(status);
+      return;
+    }
+
+    try {
+      const db = await getDb("demo");
+      if (!db) {
+        status.error = "demo_database_unavailable";
+        res.json(status);
+        return;
+      }
+
+      const [storeDemo] = await db
+        .select({ id: storeAccounts.id, status: storeAccounts.status })
+        .from(storeAccounts)
+        .where(eq(storeAccounts.email, DEMO_LOGIN_CONFIG.store.email))
+        .limit(1);
+      const [therapistDemo] = await db
+        .select({ id: therapistAccounts.id, status: therapistAccounts.status })
+        .from(therapistAccounts)
+        .where(eq(therapistAccounts.email, DEMO_LOGIN_CONFIG.therapist.email))
+        .limit(1);
+      const [customerDemo] = await db
+        .select({ id: customerAccounts.id, status: customerAccounts.status })
+        .from(customerAccounts)
+        .where(eq(customerAccounts.email, DEMO_LOGIN_CONFIG.customer.email))
+        .limit(1);
+
+      status.accounts.store = storeDemo?.status === "active";
+      status.accounts.therapist = therapistDemo?.status === "active";
+      status.accounts.customer = customerDemo?.status === "active";
+      res.json(status);
+    } catch (error) {
+      status.error = error instanceof Error ? error.message : "unknown_error";
+      res.json(status);
     }
   });
 
