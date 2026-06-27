@@ -42,11 +42,14 @@ function requiresSsl(url: string) {
   }
 }
 
-function createDrizzleDatabase(url: string) {
-  const normalizedUrl = normalizeDatabaseUrl(url);
-  if (!requiresSsl(normalizedUrl)) return drizzle(normalizedUrl);
-  const connection: PoolOptions = {
-    uri: normalizedUrl,
+function createPoolOptionsFromUrl(url: string): PoolOptions {
+  const parsed = new URL(normalizeDatabaseUrl(url));
+  return {
+    host: parsed.hostname,
+    port: parsed.port ? Number(parsed.port) : 3306,
+    user: decodeURIComponent(parsed.username),
+    password: decodeURIComponent(parsed.password),
+    database: parsed.pathname.replace(/^\/+/, ""),
     waitForConnections: true,
     connectionLimit: 5,
     supportBigNumbers: true,
@@ -55,7 +58,12 @@ function createDrizzleDatabase(url: string) {
       rejectUnauthorized: true,
     },
   };
-  return drizzle(mysql.createPool(connection));
+}
+
+function createDrizzleDatabase(url: string) {
+  const normalizedUrl = normalizeDatabaseUrl(url);
+  if (!requiresSsl(normalizedUrl)) return drizzle(normalizedUrl);
+  return drizzle(mysql.createPool(createPoolOptionsFromUrl(normalizedUrl)));
 }
 
 export function resolveDemoDatabaseUrl(url: string) {
